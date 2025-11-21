@@ -1,0 +1,44 @@
+[
+  {
+    "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc",
+    "type": "aws:ec2/vpc:Vpc",
+    "name": "main-vpc",
+    "diffType": "update",
+    "propertyDiff": [
+      {
+        "path": "tags.Environment",
+        "oldValue": "dev",
+        "newValue": "production",
+        "diffKind": "update"
+      }
+    ]
+  },
+  {
+    "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/subnet:Subnet::main-subnet",
+    "type": "aws:ec2/subnet:Subnet",
+    "name": "main-subnet",
+    "diffType": "update",
+    "propertyDiff": [
+      {
+        "path": "tags.Tier",
+        "oldValue": null,
+        "newValue": "private",
+        "diffKind": "add"
+      }
+    ]
+  },
+  {
+    "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/securityGroup:SecurityGroup::main-sg",
+    "type": "aws:ec2/securityGroup:SecurityGroup",
+    "name": "main-sg",
+    "diffType": "update",
+    "propertyDiff": [
+      {
+        "path": "description",
+        "oldValue": "Main security group",
+        "newValue": "Main security group - updated",
+        "diffKind": "update"
+      }
+    ]
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "stack": "dev",
+  "generatedAt": "2024-01-15T10:00:00Z",
+  "totalChunks": 1,
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "order": 0,
+      "resources": [
+        {
+          "urn": "urn:pulumi:dev::drift-deletion::aws:s3/bucket:Bucket::deleted-bucket",
+          "type": "aws:s3/bucket:Bucket",
+          "name": "deleted-bucket",
+          "diffType": "delete",
+          "propertyDiff": [],
+          "sourceFile": "index.ts",
+          "sourceLine": 5
+        }
+      ],
+      "status": "pending",
+      "dependencies": [],
+      "attempt": 0,
+      "lastError": ""
+    }
+  ]
+}

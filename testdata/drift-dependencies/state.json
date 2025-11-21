@@ -1,0 +1,36 @@
+{
+  "version": 3,
+  "deployment": {
+    "resources": [
+      {
+        "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc",
+        "type": "aws:ec2/vpc:Vpc",
+        "dependencies": []
+      },
+      {
+        "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/subnet:Subnet::main-subnet",
+        "type": "aws:ec2/subnet:Subnet",
+        "dependencies": [
+          "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc"
+        ],
+        "propertyDependencies": {
+          "vpcId": [
+            "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc"
+          ]
+        }
+      },
+      {
+        "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/securityGroup:SecurityGroup::main-sg",
+        "type": "aws:ec2/securityGroup:SecurityGroup",
+        "dependencies": [
+          "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc"
+        ],
+        "propertyDependencies": {
+          "vpcId": [
+            "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc"
+          ]
+        }
+      }
+    ]
+  }
+}

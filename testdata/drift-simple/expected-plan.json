@@ -1,0 +1,39 @@
+{
+  "stack": "dev",
+  "generatedAt": "2024-01-15T10:00:00Z",
+  "totalChunks": 1,
+  "chunks": [
+    {
+      "id": "chunk-001",
+      "order": 0,
+      "resources": [
+        {
+          "urn": "urn:pulumi:dev::drift-simple::aws:s3/bucket:Bucket::my-bucket",
+          "type": "aws:s3/bucket:Bucket",
+          "name": "my-bucket",
+          "diffType": "update",
+          "propertyDiff": [
+            {
+              "path": "tags.Environment",
+              "oldValue": "dev",
+              "newValue": "production",
+              "diffKind": "update"
+            },
+            {
+              "path": "tags.Owner",
+              "oldValue": null,
+              "newValue": "john@example.com",
+              "diffKind": "add"
+            }
+          ],
+          "sourceFile": "index.ts",
+          "sourceLine": 5
+        }
+      ],
+      "status": "pending",
+      "dependencies": [],
+      "attempt": 0,
+      "lastError": ""
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+[
+  {
+    "urn": "urn:pulumi:dev::drift-replacement::aws:s3/bucket:Bucket::my-bucket",
+    "type": "aws:s3/bucket:Bucket",
+    "name": "my-bucket",
+    "diffType": "replace",
+    "propertyDiff": [
+      {
+        "path": "bucket",
+        "oldValue": "my-original-bucket-12345",
+        "newValue": "my-renamed-bucket-12345",
+        "diffKind": "update"
+      }
+    ]
+  }
+]

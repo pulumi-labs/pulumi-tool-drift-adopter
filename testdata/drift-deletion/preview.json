@@ -1,0 +1,9 @@
+[
+  {
+    "urn": "urn:pulumi:dev::drift-deletion::aws:s3/bucket:Bucket::deleted-bucket",
+    "type": "aws:s3/bucket:Bucket",
+    "name": "deleted-bucket",
+    "diffType": "delete",
+    "propertyDiff": []
+  }
+]

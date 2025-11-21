@@ -1,0 +1,3 @@
+name: drift-deletion
+runtime: nodejs
+description: Resource deletion drift test - resource deleted in cloud but exists in code

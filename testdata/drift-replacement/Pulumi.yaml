@@ -1,0 +1,3 @@
+name: drift-replacement
+runtime: nodejs
+description: Resource replacement drift test - immutable property changed requiring replacement
