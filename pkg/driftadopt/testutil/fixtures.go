@@ -10,14 +10,21 @@ import (
 func LoadFixture(t *testing.T, path string) []byte {
 	t.Helper()
 
-	// Try relative to test file first
+	// Try relative to test file first (for when testdata is in same dir)
 	data, err := os.ReadFile(path)
 	if err == nil {
 		return data
 	}
 
-	// Try relative to project root
-	rootPath := filepath.Join("..", "..", "..", path)
+	// Try relative to project root (from pkg/driftadopt)
+	rootPath := filepath.Join("..", "..", path)
+	data, err = os.ReadFile(rootPath)
+	if err == nil {
+		return data
+	}
+
+	// Try from pkg/driftadopt/testutil
+	rootPath = filepath.Join("..", "..", "..", path)
 	data, err = os.ReadFile(rootPath)
 	if err != nil {
 		t.Fatalf("failed to load fixture %s: %v", path, err)

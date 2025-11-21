@@ -1,0 +1,65 @@
+{
+  "version": 3,
+  "deployment": {
+    "manifest": {
+      "time": "2024-01-15T10:00:00Z",
+      "magic": "4d4e2d9b4e4e0b8e0e5f8f8f8f8f8f8f",
+      "version": "v3.100.0"
+    },
+    "secrets_providers": {
+      "type": "passphrase",
+      "state": {}
+    },
+    "resources": [
+      {
+        "urn": "urn:pulumi:dev::test::pulumi:pulumi:Stack::test-dev",
+        "custom": false,
+        "type": "pulumi:pulumi:Stack",
+        "outputs": {}
+      },
+      {
+        "urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-a",
+        "custom": true,
+        "type": "aws:s3/bucket:Bucket",
+        "inputs": {
+          "bucket": "my-bucket-a"
+        },
+        "outputs": {
+          "bucket": "my-bucket-a",
+          "id": "my-bucket-a"
+        },
+        "dependencies": []
+      },
+      {
+        "urn": "urn:pulumi:dev::test::aws:s3/bucketObject:BucketObject::object-b",
+        "custom": true,
+        "type": "aws:s3/bucketObject:BucketObject",
+        "inputs": {
+          "bucket": "my-bucket-a",
+          "key": "file.txt"
+        },
+        "outputs": {
+          "bucket": "my-bucket-a",
+          "key": "file.txt",
+          "id": "file.txt"
+        },
+        "dependencies": ["urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-a"]
+      },
+      {
+        "urn": "urn:pulumi:dev::test::aws:s3/bucketObject:BucketObject::object-c",
+        "custom": true,
+        "type": "aws:s3/bucketObject:BucketObject",
+        "inputs": {
+          "bucket": "my-bucket-a",
+          "key": "file2.txt"
+        },
+        "outputs": {
+          "bucket": "my-bucket-a",
+          "key": "file2.txt",
+          "id": "file2.txt"
+        },
+        "dependencies": ["urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-a"]
+      }
+    ]
+  }
+}
