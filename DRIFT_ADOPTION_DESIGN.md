@@ -348,16 +348,19 @@ The drift adoption process involves:
 │   CLI Commands                               │
 │   - next: orchestrator (like terraform-mig) │
 │   - generate-plan: creates adoption plan     │
-│   - adopt-chunk: processes one drift chunk   │
+│   - show-chunk: displays chunk for agents    │
+│   - apply-diff: applies agent-submitted code │
+│   - rollback: undoes applied diffs           │
 │   - status: shows drift summary              │
 │   - skip: marks chunk to skip                │
-│   - reset-chunk: retries failed chunk        │
 └──────────────┬───────────────────────────────┘
                │
 ┌──────────────▼───────────────────────────────┐
 │   Core Logic (pkg/driftadopt/)              │
 │   - DriftPlan: dependency-ordered chunks     │
-│   - CodeGenerator: LLM-based updates         │
+│   - ChunkGuide: agent guidance generation    │
+│   - DiffApplier: applies code changes        │
+│   - DiffRecorder: records for rollback       │
 │   - DiffMatcher: validates preview matches   │
 │   - CompilationValidator: syntax checking    │
 │   - DependencyGraph: topology analysis       │
@@ -371,6 +374,14 @@ The drift adoption process involves:
 │   - Dependency graph traversal               │
 │   - State file parsing                       │
 └──────────────────────────────────────────────┘
+
+Agent (Claude) Workflow:
+  1. Agent calls: pulumi-drift-adopt next
+  2. Tool responds with chunk info and guidance
+  3. Agent generates code using LLM
+  4. Agent calls: pulumi-drift-adopt apply-diff
+  5. Tool validates and applies changes
+  6. Repeat until all chunks complete
 ```
 
 ## Workflow Gates (Sequential)
@@ -473,47 +484,67 @@ type driftPlanGenerator struct {
 - Resources with same dependencies can be in same chunk
 - Related property changes grouped together
 
-### 2. ChunkAdopter
+### 2. ChunkGuide (Agent Guidance)
 
 ```go
-type ChunkAdopter interface {
-    // Processes a single drift chunk
-    AdoptChunk(ctx context.Context, plan *DriftPlan, chunkID string) (*AdoptionResult, error)
+type ChunkGuide interface {
+    // Provides detailed information about a chunk for agent consumption
+    ShowChunk(ctx context.Context, plan *DriftPlan, chunkID string) (*ChunkInfo, error)
 }
 
-type AdoptionResult struct {
+type ChunkInfo struct {
+    ChunkID         string
+    Resources       []ResourceDiff
+    CurrentCode     map[string]string  // filepath -> code
+    ExpectedChanges []string           // Human-readable change descriptions
+    Dependencies    []string           // Chunk IDs this depends on
+    Status          ChunkStatus
+}
+```
+
+**Purpose**: The tool provides detailed chunk information to agents, who then generate code changes.
+
+**Agent Workflow**:
+1. Agent calls `pulumi-drift-adopt next`
+2. Tool outputs chunk info: resources, current code, expected changes
+3. Agent generates code using LLM (Claude, GPT, etc.)
+4. Agent submits code via `pulumi-drift-adopt apply-diff`
+5. Tool validates and applies the changes
+
+### 3. DiffApplier (Code Application)
+
+```go
+type DiffApplier interface {
+    // Applies agent-submitted code changes
+    ApplyDiff(ctx context.Context, plan *DriftPlan, chunkID string, changes []FileChange) (*ApplyResult, error)
+}
+
+type ApplyResult struct {
     ChunkID         string
     Status          ChunkStatus
-    CodeChanges     []FileChange
-    PreviewOutput   string
+    DiffID          string           // Unique ID for this diff (for rollback)
     CompileSuccess  bool
+    PreviewOutput   string
     DiffMatches     bool
     ErrorMessage    string
-    Suggestions     []string
+    Suggestions     []string         // Guidance if validation fails
 }
 
 type FileChange struct {
     FilePath string
-    OldCode  string
     NewCode  string
 }
 ```
 
 **Implementation Steps**:
-1. Extract chunk from plan
-2. Read current source code for affected resources
-3. Prepare LLM prompt with:
-   - Current code
-   - Expected property changes
-   - Resource type schema
-   - Language-specific context
-4. Call LLM to generate code changes
-5. Apply LLM-generated code changes to files
-6. Validate compilation (language-specific)
-7. Run `pulumi preview --diff`
-8. Compare preview with expected chunk diff
-9. Update chunk status in plan
-10. Return result
+1. Read current code for affected files
+2. Record original state in `code-diffs/{diffID}.json`
+3. Apply submitted code changes to files
+4. Validate compilation (language-specific)
+5. Run `pulumi preview --diff --json`
+6. Compare preview with expected chunk diff
+7. Update chunk status in plan
+8. Return validation result with guidance
 
 ### 3. CompilationValidator
 
@@ -602,7 +633,43 @@ type MatchResult struct {
 - Handle type coercion (string "true" vs bool true)
 - Tolerance for floating point comparisons
 
-### 5. DependencyGraph
+### 5. DiffRecorder (Rollback/Rollforward)
+
+```go
+type DiffRecorder interface {
+    // Records code changes for rollback capability
+    RecordDiff(ctx context.Context, diff *DiffRecord) error
+    GetDiff(diffID string) (*DiffRecord, error)
+    ListDiffs() ([]*DiffRecord, error)
+    Rollback(diffID string) error
+}
+
+type DiffRecord struct {
+    ID          string            `json:"id"`          // "001", "002", etc.
+    ChunkID     string            `json:"chunkID"`     // Associated chunk
+    Timestamp   time.Time         `json:"timestamp"`
+    Files       map[string]string `json:"files"`       // filepath -> original content
+    Applied     bool              `json:"applied"`     // Currently applied?
+}
+```
+
+**Implementation**:
+- Store diffs in `code-diffs/` directory
+- Each diff is a JSON file: `001.json`, `002.json`
+- Diffs are sequential and numbered
+- Rollback: restore files from diff record, mark as unapplied
+- Rollforward: reapply files from next diff, mark as applied
+
+**Storage Structure**:
+```
+code-diffs/
+  001.json  # First diff (chunk-001)
+  002.json  # Second diff (chunk-002)
+  003.json  # Third diff (chunk-003)
+  manifest.json  # List of all diffs with status
+```
+
+### 6. DependencyGraph
 
 ```go
 type DependencyGraph interface {
@@ -693,51 +760,179 @@ func generatePlan(stack string, output string) error {
 }
 ```
 
-### `pulumi-drift-adopt adopt-chunk`
+### `pulumi-drift-adopt show-chunk`
+
+**Purpose**: Display detailed information about a chunk for agent consumption.
 
 ```go
-func adoptChunk(planFile, chunkID string) error {
+func showChunk(planFile, chunkID string) error {
     plan := loadPlan(planFile)
     chunk := plan.GetChunk(chunkID)
 
-    // 1. Read source files for resources in chunk
-    sourceCode := readSourceFiles(chunk.Resources)
+    // 1. Display chunk metadata
+    fmt.Printf("Chunk: %s (Order: %d, Status: %s)\n", chunk.ID, chunk.Order, chunk.Status)
 
-    // 2. Prepare LLM prompt with diff context
-    prompt := buildPrompt(chunk, sourceCode)
+    // 2. Display resources and expected changes
+    fmt.Println("\nResources:")
+    for _, res := range chunk.Resources {
+        fmt.Printf("  - %s (%s)\n", res.Name, res.Type)
+        fmt.Printf("    URN: %s\n", res.URN)
+        fmt.Printf("    Diff Type: %s\n", res.DiffType)
 
-    // 3. Call LLM to generate code changes
-    codeChanges := callLLM(prompt)
+        if len(res.PropertyDiff) > 0 {
+            fmt.Println("    Property Changes:")
+            for _, prop := range res.PropertyDiff {
+                fmt.Printf("      - %s: %v => %v (%s)\n",
+                    prop.Path, prop.OldValue, prop.NewValue, prop.DiffKind)
+            }
+        }
 
-    // 4. Apply changes to files
-    applyChanges(codeChanges)
+        // 3. Display source code location
+        if res.SourceFile != "" {
+            fmt.Printf("    Source: %s:%d\n", res.SourceFile, res.SourceLine)
 
-    // 5. Validate compilation
+            // 4. Read and display current code
+            sourceCode := readFile(res.SourceFile)
+            fmt.Println("\n    Current Code:")
+            fmt.Println("    ```")
+            fmt.Println(indent(sourceCode, "    "))
+            fmt.Println("    ```")
+        }
+    }
+
+    // 5. Display dependencies
+    if len(chunk.Dependencies) > 0 {
+        fmt.Printf("\nDependencies: %s\n", strings.Join(chunk.Dependencies, ", "))
+    }
+
+    return nil
+}
+```
+
+### `pulumi-drift-adopt apply-diff`
+
+**Purpose**: Apply agent-generated code changes and validate them.
+
+```go
+func applyDiff(planFile, chunkID string, changes []FileChange) error {
+    plan := loadPlan(planFile)
+    chunk := plan.GetChunk(chunkID)
+
+    // 1. Record original state for rollback
+    diffID := generateDiffID()  // e.g., "001"
+    originalFiles := make(map[string]string)
+    for _, change := range changes {
+        originalFiles[change.FilePath] = readFile(change.FilePath)
+    }
+
+    diffRecord := &DiffRecord{
+        ID:        diffID,
+        ChunkID:   chunkID,
+        Timestamp: time.Now(),
+        Files:     originalFiles,
+        Applied:   false,
+    }
+    recorder.RecordDiff(ctx, diffRecord)
+
+    // 2. Apply changes to files
+    for _, change := range changes {
+        writeFile(change.FilePath, change.NewCode)
+    }
+
+    // 3. Validate compilation
     validationResult := validator.Validate(ctx, projectPath)
     if !validationResult.Success {
+        fmt.Println("❌ Compilation failed:")
+        for _, err := range validationResult.Errors {
+            fmt.Printf("  %s:%d:%d - %s\n", err.File, err.Line, err.Column, err.Message)
+        }
+        fmt.Printf("\nRollback with: pulumi-drift-adopt rollback %s\n", diffID)
+
         chunk.Status = ChunkFailed
-        chunk.LastError = formatErrors(validationResult.Errors)
+        chunk.LastError = "Compilation failed"
         savePlan(plan)
         return fmt.Errorf("compilation failed")
     }
 
-    // 6. Run pulumi preview
+    fmt.Println("✅ Code compiled successfully")
+
+    // 4. Run pulumi preview
+    fmt.Println("\nRunning pulumi preview...")
     previewOutput := runPreview(ctx)
 
-    // 7. Validate preview matches expected diff
+    // 5. Validate preview matches expected diff
     matchResult := diffMatcher.Matches(chunk.Resources, previewOutput)
     if !matchResult.Matches {
+        fmt.Println("❌ Preview diff mismatch:")
+
+        if len(matchResult.MissingChanges) > 0 {
+            fmt.Println("\n  Missing expected changes:")
+            for _, change := range matchResult.MissingChanges {
+                fmt.Printf("    - %s: %v => %v\n", change.Path, change.OldValue, change.NewValue)
+            }
+        }
+
+        if len(matchResult.UnexpectedChanges) > 0 {
+            fmt.Println("\n  Unexpected changes:")
+            for _, change := range matchResult.UnexpectedChanges {
+                fmt.Printf("    - %s: %v => %v\n", change.Path, change.OldValue, change.NewValue)
+            }
+        }
+
+        fmt.Printf("\nRollback with: pulumi-drift-adopt rollback %s\n", diffID)
+
         chunk.Status = ChunkFailed
-        chunk.LastError = formatMatchErrors(matchResult)
+        chunk.LastError = "Preview mismatch"
         savePlan(plan)
-        return fmt.Errorf("preview diff mismatch")
+        return fmt.Errorf("preview mismatch")
     }
 
-    // 8. Update chunk status
+    // 6. Success! Mark diff as applied
+    diffRecord.Applied = true
+    recorder.RecordDiff(ctx, diffRecord)
+
     chunk.Status = ChunkCompleted
     savePlan(plan)
 
-    fmt.Printf("✓ Chunk %s adopted successfully\n", chunkID)
+    fmt.Printf("✅ Chunk %s adopted successfully (diff %s)\n", chunkID, diffID)
+    fmt.Printf("\nNext: pulumi-drift-adopt next\n")
+    return nil
+}
+```
+
+### `pulumi-drift-adopt rollback`
+
+**Purpose**: Rollback a previously applied diff.
+
+```go
+func rollback(diffID string) error {
+    // 1. Load diff record
+    diff, err := recorder.GetDiff(diffID)
+    if err != nil {
+        return fmt.Errorf("diff not found: %s", diffID)
+    }
+
+    if !diff.Applied {
+        return fmt.Errorf("diff %s not currently applied", diffID)
+    }
+
+    // 2. Restore original files
+    for filePath, originalContent := range diff.Files {
+        writeFile(filePath, originalContent)
+    }
+
+    // 3. Mark diff as unapplied
+    diff.Applied = false
+    recorder.RecordDiff(ctx, diff)
+
+    // 4. Update chunk status
+    plan := loadPlan(planFile)
+    chunk := plan.GetChunk(diff.ChunkID)
+    chunk.Status = ChunkPending
+    chunk.LastError = ""
+    savePlan(plan)
+
+    fmt.Printf("✅ Rolled back diff %s for chunk %s\n", diffID, diff.ChunkID)
     fmt.Printf("\nNext: pulumi-drift-adopt next\n")
     return nil
 }
@@ -1765,305 +1960,511 @@ func (p *PreviewParser) ParseDiff(output string) ([]ResourceDiff, error) {
 
 ---
 
-## Phase 3: Code Generation (Week 3)
+## Phase 3: Diff Management (Week 3)
 
-### Day 1-2: LLM Integration
+**Purpose**: Build components for applying agent-submitted code changes and recording them for rollback.
+
+### Day 1-2: DiffApplier
 
 **Test First**:
 ```go
-// pkg/driftadopt/codegen_test.go
+// pkg/driftadopt/diff_applier_test.go
 
-func TestCodeGenerator_BuildPrompt(t *testing.T) {
+func TestDiffApplier_ApplyChanges(t *testing.T) {
     // Arrange
-    chunk := &DriftChunk{
-        ID: "chunk-001",
-        Resources: []ResourceDiff{
+    tmpDir := t.TempDir()
+    filePath := filepath.Join(tmpDir, "index.ts")
+    originalCode := `export const bucket = new aws.s3.Bucket("my-bucket", {
+    tags: { Environment: "dev" }
+});`
+    os.WriteFile(filePath, []byte(originalCode), 0644)
+
+    applier := NewDiffApplier(tmpDir)
+    changes := []FileChange{
+        {
+            FilePath: filePath,
+            NewCode: `export const bucket = new aws.s3.Bucket("my-bucket", {
+    tags: { Environment: "production" }
+});`,
+        },
+    }
+
+    // Act
+    diffID, err := applier.ApplyChanges("chunk-001", changes)
+    require.NoError(t, err)
+
+    // Assert
+    assert.NotEmpty(t, diffID)
+    newContent, _ := os.ReadFile(filePath)
+    assert.Contains(t, string(newContent), "production")
+    assert.NotContains(t, string(newContent), "dev")
+}
+
+func TestDiffApplier_RecordsOriginalState(t *testing.T) {
+    // Arrange
+    tmpDir := t.TempDir()
+    filePath := filepath.Join(tmpDir, "index.ts")
+    originalCode := "const x = 1;"
+    os.WriteFile(filePath, []byte(originalCode), 0644)
+
+    applier := NewDiffApplier(tmpDir)
+    changes := []FileChange{{FilePath: filePath, NewCode: "const x = 2;"}}
+
+    // Act
+    diffID, err := applier.ApplyChanges("chunk-001", changes)
+    require.NoError(t, err)
+
+    // Assert - check that original is recorded
+    recorder := applier.GetRecorder()
+    diff, err := recorder.GetDiff(diffID)
+    require.NoError(t, err)
+    assert.Equal(t, "chunk-001", diff.ChunkID)
+    assert.Equal(t, originalCode, diff.Files[filePath])
+    assert.True(t, diff.Applied)
+}
+
+func TestDiffApplier_MultipleFiles(t *testing.T) {
+    // Arrange
+    tmpDir := t.TempDir()
+    file1 := filepath.Join(tmpDir, "file1.ts")
+    file2 := filepath.Join(tmpDir, "file2.ts")
+    os.WriteFile(file1, []byte("// file 1"), 0644)
+    os.WriteFile(file2, []byte("// file 2"), 0644)
+
+    applier := NewDiffApplier(tmpDir)
+    changes := []FileChange{
+        {FilePath: file1, NewCode: "// file 1 updated"},
+        {FilePath: file2, NewCode: "// file 2 updated"},
+    }
+
+    // Act
+    diffID, err := applier.ApplyChanges("chunk-001", changes)
+    require.NoError(t, err)
+
+    // Assert - both files updated
+    content1, _ := os.ReadFile(file1)
+    content2, _ := os.ReadFile(file2)
+    assert.Contains(t, string(content1), "updated")
+    assert.Contains(t, string(content2), "updated")
+
+    // Assert - both originals recorded
+    recorder := applier.GetRecorder()
+    diff, _ := recorder.GetDiff(diffID)
+    assert.Len(t, diff.Files, 2)
+}
+```
+
+**Implementation**:
+```go
+// pkg/driftadopt/diff_applier.go
+
+type DiffApplier struct {
+    projectDir string
+    recorder   *DiffRecorder
+}
+
+func NewDiffApplier(projectDir string) *DiffApplier {
+    return &DiffApplier{
+        projectDir: projectDir,
+        recorder:   NewDiffRecorder(filepath.Join(projectDir, "code-diffs")),
+    }
+}
+
+func (d *DiffApplier) GetRecorder() *DiffRecorder {
+    return d.recorder
+}
+
+func (d *DiffApplier) ApplyChanges(chunkID string, changes []FileChange) (string, error) {
+    // 1. Record original state
+    originalFiles := make(map[string]string)
+    for _, change := range changes {
+        content, err := os.ReadFile(change.FilePath)
+        if err != nil {
+            return "", fmt.Errorf("read file %s: %w", change.FilePath, err)
+        }
+        originalFiles[change.FilePath] = string(content)
+    }
+
+    // 2. Generate diff ID
+    diffID := d.recorder.NextID()
+
+    // 3. Record diff
+    diffRecord := &DiffRecord{
+        ID:        diffID,
+        ChunkID:   chunkID,
+        Timestamp: time.Now(),
+        Files:     originalFiles,
+        Applied:   true,
+    }
+
+    if err := d.recorder.RecordDiff(diffRecord); err != nil {
+        return "", fmt.Errorf("record diff: %w", err)
+    }
+
+    // 4. Apply changes
+    for _, change := range changes {
+        if err := os.WriteFile(change.FilePath, []byte(change.NewCode), 0644); err != nil {
+            // Rollback on error
+            d.recorder.Rollback(diffID)
+            return "", fmt.Errorf("write file %s: %w", change.FilePath, err)
+        }
+    }
+
+    return diffID, nil
+}
+```
+
+### Day 3-4: DiffRecorder
+
+**Test First**:
+```go
+// pkg/driftadopt/diff_recorder_test.go
+
+func TestDiffRecorder_RecordAndRetrieve(t *testing.T) {
+    // Arrange
+    tmpDir := t.TempDir()
+    recorder := NewDiffRecorder(tmpDir)
+
+    diff := &DiffRecord{
+        ID:        "001",
+        ChunkID:   "chunk-001",
+        Timestamp: time.Now(),
+        Files: map[string]string{
+            "/path/to/file.ts": "original content",
+        },
+        Applied: true,
+    }
+
+    // Act
+    err := recorder.RecordDiff(diff)
+    require.NoError(t, err)
+
+    // Assert
+    retrieved, err := recorder.GetDiff("001")
+    require.NoError(t, err)
+    assert.Equal(t, "001", retrieved.ID)
+    assert.Equal(t, "chunk-001", retrieved.ChunkID)
+    assert.True(t, retrieved.Applied)
+    assert.Equal(t, "original content", retrieved.Files["/path/to/file.ts"])
+}
+
+func TestDiffRecorder_ListDiffs(t *testing.T) {
+    // Arrange
+    tmpDir := t.TempDir()
+    recorder := NewDiffRecorder(tmpDir)
+
+    recorder.RecordDiff(&DiffRecord{ID: "001", ChunkID: "chunk-001", Applied: true})
+    recorder.RecordDiff(&DiffRecord{ID: "002", ChunkID: "chunk-002", Applied: false})
+
+    // Act
+    diffs, err := recorder.ListDiffs()
+    require.NoError(t, err)
+
+    // Assert
+    assert.Len(t, diffs, 2)
+    assert.Equal(t, "001", diffs[0].ID)
+    assert.Equal(t, "002", diffs[1].ID)
+}
+
+func TestDiffRecorder_Rollback(t *testing.T) {
+    // Arrange
+    tmpDir := t.TempDir()
+    filePath := filepath.Join(tmpDir, "test.ts")
+    os.WriteFile(filePath, []byte("new content"), 0644)
+
+    recorder := NewDiffRecorder(filepath.Join(tmpDir, "diffs"))
+    diff := &DiffRecord{
+        ID:      "001",
+        ChunkID: "chunk-001",
+        Files: map[string]string{
+            filePath: "original content",
+        },
+        Applied: true,
+    }
+    recorder.RecordDiff(diff)
+
+    // Act
+    err := recorder.Rollback("001")
+    require.NoError(t, err)
+
+    // Assert - file restored
+    content, _ := os.ReadFile(filePath)
+    assert.Equal(t, "original content", string(content))
+
+    // Assert - diff marked as unapplied
+    retrieved, _ := recorder.GetDiff("001")
+    assert.False(t, retrieved.Applied)
+}
+
+func TestDiffRecorder_NextID(t *testing.T) {
+    // Arrange
+    tmpDir := t.TempDir()
+    recorder := NewDiffRecorder(tmpDir)
+
+    // Act
+    id1 := recorder.NextID()
+    recorder.RecordDiff(&DiffRecord{ID: id1, ChunkID: "c1"})
+    id2 := recorder.NextID()
+
+    // Assert
+    assert.Equal(t, "001", id1)
+    assert.Equal(t, "002", id2)
+}
+```
+
+**Implementation**:
+```go
+// pkg/driftadopt/diff_recorder.go
+
+type DiffRecorder struct {
+    diffsDir string
+}
+
+type DiffRecord struct {
+    ID        string            `json:"id"`
+    ChunkID   string            `json:"chunkID"`
+    Timestamp time.Time         `json:"timestamp"`
+    Files     map[string]string `json:"files"` // filepath -> original content
+    Applied   bool              `json:"applied"`
+}
+
+func NewDiffRecorder(diffsDir string) *DiffRecorder {
+    os.MkdirAll(diffsDir, 0755)
+    return &DiffRecorder{diffsDir: diffsDir}
+}
+
+func (r *DiffRecorder) NextID() string {
+    diffs, _ := r.ListDiffs()
+    return fmt.Sprintf("%03d", len(diffs)+1)
+}
+
+func (r *DiffRecorder) RecordDiff(diff *DiffRecord) error {
+    data, err := json.MarshalIndent(diff, "", "  ")
+    if err != nil {
+        return fmt.Errorf("marshal diff: %w", err)
+    }
+
+    filePath := filepath.Join(r.diffsDir, fmt.Sprintf("%s.json", diff.ID))
+    if err := os.WriteFile(filePath, data, 0644); err != nil {
+        return fmt.Errorf("write diff file: %w", err)
+    }
+
+    return nil
+}
+
+func (r *DiffRecorder) GetDiff(diffID string) (*DiffRecord, error) {
+    filePath := filepath.Join(r.diffsDir, fmt.Sprintf("%s.json", diffID))
+
+    data, err := os.ReadFile(filePath)
+    if err != nil {
+        return nil, fmt.Errorf("read diff file: %w", err)
+    }
+
+    var diff DiffRecord
+    if err := json.Unmarshal(data, &diff); err != nil {
+        return nil, fmt.Errorf("unmarshal diff: %w", err)
+    }
+
+    return &diff, nil
+}
+
+func (r *DiffRecorder) ListDiffs() ([]*DiffRecord, error) {
+    entries, err := os.ReadDir(r.diffsDir)
+    if err != nil {
+        if os.IsNotExist(err) {
+            return nil, nil
+        }
+        return nil, fmt.Errorf("read diffs directory: %w", err)
+    }
+
+    var diffs []*DiffRecord
+    for _, entry := range entries {
+        if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".json") {
+            diffID := strings.TrimSuffix(entry.Name(), ".json")
+            diff, err := r.GetDiff(diffID)
+            if err != nil {
+                return nil, err
+            }
+            diffs = append(diffs, diff)
+        }
+    }
+
+    // Sort by ID
+    sort.Slice(diffs, func(i, j int) bool {
+        return diffs[i].ID < diffs[j].ID
+    })
+
+    return diffs, nil
+}
+
+func (r *DiffRecorder) Rollback(diffID string) error {
+    diff, err := r.GetDiff(diffID)
+    if err != nil {
+        return fmt.Errorf("get diff: %w", err)
+    }
+
+    if !diff.Applied {
+        return fmt.Errorf("diff %s not currently applied", diffID)
+    }
+
+    // Restore original files
+    for filePath, originalContent := range diff.Files {
+        if err := os.WriteFile(filePath, []byte(originalContent), 0644); err != nil {
+            return fmt.Errorf("restore file %s: %w", filePath, err)
+        }
+    }
+
+    // Mark as unapplied
+    diff.Applied = false
+    return r.RecordDiff(diff)
+}
+```
+
+### Day 5: ChunkGuide (Agent Guidance)
+
+**Test First**:
+```go
+// pkg/driftadopt/chunk_guide_test.go
+
+func TestChunkGuide_ShowChunk(t *testing.T) {
+    // Arrange
+    tmpDir := t.TempDir()
+    filePath := filepath.Join(tmpDir, "index.ts")
+    code := `export const bucket = new aws.s3.Bucket("my-bucket");`
+    os.WriteFile(filePath, []byte(code), 0644)
+
+    plan := &DriftPlan{
+        Chunks: []DriftChunk{
             {
-                URN:  "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket",
-                Type: "aws:s3/bucket:Bucket",
-                Name: "my-bucket",
-                PropertyDiff: []PropChange{
+                ID:    "chunk-001",
+                Order: 1,
+                Resources: []ResourceDiff{
                     {
-                        Path:     "tags.Environment",
-                        OldValue: "dev",
-                        NewValue: "production",
-                        DiffKind: "update",
+                        URN:        "urn:pulumi:dev::app::aws:s3/bucket:Bucket::my-bucket",
+                        Type:       "aws:s3/bucket:Bucket",
+                        Name:       "my-bucket",
+                        DiffType:   DiffTypeUpdate,
+                        SourceFile: filePath,
+                        PropertyDiff: []PropChange{
+                            {
+                                Path:     "tags.Environment",
+                                OldValue: nil,
+                                NewValue: "production",
+                                DiffKind: "add",
+                            },
+                        },
                     },
                 },
+                Status: ChunkPending,
             },
         },
     }
 
-    sourceCode := `new aws.s3.Bucket("my-bucket", {
-    tags: { Environment: "dev" }
-});`
-
-    gen := NewCodeGenerator(nil) // nil client for testing
+    guide := NewChunkGuide(tmpDir)
 
     // Act
-    prompt := gen.BuildPrompt(chunk, sourceCode)
-
-    // Assert
-    assert.Contains(t, prompt, "my-bucket")
-    assert.Contains(t, prompt, "tags.Environment")
-    assert.Contains(t, prompt, "production")
-    assert.Contains(t, prompt, sourceCode)
-}
-
-func TestCodeGenerator_MockLLM(t *testing.T) {
-    // Arrange
-    mockLLM := &MockLLMClient{
-        Response: `new aws.s3.Bucket("my-bucket", {
-    tags: { Environment: "production" }
-});`,
-    }
-
-    gen := NewCodeGenerator(mockLLM)
-    chunk := &DriftChunk{/* ... */}
-    sourceCode := "/* old code */"
-
-    // Act
-    newCode, err := gen.GenerateCode(chunk, sourceCode)
+    info, err := guide.ShowChunk(plan, "chunk-001")
     require.NoError(t, err)
 
     // Assert
-    assert.Contains(t, newCode, "production")
-    assert.NotContains(t, newCode, "dev")
+    assert.Equal(t, "chunk-001", info.ChunkID)
+    assert.Len(t, info.Resources, 1)
+    assert.Contains(t, info.CurrentCode[filePath], "my-bucket")
+    assert.Contains(t, info.ExpectedChanges[0], "tags.Environment")
+    assert.Contains(t, info.ExpectedChanges[0], "production")
 }
 
-func TestCodeGenerator_LLMError(t *testing.T) {
+func TestChunkGuide_FormatsExpectedChanges(t *testing.T) {
     // Arrange
-    mockLLM := &MockLLMClient{
-        Error: fmt.Errorf("API error"),
+    guide := NewChunkGuide("")
+
+    propChange := PropChange{
+        Path:     "tags.Owner",
+        OldValue: "team-a",
+        NewValue: "team-b",
+        DiffKind: "update",
     }
 
-    gen := NewCodeGenerator(mockLLM)
-
     // Act
-    _, err := gen.GenerateCode(&DriftChunk{}, "code")
+    description := guide.FormatPropertyChange(propChange)
 
     // Assert
-    assert.Error(t, err)
-    assert.Contains(t, err.Error(), "API error")
+    assert.Contains(t, description, "tags.Owner")
+    assert.Contains(t, description, "team-a")
+    assert.Contains(t, description, "team-b")
+    assert.Contains(t, description, "update")
 }
 ```
 
 **Implementation**:
 ```go
-// pkg/driftadopt/codegen.go
+// pkg/driftadopt/chunk_guide.go
 
-type LLMClient interface {
-    Generate(prompt string) (string, error)
+type ChunkGuide struct {
+    projectDir string
 }
 
-type CodeGenerator struct {
-    client LLMClient
+type ChunkInfo struct {
+    ChunkID         string
+    Resources       []ResourceDiff
+    CurrentCode     map[string]string // filepath -> code
+    ExpectedChanges []string          // Human-readable descriptions
+    Dependencies    []string
+    Status          ChunkStatus
 }
 
-func NewCodeGenerator(client LLMClient) *CodeGenerator {
-    return &CodeGenerator{client: client}
+func NewChunkGuide(projectDir string) *ChunkGuide {
+    return &ChunkGuide{projectDir: projectDir}
 }
 
-func (g *CodeGenerator) BuildPrompt(chunk *DriftChunk, sourceCode string) string {
-    var sb strings.Builder
+func (g *ChunkGuide) ShowChunk(plan *DriftPlan, chunkID string) (*ChunkInfo, error) {
+    chunk := plan.GetChunk(chunkID)
+    if chunk == nil {
+        return nil, fmt.Errorf("chunk not found: %s", chunkID)
+    }
 
-    sb.WriteString("You are helping adopt infrastructure drift into Pulumi IaC.\n\n")
-    sb.WriteString("Current source code:\n")
-    sb.WriteString("```\n")
-    sb.WriteString(sourceCode)
-    sb.WriteString("\n```\n\n")
-
-    sb.WriteString("Required changes:\n")
+    // Read current code for affected files
+    currentCode := make(map[string]string)
     for _, res := range chunk.Resources {
-        sb.WriteString(fmt.Sprintf("\nResource: %s (%s)\n", res.Name, res.Type))
-        for _, prop := range res.PropertyDiff {
-            sb.WriteString(fmt.Sprintf("  - %s: %v => %v (%s)\n",
-                prop.Path, prop.OldValue, prop.NewValue, prop.DiffKind))
+        if res.SourceFile != "" {
+            content, err := os.ReadFile(res.SourceFile)
+            if err != nil {
+                return nil, fmt.Errorf("read source file %s: %w", res.SourceFile, err)
+            }
+            currentCode[res.SourceFile] = string(content)
         }
     }
 
-    sb.WriteString("\nGenerate updated code that incorporates these changes.\n")
-    sb.WriteString("Preserve existing structure and formatting.\n")
-    sb.WriteString("Only modify the specified properties.\n")
-    sb.WriteString("\nReturn the complete updated code.\n")
-
-    return sb.String()
-}
-
-func (g *CodeGenerator) GenerateCode(chunk *DriftChunk, sourceCode string) (string, error) {
-    prompt := g.BuildPrompt(chunk, sourceCode)
-
-    newCode, err := g.client.Generate(prompt)
-    if err != nil {
-        return "", fmt.Errorf("LLM generation failed: %w", err)
+    // Format expected changes as human-readable descriptions
+    var expectedChanges []string
+    for _, res := range chunk.Resources {
+        for _, prop := range res.PropertyDiff {
+            expectedChanges = append(expectedChanges, g.FormatPropertyChange(prop))
+        }
     }
 
-    return newCode, nil
+    return &ChunkInfo{
+        ChunkID:         chunk.ID,
+        Resources:       chunk.Resources,
+        CurrentCode:     currentCode,
+        ExpectedChanges: expectedChanges,
+        Dependencies:    chunk.Dependencies,
+        Status:          chunk.Status,
+    }, nil
 }
 
-// Mock implementation for testing
-type MockLLMClient struct {
-    Response string
-    Error    error
-}
-
-func (m *MockLLMClient) Generate(prompt string) (string, error) {
-    if m.Error != nil {
-        return "", m.Error
+func (g *ChunkGuide) FormatPropertyChange(prop PropChange) string {
+    switch prop.DiffKind {
+    case "add":
+        return fmt.Sprintf("Add %s = %v", prop.Path, prop.NewValue)
+    case "delete":
+        return fmt.Sprintf("Delete %s (was: %v)", prop.Path, prop.OldValue)
+    case "update":
+        return fmt.Sprintf("Update %s: %v => %v", prop.Path, prop.OldValue, prop.NewValue)
+    default:
+        return fmt.Sprintf("%s %s: %v => %v", prop.DiffKind, prop.Path, prop.OldValue, prop.NewValue)
     }
-    return m.Response, nil
 }
-```
-
-### Day 3: Anthropic Claude Integration
-
-**Test First**:
-```go
-// pkg/driftadopt/claude_test.go
-
-func TestClaudeClient_Generate(t *testing.T) {
-    // Skip if no API key
-    apiKey := os.Getenv("ANTHROPIC_API_KEY")
-    if apiKey == "" {
-        t.Skip("ANTHROPIC_API_KEY not set")
-    }
-
-    // Arrange
-    client := NewClaudeClient(apiKey)
-    prompt := "Write a simple TypeScript function that adds two numbers"
-
-    // Act
-    response, err := client.Generate(prompt)
-    require.NoError(t, err)
-
-    // Assert
-    assert.NotEmpty(t, response)
-    assert.Contains(t, response, "function")
-}
-
-func TestClaudeClient_InvalidAPIKey(t *testing.T) {
-    // Arrange
-    client := NewClaudeClient("invalid-key")
-
-    // Act
-    _, err := client.Generate("test")
-
-    // Assert
-    assert.Error(t, err)
-}
-```
-
-**Implementation**:
-```go
-// pkg/driftadopt/claude.go
-
-import (
-    "github.com/anthropics/anthropic-sdk-go"
-)
-
-type ClaudeClient struct {
-    client *anthropic.Client
-}
-
-func NewClaudeClient(apiKey string) *ClaudeClient {
-    client := anthropic.NewClient(
-        option.WithAPIKey(apiKey),
-    )
-    return &ClaudeClient{client: client}
-}
-
-func (c *ClaudeClient) Generate(prompt string) (string, error) {
-    message, err := c.client.Messages.New(context.TODO(), anthropic.MessageNewParams{
-        Model:     anthropic.F(anthropic.ModelClaudeSonnet4_5_20250929),
-        MaxTokens: anthropic.F(int64(4096)),
-        Messages: anthropic.F([]anthropic.MessageParam{
-            anthropic.NewUserMessage(anthropic.NewTextBlock(prompt)),
-        }),
-    })
-
-    if err != nil {
-        return "", fmt.Errorf("Claude API call failed: %w", err)
-    }
-
-    // Extract text from response
-    if len(message.Content) == 0 {
-        return "", fmt.Errorf("empty response from Claude")
-    }
-
-    textBlock := message.Content[0]
-    return textBlock.Text, nil
-}
-```
-
-### Day 4-5: Source Code Manipulation
-
-**Test First**:
-```go
-// pkg/driftadopt/editor/typescript_test.go
-
-func TestTypeScriptEditor_ApplyChange(t *testing.T) {
-    // Arrange
-    sourceCode := `const bucket = new aws.s3.Bucket("my-bucket", {
-    tags: { Environment: "dev" }
-});`
-
-    newCode := `const bucket = new aws.s3.Bucket("my-bucket", {
-    tags: { Environment: "production" }
-});`
-
-    editor := NewTypeScriptEditor()
-
-    // Act
-    result, err := editor.ApplyChange(sourceCode, newCode)
-    require.NoError(t, err)
-
-    // Assert
-    assert.Contains(t, result, "production")
-}
-
-func TestTypeScriptEditor_PreserveFormatting(t *testing.T) {
-    // Arrange - Code with specific indentation and comments
-    sourceCode := `// My bucket
-const bucket = new aws.s3.Bucket("my-bucket", {
-    // Environment tag
-    tags: {
-        Environment: "dev",
-    },
-});`
-
-    editor := NewTypeScriptEditor()
-
-    // Act - Simple property update
-    newCode := strings.Replace(sourceCode, "dev", "production", 1)
-    result, err := editor.ApplyChange(sourceCode, newCode)
-    require.NoError(t, err)
-
-    // Assert - Comments and formatting preserved
-    assert.Contains(t, result, "// My bucket")
-    assert.Contains(t, result, "// Environment tag")
-}
-```
-
-**Implementation**:
-```go
-// pkg/driftadopt/editor/typescript.go
-
-type TypeScriptEditor struct{}
-
-func NewTypeScriptEditor() *TypeScriptEditor {
-    return &TypeScriptEditor{}
-}
-
-func (e *TypeScriptEditor) ApplyChange(oldCode, newCode string) (string, error) {
-    // For now, simple replacement
-    // In future, could use AST parsing for more sophisticated edits
-    return newCode, nil
-}
-
-// TODO: Implement AST-based editing
-// - Parse with esprima or similar
-// - Apply targeted changes
-// - Preserve formatting
 ```
 
 ---
