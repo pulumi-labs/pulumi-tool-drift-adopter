@@ -30,3 +30,12 @@ go.work.sum
 # Editor/IDE
 # .idea/
 # .vscode/
+
+# Binary
+pulumi-drift-adopt
+/dist/
+
+# Test artifacts
+testdata/*/actual/
+*.tmp.json
+drift-plan.json
