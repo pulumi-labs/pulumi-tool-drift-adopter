@@ -31,9 +31,10 @@ go.work.sum
 # .idea/
 # .vscode/
 
-# Binary
-pulumi-drift-adopt
+# Binary (exclude source directory)
+/pulumi-drift-adopt
 /dist/
+bin/
 
 # Test artifacts
 testdata/*/actual/
