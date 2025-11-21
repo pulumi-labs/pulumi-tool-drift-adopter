@@ -5,11 +5,13 @@
       {
         "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc",
         "type": "aws:ec2/vpc:Vpc",
+        "custom": true,
         "dependencies": []
       },
       {
         "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/subnet:Subnet::main-subnet",
         "type": "aws:ec2/subnet:Subnet",
+        "custom": true,
         "dependencies": [
           "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc"
         ],
@@ -22,6 +24,7 @@
       {
         "urn": "urn:pulumi:dev::drift-dependencies::aws:ec2/securityGroup:SecurityGroup::main-sg",
         "type": "aws:ec2/securityGroup:SecurityGroup",
+        "custom": true,
         "dependencies": [
           "urn:pulumi:dev::drift-dependencies::aws:ec2/vpc:Vpc::main-vpc"
         ],
