@@ -7,11 +7,12 @@ This test validates the complete drift adoption workflow using:
 
 ## Test Flow
 
-1. **Deploy Infrastructure**: Creates a Pulumi stack with an S3 bucket (no tags)
-2. **Create Drift**: Uses AWS CLI to add tags to the bucket manually
-3. **Invoke Claude**: Calls Claude SDK with the drift-adopt skill to fix the code
+1. **Setup**: Uses pulumitest's `CopyToTempDir()` to copy the `examples/simple-s3` Pulumi program to a temp directory
+2. **Deploy Infrastructure**: Deploys the stack (S3 bucket without tags)
+3. **Create Drift**: Uses AWS CLI to add tags to the bucket manually
+4. **Invoke Claude**: Calls Claude SDK with the drift-adopt skill to fix the code
    - Claude runs `pulumi-drift-adopt next` which automatically refreshes state
-4. **Verify**: Confirms the code was updated and preview shows no drift
+5. **Verify**: Confirms the code was updated and preview shows no drift
 
 ## Prerequisites
 

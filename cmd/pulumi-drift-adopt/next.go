@@ -1,13 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/spf13/cobra"
 )
 
@@ -67,45 +67,38 @@ func runNext(cmd *cobra.Command, args []string) error {
 	previewCmd.Dir = projectDir
 	previewCmd.Stderr = os.Stderr
 
-	stdout, err := previewCmd.StdoutPipe()
+	output, err := previewCmd.Output()
 	if err != nil {
-		return outputError(fmt.Sprintf("failed to create stdout pipe: %v", err))
+		return outputError(fmt.Sprintf("pulumi preview failed: %v", err))
 	}
 
-	if err := previewCmd.Start(); err != nil {
-		return outputError(fmt.Sprintf("failed to start pulumi preview: %v", err))
+	// Parse the JSON output structure
+	var previewResult struct {
+		Steps []auto.PreviewStep `json:"steps"`
 	}
 
-	// Parse newline-delimited JSON events
+	if err := json.Unmarshal(output, &previewResult); err != nil {
+		return outputError(fmt.Sprintf("failed to parse preview output: %v", err))
+	}
+
+	// Parse steps for resources that need changes
 	var resources []ResourceChange
-	scanner := bufio.NewScanner(stdout)
-	for scanner.Scan() {
-		line := scanner.Text()
-		var event map[string]interface{}
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue // Skip non-JSON lines
+	for _, step := range previewResult.Steps {
+		// Extract resource type from old or new state
+		var resourceType string
+		if step.OldState != nil {
+			resourceType = string(step.OldState.Type)
 		}
-
-		// We're looking for resource-step events
-		if event["type"] != "resource-step" {
-			continue
+		if resourceType == "" && step.NewState != nil {
+			resourceType = string(step.NewState.Type)
 		}
-
-		metadata, ok := event["metadata"].(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		op, _ := metadata["op"].(string)
-		urn, _ := metadata["urn"].(string)
-		resourceType, _ := metadata["type"].(string)
 
 		// Extract resource name from URN
-		name := extractResourceName(urn)
+		name := extractResourceName(string(step.URN))
 
 		// Invert the preview operation logic
 		var action string
-		switch op {
+		switch step.Op {
 		case "create":
 			// Preview wants to CREATE = resource is in code but not in state
 			// Action: DELETE from code
@@ -119,55 +112,55 @@ func runNext(cmd *cobra.Command, args []string) error {
 			// Action: UPDATE code to match state
 			action = "update_code"
 		default:
-			continue
+			continue // Skip "same", "refresh", etc.
 		}
 
 		// Parse detailed diff for properties
 		var properties []PropertyChange
-		if detailedDiff, ok := metadata["detailedDiff"].(map[string]interface{}); ok {
-			for path, detail := range detailedDiff {
-				if detailMap, ok := detail.(map[string]interface{}); ok {
-					kind, _ := detailMap["kind"].(string)
-					lhs := detailMap["lhs"] // Old value (state) = DESIRED
-					rhs := detailMap["rhs"] // New value (code) = CURRENT
+		for path, diff := range step.DetailedDiff {
+			// Get actual values from old/new states
+			var currentValue, desiredValue interface{}
 
-					properties = append(properties, PropertyChange{
-						Path:         path,
-						CurrentValue: rhs,
-						DesiredValue: lhs,
-						Kind:         kind,
-					})
-				}
+			// OldState contains what's in state (what we want)
+			if step.OldState != nil && step.OldState.Outputs != nil {
+				desiredValue = getNestedProperty(step.OldState.Outputs, path)
 			}
+
+			// NewState contains what the code will produce (what currently exists or will be created)
+			if step.NewState != nil && step.NewState.Outputs != nil {
+				currentValue = getNestedProperty(step.NewState.Outputs, path)
+			}
+
+			properties = append(properties, PropertyChange{
+				Path:         path,
+				CurrentValue: currentValue,
+				DesiredValue: desiredValue,
+				Kind:         diff.Kind,
+			})
 		}
 
 		resources = append(resources, ResourceChange{
 			Action:     action,
-			URN:        urn,
+			URN:        string(step.URN),
 			Type:       resourceType,
 			Name:       name,
 			Properties: properties,
 		})
 	}
 
-	if err := previewCmd.Wait(); err != nil {
-		// Preview failed - likely a code error
-		return outputError(fmt.Sprintf("pulumi preview failed: %v", err))
-	}
-
 	// Determine status
-	output := NextOutput{}
+	result := NextOutput{}
 	if len(resources) == 0 {
-		output.Status = "clean"
+		result.Status = "clean"
 	} else {
-		output.Status = "changes_needed"
-		output.Resources = resources
+		result.Status = "changes_needed"
+		result.Resources = resources
 	}
 
 	// Output JSON
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(output); err != nil {
+	if err := encoder.Encode(result); err != nil {
 		return fmt.Errorf("failed to encode output: %w", err)
 	}
 
@@ -194,4 +187,23 @@ func extractResourceName(urn string) string {
 		return parts[len(parts)-1]
 	}
 	return ""
+}
+
+// getNestedProperty extracts a value from a nested map using a dot-separated path
+func getNestedProperty(props map[string]interface{}, path string) interface{} {
+	parts := strings.Split(path, ".")
+	var current interface{} = props
+
+	for _, part := range parts {
+		m, ok := current.(map[string]interface{})
+		if !ok {
+			return nil
+		}
+		current, ok = m[part]
+		if !ok {
+			return nil
+		}
+	}
+
+	return current
 }
