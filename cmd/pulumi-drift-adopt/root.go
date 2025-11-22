@@ -20,15 +20,8 @@ This tool follows an agent-oriented pattern, designed to be called by AI agents
 
 func init() {
 	// Global flags
-	rootCmd.PersistentFlags().String("plan", "drift-plan.json", "Path to drift plan file")
 	rootCmd.PersistentFlags().String("project", ".", "Project directory")
 
 	// Add commands
 	rootCmd.AddCommand(nextCmd)
-	rootCmd.AddCommand(generatePlanCmd)
-	rootCmd.AddCommand(showStepCmd)
-	rootCmd.AddCommand(applyDiffCmd)
-	rootCmd.AddCommand(rollbackCmd)
-	rootCmd.AddCommand(statusCmd)
-	rootCmd.AddCommand(skipCmd)
 }

@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2025-11-21
+
+### Changed - Major Simplification
+- **BREAKING**: Complete architectural simplification - tool is now stateless
+- Removed all plan/step management functionality
+- Removed commands: `generate-plan`, `show-step`, `apply-diff`, `status`, `skip`, `rollback`
+- Simplified `next` command to just run `pulumi preview --json` and return results
+- Tool now uses inverted logic: state values (old) = desired, code values (new) = current
+- Operations inverted: create → delete_from_code, delete → add_to_code, update → update_code
+- Single command workflow: agent calls `next`, updates code, calls `next` again
+- Removed plan files, dependency graphs, step orchestration, diff recording
+- Greatly simplified codebase: removed ~50% of code
+- Test suite reduced to essential tests (24 tests total)
+
+### Rationale
+The previous architecture was over-engineered for the use case. The simplified version:
+- No state management needed - `pulumi preview` already has all the information
+- Agent can directly interpret preview output without intermediate plan files
+- Stateless = simpler, more reliable, easier to understand
+- Single responsibility: parse preview and format for agent consumption
+
 ## [0.1.0] - 2025-11-21
 
 ### Added
