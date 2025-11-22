@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestChunkGuide_ShowChunk(t *testing.T) {
+func TestStepGuide_ShowStep(t *testing.T) {
 	// Arrange
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "index.ts")
@@ -21,9 +21,9 @@ func TestChunkGuide_ShowChunk(t *testing.T) {
 	require.NoError(t, err)
 
 	plan := &driftadopt.DriftPlan{
-		Chunks: []driftadopt.DriftChunk{
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:    "chunk-001",
+				ID:    "step-001",
 				Order: 1,
 				Resources: []driftadopt.ResourceDiff{
 					{
@@ -42,19 +42,19 @@ func TestChunkGuide_ShowChunk(t *testing.T) {
 						},
 					},
 				},
-				Status: driftadopt.ChunkPending,
+				Status: driftadopt.StepPending,
 			},
 		},
 	}
 
-	guide := driftadopt.NewChunkGuide(tmpDir)
+	guide := driftadopt.NewStepGuide(tmpDir)
 
 	// Act
-	info, err := guide.ShowChunk(plan, "chunk-001")
+	info, err := guide.ShowStep(plan, "step-001")
 	require.NoError(t, err)
 
 	// Assert
-	assert.Equal(t, "chunk-001", info.ChunkID)
+	assert.Equal(t, "step-001", info.StepID)
 	assert.Len(t, info.Resources, 1)
 	assert.Contains(t, info.CurrentCode[filePath], "my-bucket")
 	assert.Len(t, info.ExpectedChanges, 1)
@@ -62,24 +62,24 @@ func TestChunkGuide_ShowChunk(t *testing.T) {
 	assert.Contains(t, info.ExpectedChanges[0], "production")
 }
 
-func TestChunkGuide_ChunkNotFound(t *testing.T) {
+func TestStepGuide_StepNotFound(t *testing.T) {
 	// Arrange
 	tmpDir := t.TempDir()
 	plan := &driftadopt.DriftPlan{
-		Chunks: []driftadopt.DriftChunk{},
+		Steps: []driftadopt.DriftStep{},
 	}
 
-	guide := driftadopt.NewChunkGuide(tmpDir)
+	guide := driftadopt.NewStepGuide(tmpDir)
 
 	// Act
-	_, err := guide.ShowChunk(plan, "nonexistent")
+	_, err := guide.ShowStep(plan, "nonexistent")
 
 	// Assert
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "chunk not found")
+	assert.Contains(t, err.Error(), "step not found")
 }
 
-func TestChunkGuide_MultipleResources(t *testing.T) {
+func TestStepGuide_MultipleResources(t *testing.T) {
 	// Arrange
 	tmpDir := t.TempDir()
 	file1 := filepath.Join(tmpDir, "bucket.ts")
@@ -88,9 +88,9 @@ func TestChunkGuide_MultipleResources(t *testing.T) {
 	os.WriteFile(file2, []byte("object code"), 0644)
 
 	plan := &driftadopt.DriftPlan{
-		Chunks: []driftadopt.DriftChunk{
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:    "chunk-001",
+				ID:    "step-001",
 				Order: 1,
 				Resources: []driftadopt.ResourceDiff{
 					{
@@ -114,10 +114,10 @@ func TestChunkGuide_MultipleResources(t *testing.T) {
 		},
 	}
 
-	guide := driftadopt.NewChunkGuide(tmpDir)
+	guide := driftadopt.NewStepGuide(tmpDir)
 
 	// Act
-	info, err := guide.ShowChunk(plan, "chunk-001")
+	info, err := guide.ShowStep(plan, "step-001")
 	require.NoError(t, err)
 
 	// Assert
@@ -126,9 +126,9 @@ func TestChunkGuide_MultipleResources(t *testing.T) {
 	assert.Len(t, info.ExpectedChanges, 2)
 }
 
-func TestChunkGuide_FormatPropertyChange_Add(t *testing.T) {
+func TestStepGuide_FormatPropertyChange_Add(t *testing.T) {
 	// Arrange
-	guide := driftadopt.NewChunkGuide("")
+	guide := driftadopt.NewStepGuide("")
 	propChange := driftadopt.PropChange{
 		Path:     "tags.Owner",
 		NewValue: "team-a",
@@ -144,9 +144,9 @@ func TestChunkGuide_FormatPropertyChange_Add(t *testing.T) {
 	assert.Contains(t, description, "team-a")
 }
 
-func TestChunkGuide_FormatPropertyChange_Delete(t *testing.T) {
+func TestStepGuide_FormatPropertyChange_Delete(t *testing.T) {
 	// Arrange
-	guide := driftadopt.NewChunkGuide("")
+	guide := driftadopt.NewStepGuide("")
 	propChange := driftadopt.PropChange{
 		Path:     "tags.Environment",
 		OldValue: "dev",
@@ -162,9 +162,9 @@ func TestChunkGuide_FormatPropertyChange_Delete(t *testing.T) {
 	assert.Contains(t, description, "dev")
 }
 
-func TestChunkGuide_FormatPropertyChange_Update(t *testing.T) {
+func TestStepGuide_FormatPropertyChange_Update(t *testing.T) {
 	// Arrange
-	guide := driftadopt.NewChunkGuide("")
+	guide := driftadopt.NewStepGuide("")
 	propChange := driftadopt.PropChange{
 		Path:     "tags.Owner",
 		OldValue: "team-a",
@@ -182,38 +182,38 @@ func TestChunkGuide_FormatPropertyChange_Update(t *testing.T) {
 	assert.Contains(t, description, "team-b")
 }
 
-func TestChunkGuide_WithDependencies(t *testing.T) {
+func TestStepGuide_WithDependencies(t *testing.T) {
 	// Arrange
 	tmpDir := t.TempDir()
 	plan := &driftadopt.DriftPlan{
-		Chunks: []driftadopt.DriftChunk{
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:           "chunk-002",
+				ID:           "step-002",
 				Order:        2,
 				Resources:    []driftadopt.ResourceDiff{},
-				Dependencies: []string{"chunk-001"},
+				Dependencies: []string{"step-001"},
 			},
 		},
 	}
 
-	guide := driftadopt.NewChunkGuide(tmpDir)
+	guide := driftadopt.NewStepGuide(tmpDir)
 
 	// Act
-	info, err := guide.ShowChunk(plan, "chunk-002")
+	info, err := guide.ShowStep(plan, "step-002")
 	require.NoError(t, err)
 
 	// Assert
 	assert.Len(t, info.Dependencies, 1)
-	assert.Contains(t, info.Dependencies, "chunk-001")
+	assert.Contains(t, info.Dependencies, "step-001")
 }
 
-func TestChunkGuide_SourceFileNotFound(t *testing.T) {
+func TestStepGuide_SourceFileNotFound(t *testing.T) {
 	// Arrange
 	tmpDir := t.TempDir()
 	plan := &driftadopt.DriftPlan{
-		Chunks: []driftadopt.DriftChunk{
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:    "chunk-001",
+				ID:    "step-001",
 				Order: 1,
 				Resources: []driftadopt.ResourceDiff{
 					{
@@ -225,10 +225,10 @@ func TestChunkGuide_SourceFileNotFound(t *testing.T) {
 		},
 	}
 
-	guide := driftadopt.NewChunkGuide(tmpDir)
+	guide := driftadopt.NewStepGuide(tmpDir)
 
 	// Act
-	_, err := guide.ShowChunk(plan, "chunk-001")
+	_, err := guide.ShowStep(plan, "step-001")
 
 	// Assert
 	assert.Error(t, err)

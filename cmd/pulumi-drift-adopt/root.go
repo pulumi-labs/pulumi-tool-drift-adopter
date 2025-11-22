@@ -26,7 +26,7 @@ func init() {
 	// Add commands
 	rootCmd.AddCommand(nextCmd)
 	rootCmd.AddCommand(generatePlanCmd)
-	rootCmd.AddCommand(showChunkCmd)
+	rootCmd.AddCommand(showStepCmd)
 	rootCmd.AddCommand(applyDiffCmd)
 	rootCmd.AddCommand(rollbackCmd)
 	rootCmd.AddCommand(statusCmd)

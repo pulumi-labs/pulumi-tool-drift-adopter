@@ -5,36 +5,36 @@ import (
 	"os"
 )
 
-// ChunkGuide provides guidance to agents about chunks
-type ChunkGuide struct {
+// StepGuide provides guidance to agents about steps
+type StepGuide struct {
 	projectDir string
 }
 
-// ChunkInfo contains information about a chunk for agent consumption
-type ChunkInfo struct {
-	ChunkID         string
+// StepInfo contains information about a step for agent consumption
+type StepInfo struct {
+	StepID         string
 	Resources       []ResourceDiff
 	CurrentCode     map[string]string // filepath -> code
 	ExpectedChanges []string          // Human-readable descriptions
 	Dependencies    []string
-	Status          ChunkStatus
+	Status          StepStatus
 }
 
-// NewChunkGuide creates a new chunk guide
-func NewChunkGuide(projectDir string) *ChunkGuide {
-	return &ChunkGuide{projectDir: projectDir}
+// NewStepGuide creates a new step guide
+func NewStepGuide(projectDir string) *StepGuide {
+	return &StepGuide{projectDir: projectDir}
 }
 
-// ShowChunk provides detailed information about a chunk
-func (g *ChunkGuide) ShowChunk(plan *DriftPlan, chunkID string) (*ChunkInfo, error) {
-	chunk := plan.GetChunk(chunkID)
-	if chunk == nil {
-		return nil, fmt.Errorf("chunk not found: %s", chunkID)
+// ShowStep provides detailed information about a step
+func (g *StepGuide) ShowStep(plan *DriftPlan, stepID string) (*StepInfo, error) {
+	step := plan.GetStep(stepID)
+	if step == nil {
+		return nil, fmt.Errorf("step not found: %s", stepID)
 	}
 
 	// Read current code for affected files
 	currentCode := make(map[string]string)
-	for _, res := range chunk.Resources {
+	for _, res := range step.Resources {
 		if res.SourceFile != "" {
 			content, err := os.ReadFile(res.SourceFile)
 			if err != nil {
@@ -46,24 +46,24 @@ func (g *ChunkGuide) ShowChunk(plan *DriftPlan, chunkID string) (*ChunkInfo, err
 
 	// Format expected changes as human-readable descriptions
 	var expectedChanges []string
-	for _, res := range chunk.Resources {
+	for _, res := range step.Resources {
 		for _, prop := range res.PropertyDiff {
 			expectedChanges = append(expectedChanges, g.FormatPropertyChange(prop))
 		}
 	}
 
-	return &ChunkInfo{
-		ChunkID:         chunk.ID,
-		Resources:       chunk.Resources,
+	return &StepInfo{
+		StepID:         step.ID,
+		Resources:       step.Resources,
 		CurrentCode:     currentCode,
 		ExpectedChanges: expectedChanges,
-		Dependencies:    chunk.Dependencies,
-		Status:          chunk.Status,
+		Dependencies:    step.Dependencies,
+		Status:          step.Status,
 	}, nil
 }
 
 // FormatPropertyChange formats a property change as a human-readable string
-func (g *ChunkGuide) FormatPropertyChange(prop PropChange) string {
+func (g *StepGuide) FormatPropertyChange(prop PropChange) string {
 	switch prop.DiffKind {
 	case "add":
 		return fmt.Sprintf("Add %s = %v", prop.Path, prop.NewValue)

@@ -9,26 +9,26 @@ import (
 
 var skipCmd = &cobra.Command{
 	Use:   "skip",
-	Short: "Skip a chunk in the drift adoption plan",
-	Long: `Marks a chunk as skipped and moves to the next chunk.
+	Short: "Skip a step in the drift adoption plan",
+	Long: `Marks a step as skipped and moves to the next step.
 
 Use this when:
-- A chunk is too complex to adopt automatically
+- A step is too complex to adopt automatically
 - Manual intervention is needed
 - The drift should be handled separately
-- You want to defer the chunk for later
+- You want to defer the step for later
 
-Skipped chunks won't block progress on subsequent chunks.`,
+Skipped steps won't block progress on subsequent steps.`,
 	RunE: runSkip,
 }
 
-var skipChunkID string
+var skipStepID string
 var skipReason string
 
 func init() {
-	skipCmd.Flags().StringVar(&skipChunkID, "chunk", "", "Chunk ID to skip (required)")
+	skipCmd.Flags().StringVar(&skipStepID, "step", "", "Step ID to skip (required)")
 	skipCmd.Flags().StringVar(&skipReason, "reason", "", "Reason for skipping (optional)")
-	skipCmd.MarkFlagRequired("chunk")
+	skipCmd.MarkFlagRequired("step")
 }
 
 func runSkip(cmd *cobra.Command, args []string) error {
@@ -40,27 +40,27 @@ func runSkip(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("read plan: %w", err)
 	}
 
-	// Find and update chunk
-	chunk := plan.GetChunk(skipChunkID)
-	if chunk == nil {
-		return fmt.Errorf("chunk not found: %s", skipChunkID)
+	// Find and update step
+	step := plan.GetStep(skipStepID)
+	if step == nil {
+		return fmt.Errorf("step not found: %s", skipStepID)
 	}
 
-	// Display chunk info
-	fmt.Printf("⏭️  Skipping chunk: %s (Order: %d)\n", skipChunkID, chunk.Order)
+	// Display step info
+	fmt.Printf("⏭️  Skipping step: %s (Order: %d)\n", skipStepID, step.Order)
 	fmt.Println()
-	fmt.Printf("Resources in chunk: %d\n", len(chunk.Resources))
-	for _, res := range chunk.Resources {
+	fmt.Printf("Resources in step: %d\n", len(step.Resources))
+	for _, res := range step.Resources {
 		fmt.Printf("  - %s\n", res.URN)
 	}
 	fmt.Println()
 
-	// Update chunk status
-	chunk.Status = driftadopt.ChunkSkipped
+	// Update step status
+	step.Status = driftadopt.StepSkipped
 	if skipReason != "" {
-		chunk.LastError = fmt.Sprintf("Skipped: %s", skipReason)
+		step.LastError = fmt.Sprintf("Skipped: %s", skipReason)
 	} else {
-		chunk.LastError = "Skipped by user"
+		step.LastError = "Skipped by user"
 	}
 
 	// Save plan
@@ -68,24 +68,24 @@ func runSkip(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("write plan: %w", err)
 	}
 
-	fmt.Println("✅ Chunk skipped")
+	fmt.Println("✅ Step skipped")
 	fmt.Println()
 
 	// Show next steps
-	nextChunk := plan.GetNextPendingChunk()
-	if nextChunk != nil {
-		fmt.Printf("Next chunk: %s (Order: %d)\n", nextChunk.ID, nextChunk.Order)
+	nextStep := plan.GetNextPendingStep()
+	if nextStep != nil {
+		fmt.Printf("Next step: %s (Order: %d)\n", nextStep.ID, nextStep.Order)
 		fmt.Println()
 	} else {
-		failedChunks := plan.GetFailedChunks()
-		if len(failedChunks) > 0 {
-			fmt.Println("Remaining failed chunks to address:")
-			for _, fc := range failedChunks {
+		failedSteps := plan.GetFailedSteps()
+		if len(failedSteps) > 0 {
+			fmt.Println("Remaining failed steps to address:")
+			for _, fc := range failedSteps {
 				fmt.Printf("  - %s\n", fc.ID)
 			}
 			fmt.Println()
 		} else {
-			fmt.Println("All chunks complete!")
+			fmt.Println("All steps complete!")
 			fmt.Println()
 		}
 	}

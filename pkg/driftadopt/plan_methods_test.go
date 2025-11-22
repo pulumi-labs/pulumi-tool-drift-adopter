@@ -11,88 +11,88 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestDriftPlan_GetChunk(t *testing.T) {
+func TestDriftPlan_GetStep(t *testing.T) {
 	// Arrange
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 3,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Order: 0},
-			{ID: "chunk-002", Order: 1},
-			{ID: "chunk-003", Order: 2},
+		TotalSteps:  3,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Order: 0},
+			{ID: "step-002", Order: 1},
+			{ID: "step-003", Order: 2},
 		},
 	}
 
 	// Act & Assert - Found
-	chunk := plan.GetChunk("chunk-002")
-	require.NotNil(t, chunk)
-	assert.Equal(t, "chunk-002", chunk.ID)
-	assert.Equal(t, 1, chunk.Order)
+	step := plan.GetStep("step-002")
+	require.NotNil(t, step)
+	assert.Equal(t, "step-002", step.ID)
+	assert.Equal(t, 1, step.Order)
 
 	// Act & Assert - Not found
-	chunk = plan.GetChunk("chunk-999")
-	assert.Nil(t, chunk)
+	step = plan.GetStep("step-999")
+	assert.Nil(t, step)
 
 	// Act & Assert - Empty plan
-	emptyPlan := &driftadopt.DriftPlan{Chunks: []driftadopt.DriftChunk{}}
-	chunk = emptyPlan.GetChunk("chunk-001")
-	assert.Nil(t, chunk)
+	emptyPlan := &driftadopt.DriftPlan{Steps: []driftadopt.DriftStep{}}
+	step = emptyPlan.GetStep("step-001")
+	assert.Nil(t, step)
 }
 
-func TestDriftPlan_GetNextPendingChunk(t *testing.T) {
+func TestDriftPlan_GetNextPendingStep(t *testing.T) {
 	// Arrange
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 4,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Order: 0, Status: driftadopt.ChunkCompleted},
-			{ID: "chunk-002", Order: 1, Status: driftadopt.ChunkPending},
-			{ID: "chunk-003", Order: 2, Status: driftadopt.ChunkPending},
-			{ID: "chunk-004", Order: 3, Status: driftadopt.ChunkFailed},
+		TotalSteps:  4,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Order: 0, Status: driftadopt.StepCompleted},
+			{ID: "step-002", Order: 1, Status: driftadopt.StepPending},
+			{ID: "step-003", Order: 2, Status: driftadopt.StepPending},
+			{ID: "step-004", Order: 3, Status: driftadopt.StepFailed},
 		},
 	}
 
 	// Act
-	chunk := plan.GetNextPendingChunk()
+	step := plan.GetNextPendingStep()
 
-	// Assert - Returns first pending chunk
-	require.NotNil(t, chunk)
-	assert.Equal(t, "chunk-002", chunk.ID)
-	assert.Equal(t, driftadopt.ChunkPending, chunk.Status)
+	// Assert - Returns first pending step
+	require.NotNil(t, step)
+	assert.Equal(t, "step-002", step.ID)
+	assert.Equal(t, driftadopt.StepPending, step.Status)
 }
 
-func TestDriftPlan_GetNextPendingChunk_NoPending(t *testing.T) {
-	// Arrange - All chunks completed or failed
+func TestDriftPlan_GetNextPendingStep_NoPending(t *testing.T) {
+	// Arrange - All steps completed or failed
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 2,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Order: 0, Status: driftadopt.ChunkCompleted},
-			{ID: "chunk-002", Order: 1, Status: driftadopt.ChunkFailed},
+		TotalSteps:  2,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Order: 0, Status: driftadopt.StepCompleted},
+			{ID: "step-002", Order: 1, Status: driftadopt.StepFailed},
 		},
 	}
 
 	// Act
-	chunk := plan.GetNextPendingChunk()
+	step := plan.GetNextPendingStep()
 
-	// Assert - Returns nil when no pending chunks
-	assert.Nil(t, chunk)
+	// Assert - Returns nil when no pending steps
+	assert.Nil(t, step)
 }
 
-func TestDriftPlan_GetNextPendingChunk_EmptyPlan(t *testing.T) {
+func TestDriftPlan_GetNextPendingStep_EmptyPlan(t *testing.T) {
 	// Arrange
 	plan := &driftadopt.DriftPlan{
-		Chunks: []driftadopt.DriftChunk{},
+		Steps: []driftadopt.DriftStep{},
 	}
 
 	// Act
-	chunk := plan.GetNextPendingChunk()
+	step := plan.GetNextPendingStep()
 
 	// Assert
-	assert.Nil(t, chunk)
+	assert.Nil(t, step)
 }
 
 func TestDriftPlan_CountByStatus(t *testing.T) {
@@ -100,14 +100,14 @@ func TestDriftPlan_CountByStatus(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 6,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Status: driftadopt.ChunkCompleted},
-			{ID: "chunk-002", Status: driftadopt.ChunkCompleted},
-			{ID: "chunk-003", Status: driftadopt.ChunkCompleted},
-			{ID: "chunk-004", Status: driftadopt.ChunkPending},
-			{ID: "chunk-005", Status: driftadopt.ChunkFailed},
-			{ID: "chunk-006", Status: driftadopt.ChunkSkipped},
+		TotalSteps:  6,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Status: driftadopt.StepCompleted},
+			{ID: "step-002", Status: driftadopt.StepCompleted},
+			{ID: "step-003", Status: driftadopt.StepCompleted},
+			{ID: "step-004", Status: driftadopt.StepPending},
+			{ID: "step-005", Status: driftadopt.StepFailed},
+			{ID: "step-006", Status: driftadopt.StepSkipped},
 		},
 	}
 
@@ -115,84 +115,84 @@ func TestDriftPlan_CountByStatus(t *testing.T) {
 	counts := plan.CountByStatus()
 
 	// Assert
-	assert.Equal(t, 3, counts[driftadopt.ChunkCompleted])
-	assert.Equal(t, 1, counts[driftadopt.ChunkPending])
-	assert.Equal(t, 1, counts[driftadopt.ChunkFailed])
-	assert.Equal(t, 1, counts[driftadopt.ChunkSkipped])
-	assert.Equal(t, 0, counts[driftadopt.ChunkInProgress]) // None in progress
+	assert.Equal(t, 3, counts[driftadopt.StepCompleted])
+	assert.Equal(t, 1, counts[driftadopt.StepPending])
+	assert.Equal(t, 1, counts[driftadopt.StepFailed])
+	assert.Equal(t, 1, counts[driftadopt.StepSkipped])
+	assert.Equal(t, 0, counts[driftadopt.StepInProgress]) // None in progress
 }
 
 func TestDriftPlan_CountByStatus_Empty(t *testing.T) {
 	// Arrange
 	plan := &driftadopt.DriftPlan{
-		Chunks: []driftadopt.DriftChunk{},
+		Steps: []driftadopt.DriftStep{},
 	}
 
 	// Act
 	counts := plan.CountByStatus()
 
 	// Assert - All counts should be zero
-	assert.Equal(t, 0, counts[driftadopt.ChunkCompleted])
-	assert.Equal(t, 0, counts[driftadopt.ChunkPending])
-	assert.Equal(t, 0, counts[driftadopt.ChunkFailed])
-	assert.Equal(t, 0, counts[driftadopt.ChunkSkipped])
-	assert.Equal(t, 0, counts[driftadopt.ChunkInProgress])
+	assert.Equal(t, 0, counts[driftadopt.StepCompleted])
+	assert.Equal(t, 0, counts[driftadopt.StepPending])
+	assert.Equal(t, 0, counts[driftadopt.StepFailed])
+	assert.Equal(t, 0, counts[driftadopt.StepSkipped])
+	assert.Equal(t, 0, counts[driftadopt.StepInProgress])
 }
 
-func TestDriftPlan_GetFailedChunks(t *testing.T) {
+func TestDriftPlan_GetFailedSteps(t *testing.T) {
 	// Arrange
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 5,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Status: driftadopt.ChunkCompleted},
-			{ID: "chunk-002", Status: driftadopt.ChunkFailed, LastError: "compilation error"},
-			{ID: "chunk-003", Status: driftadopt.ChunkPending},
-			{ID: "chunk-004", Status: driftadopt.ChunkFailed, LastError: "diff mismatch"},
-			{ID: "chunk-005", Status: driftadopt.ChunkSkipped},
+		TotalSteps:  5,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Status: driftadopt.StepCompleted},
+			{ID: "step-002", Status: driftadopt.StepFailed, LastError: "compilation error"},
+			{ID: "step-003", Status: driftadopt.StepPending},
+			{ID: "step-004", Status: driftadopt.StepFailed, LastError: "diff mismatch"},
+			{ID: "step-005", Status: driftadopt.StepSkipped},
 		},
 	}
 
 	// Act
-	failed := plan.GetFailedChunks()
+	failed := plan.GetFailedSteps()
 
 	// Assert
 	require.Len(t, failed, 2)
-	assert.Equal(t, "chunk-002", failed[0].ID)
+	assert.Equal(t, "step-002", failed[0].ID)
 	assert.Equal(t, "compilation error", failed[0].LastError)
-	assert.Equal(t, "chunk-004", failed[1].ID)
+	assert.Equal(t, "step-004", failed[1].ID)
 	assert.Equal(t, "diff mismatch", failed[1].LastError)
 }
 
-func TestDriftPlan_GetFailedChunks_None(t *testing.T) {
-	// Arrange - No failed chunks
+func TestDriftPlan_GetFailedSteps_None(t *testing.T) {
+	// Arrange - No failed steps
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 2,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Status: driftadopt.ChunkCompleted},
-			{ID: "chunk-002", Status: driftadopt.ChunkPending},
+		TotalSteps:  2,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Status: driftadopt.StepCompleted},
+			{ID: "step-002", Status: driftadopt.StepPending},
 		},
 	}
 
 	// Act
-	failed := plan.GetFailedChunks()
+	failed := plan.GetFailedSteps()
 
 	// Assert - Empty slice, not nil
 	assert.NotNil(t, failed)
 	assert.Empty(t, failed)
 }
 
-func TestDriftPlan_GetFailedChunks_Empty(t *testing.T) {
+func TestDriftPlan_GetFailedSteps_Empty(t *testing.T) {
 	// Arrange
 	plan := &driftadopt.DriftPlan{
-		Chunks: []driftadopt.DriftChunk{},
+		Steps: []driftadopt.DriftStep{},
 	}
 
 	// Act
-	failed := plan.GetFailedChunks()
+	failed := plan.GetFailedSteps()
 
 	// Assert
 	assert.NotNil(t, failed)
@@ -204,35 +204,35 @@ func TestDriftPlan_HelperMethods_Integration(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "production",
 		GeneratedAt: time.Now(),
-		TotalChunks: 5,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Order: 0, Status: driftadopt.ChunkCompleted},
-			{ID: "chunk-002", Order: 1, Status: driftadopt.ChunkPending},
-			{ID: "chunk-003", Order: 2, Status: driftadopt.ChunkPending},
-			{ID: "chunk-004", Order: 3, Status: driftadopt.ChunkFailed, LastError: "error 1"},
-			{ID: "chunk-005", Order: 4, Status: driftadopt.ChunkSkipped},
+		TotalSteps:  5,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Order: 0, Status: driftadopt.StepCompleted},
+			{ID: "step-002", Order: 1, Status: driftadopt.StepPending},
+			{ID: "step-003", Order: 2, Status: driftadopt.StepPending},
+			{ID: "step-004", Order: 3, Status: driftadopt.StepFailed, LastError: "error 1"},
+			{ID: "step-005", Order: 4, Status: driftadopt.StepSkipped},
 		},
 	}
 
-	// Test GetChunk
-	chunk := plan.GetChunk("chunk-003")
-	require.NotNil(t, chunk)
-	assert.Equal(t, driftadopt.ChunkPending, chunk.Status)
+	// Test GetStep
+	step := plan.GetStep("step-003")
+	require.NotNil(t, step)
+	assert.Equal(t, driftadopt.StepPending, step.Status)
 
-	// Test GetNextPendingChunk
-	nextChunk := plan.GetNextPendingChunk()
-	require.NotNil(t, nextChunk)
-	assert.Equal(t, "chunk-002", nextChunk.ID)
+	// Test GetNextPendingStep
+	nextStep := plan.GetNextPendingStep()
+	require.NotNil(t, nextStep)
+	assert.Equal(t, "step-002", nextStep.ID)
 
 	// Test CountByStatus
 	counts := plan.CountByStatus()
-	assert.Equal(t, 1, counts[driftadopt.ChunkCompleted])
-	assert.Equal(t, 2, counts[driftadopt.ChunkPending])
-	assert.Equal(t, 1, counts[driftadopt.ChunkFailed])
-	assert.Equal(t, 1, counts[driftadopt.ChunkSkipped])
+	assert.Equal(t, 1, counts[driftadopt.StepCompleted])
+	assert.Equal(t, 2, counts[driftadopt.StepPending])
+	assert.Equal(t, 1, counts[driftadopt.StepFailed])
+	assert.Equal(t, 1, counts[driftadopt.StepSkipped])
 
-	// Test GetFailedChunks
-	failed := plan.GetFailedChunks()
+	// Test GetFailedSteps
+	failed := plan.GetFailedSteps()
 	require.Len(t, failed, 1)
-	assert.Equal(t, "chunk-004", failed[0].ID)
+	assert.Equal(t, "step-004", failed[0].ID)
 }

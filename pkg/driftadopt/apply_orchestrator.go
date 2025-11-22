@@ -23,8 +23,8 @@ type PreviewRunner interface {
 
 // ApplyResult contains the result of applying a diff
 type ApplyResult struct {
-	ChunkID        string
-	Status         ChunkStatus
+	StepID        string
+	Status         StepStatus
 	DiffID         string
 	CompileSuccess bool
 	PreviewOutput  string
@@ -45,38 +45,38 @@ func NewApplyOrchestrator(projectDir string, validator validator.Validator, prev
 }
 
 // ApplyDiff applies code changes and validates them
-func (o *ApplyOrchestrator) ApplyDiff(ctx context.Context, planFile, chunkID string, changes []FileChange) (*ApplyResult, error) {
+func (o *ApplyOrchestrator) ApplyDiff(ctx context.Context, planFile, stepID string, changes []FileChange) (*ApplyResult, error) {
 	// Load plan
 	plan, err := ReadPlanFile(planFile)
 	if err != nil {
 		return nil, fmt.Errorf("read plan file: %w", err)
 	}
 
-	// Get chunk
-	chunk := plan.GetChunk(chunkID)
-	if chunk == nil {
-		return nil, fmt.Errorf("chunk not found: %s", chunkID)
+	// Get step
+	step := plan.GetStep(stepID)
+	if step == nil {
+		return nil, fmt.Errorf("step not found: %s", stepID)
 	}
 
-	// Mark chunk as in progress
-	chunk.Status = ChunkInProgress
+	// Mark step as in progress
+	step.Status = StepInProgress
 	if err := WritePlanFile(planFile, plan); err != nil {
 		return nil, fmt.Errorf("update plan: %w", err)
 	}
 
 	result := &ApplyResult{
-		ChunkID:        chunkID,
+		StepID:        stepID,
 		CompileSuccess: false,
 		DiffMatches:    false,
 	}
 
 	// Step 1: Apply changes
-	diffID, err := o.diffApplier.ApplyChanges(chunkID, changes)
+	diffID, err := o.diffApplier.ApplyChanges(stepID, changes)
 	if err != nil {
-		result.Status = ChunkFailed
+		result.Status = StepFailed
 		result.ErrorMessage = fmt.Sprintf("Failed to apply changes: %v", err)
 		result.Suggestions = []string{"Check file paths and permissions"}
-		o.updatePlanStatus(planFile, chunkID, result)
+		o.updatePlanStatus(planFile, stepID, result)
 		return result, nil
 	}
 
@@ -85,19 +85,19 @@ func (o *ApplyOrchestrator) ApplyDiff(ctx context.Context, planFile, chunkID str
 	// Step 2: Validate compilation
 	validationResult, err := o.validator.Validate(ctx, o.projectDir)
 	if err != nil {
-		result.Status = ChunkFailed
+		result.Status = StepFailed
 		result.ErrorMessage = fmt.Sprintf("Validation error: %v", err)
 		result.Suggestions = []string{"Check validator configuration"}
-		o.rollbackAndUpdatePlan(planFile, chunkID, diffID, result)
+		o.rollbackAndUpdatePlan(planFile, stepID, diffID, result)
 		return result, nil
 	}
 
 	if !validationResult.Success {
-		result.Status = ChunkFailed
+		result.Status = StepFailed
 		result.CompileSuccess = false
 		result.ErrorMessage = "Compilation failed"
 		result.Suggestions = o.formatCompilationErrors(validationResult.Errors)
-		o.rollbackAndUpdatePlan(planFile, chunkID, diffID, result)
+		o.rollbackAndUpdatePlan(planFile, stepID, diffID, result)
 		return result, nil
 	}
 
@@ -106,67 +106,67 @@ func (o *ApplyOrchestrator) ApplyDiff(ctx context.Context, planFile, chunkID str
 	// Step 3: Run preview
 	if o.previewRunner == nil {
 		// No preview runner configured (testing mode)
-		result.Status = ChunkCompleted
+		result.Status = StepCompleted
 		result.DiffMatches = true
-		o.updatePlanStatus(planFile, chunkID, result)
+		o.updatePlanStatus(planFile, stepID, result)
 		return result, nil
 	}
 
 	previewDiffs, err := o.previewRunner.RunPreview(ctx, o.projectDir)
 	if err != nil {
-		result.Status = ChunkFailed
+		result.Status = StepFailed
 		result.ErrorMessage = fmt.Sprintf("Preview failed: %v", err)
 		result.Suggestions = []string{"Check Pulumi configuration", "Verify stack exists"}
-		o.rollbackAndUpdatePlan(planFile, chunkID, diffID, result)
+		o.rollbackAndUpdatePlan(planFile, stepID, diffID, result)
 		return result, nil
 	}
 
 	// Step 4: Match diffs
-	matchResult := o.diffMatcher.Matches(chunk.Resources, previewDiffs)
+	matchResult := o.diffMatcher.Matches(step.Resources, previewDiffs)
 
 	if !matchResult.Matches {
-		result.Status = ChunkFailed
+		result.Status = StepFailed
 		result.DiffMatches = false
 		result.ErrorMessage = "Preview mismatch"
 		result.Suggestions = o.formatMatchErrors(matchResult)
-		o.rollbackAndUpdatePlan(planFile, chunkID, diffID, result)
+		o.rollbackAndUpdatePlan(planFile, stepID, diffID, result)
 		return result, nil
 	}
 
 	// Success!
-	result.Status = ChunkCompleted
+	result.Status = StepCompleted
 	result.DiffMatches = true
-	o.updatePlanStatus(planFile, chunkID, result)
+	o.updatePlanStatus(planFile, stepID, result)
 
 	return result, nil
 }
 
 // rollbackAndUpdatePlan rolls back changes and updates plan
-func (o *ApplyOrchestrator) rollbackAndUpdatePlan(planFile, chunkID, diffID string, result *ApplyResult) {
+func (o *ApplyOrchestrator) rollbackAndUpdatePlan(planFile, stepID, diffID string, result *ApplyResult) {
 	// Rollback the diff
 	if diffID != "" {
 		o.diffApplier.GetRecorder().Rollback(diffID)
 	}
 
 	// Update plan
-	o.updatePlanStatus(planFile, chunkID, result)
+	o.updatePlanStatus(planFile, stepID, result)
 }
 
-// updatePlanStatus updates the chunk status in the plan file
-func (o *ApplyOrchestrator) updatePlanStatus(planFile, chunkID string, result *ApplyResult) {
+// updatePlanStatus updates the step status in the plan file
+func (o *ApplyOrchestrator) updatePlanStatus(planFile, stepID string, result *ApplyResult) {
 	plan, err := ReadPlanFile(planFile)
 	if err != nil {
 		return
 	}
 
-	chunk := plan.GetChunk(chunkID)
-	if chunk == nil {
+	step := plan.GetStep(stepID)
+	if step == nil {
 		return
 	}
 
-	chunk.Status = result.Status
+	step.Status = result.Status
 	if result.ErrorMessage != "" {
-		chunk.LastError = result.ErrorMessage
+		step.LastError = result.ErrorMessage
 	}
 
 	WritePlanFile(planFile, plan)

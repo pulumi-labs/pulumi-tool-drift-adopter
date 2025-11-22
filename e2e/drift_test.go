@@ -36,26 +36,26 @@ func TestDriftSimple(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
+		TotalSteps:  1,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:           "chunk-001",
+				ID:           "step-001",
 				Order:        0,
 				Resources:    preview,
-				Status:       driftadopt.ChunkPending,
+				Status:       driftadopt.StepPending,
 				Dependencies: []string{},
 			},
 		},
 	}
 
 	// Verify plan structure
-	assert.Equal(t, 1, plan.TotalChunks)
-	assert.Equal(t, driftadopt.ChunkPending, plan.Chunks[0].Status)
+	assert.Equal(t, 1, plan.TotalSteps)
+	assert.Equal(t, driftadopt.StepPending, plan.Steps[0].Status)
 
-	// Verify next chunk is available
-	nextChunk := plan.GetNextPendingChunk()
-	require.NotNil(t, nextChunk)
-	assert.Equal(t, "chunk-001", nextChunk.ID)
+	// Verify next step is available
+	nextStep := plan.GetNextPendingStep()
+	require.NotNil(t, nextStep)
+	assert.Equal(t, "step-001", nextStep.ID)
 }
 
 // TestDriftDependencies tests multi-resource drift with dependencies
@@ -103,17 +103,17 @@ func TestDriftDependencies(t *testing.T) {
 	assert.True(t, vpcIndex < subnetIndex, "VPC should come before Subnet")
 	assert.True(t, vpcIndex < sgIndex, "VPC should come before SecurityGroup")
 
-	// Create chunks based on dependency levels
-	chunks := createChunksFromDependencies(preview, graph)
-	assert.Len(t, chunks, 2, "Should have 2 chunks")
+	// Create steps based on dependency levels
+	steps := createStepsFromDependencies(preview, graph)
+	assert.Len(t, steps, 2, "Should have 2 steps")
 
-	// Verify first chunk has VPC
-	assert.Len(t, chunks[0].Resources, 1, "First chunk should have 1 resource")
-	assert.Equal(t, "main-vpc", chunks[0].Resources[0].Name)
+	// Verify first step has VPC
+	assert.Len(t, steps[0].Resources, 1, "First step should have 1 resource")
+	assert.Equal(t, "main-vpc", steps[0].Resources[0].Name)
 
-	// Verify second chunk has Subnet and SecurityGroup
-	assert.Len(t, chunks[1].Resources, 2, "Second chunk should have 2 resources")
-	assert.Equal(t, []string{"chunk-001"}, chunks[1].Dependencies)
+	// Verify second step has Subnet and SecurityGroup
+	assert.Len(t, steps[1].Resources, 2, "Second step should have 2 resources")
+	assert.Equal(t, []string{"step-001"}, steps[1].Dependencies)
 }
 
 // TestDriftDeletion tests resource deletion scenario
@@ -138,20 +138,20 @@ func TestDriftDeletion(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
+		TotalSteps:  1,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:           "chunk-001",
+				ID:           "step-001",
 				Order:        0,
 				Resources:    preview,
-				Status:       driftadopt.ChunkPending,
+				Status:       driftadopt.StepPending,
 				Dependencies: []string{},
 			},
 		},
 	}
 
-	assert.Equal(t, 1, plan.TotalChunks)
-	assert.Equal(t, driftadopt.DiffTypeDelete, plan.Chunks[0].Resources[0].DiffType)
+	assert.Equal(t, 1, plan.TotalSteps)
+	assert.Equal(t, driftadopt.DiffTypeDelete, plan.Steps[0].Resources[0].DiffType)
 }
 
 // TestDriftReplacement tests resource replacement scenario
@@ -174,8 +174,8 @@ func TestDriftReplacement(t *testing.T) {
 	assert.Equal(t, "bucket", preview[0].PropertyDiff[0].Path)
 }
 
-// TestChunkGuide tests the chunk guide functionality
-func TestChunkGuide(t *testing.T) {
+// TestStepGuide tests the step guide functionality
+func TestStepGuide(t *testing.T) {
 	fixtureDir := "../testdata/drift-simple"
 
 	// Load expected plan
@@ -188,22 +188,22 @@ func TestChunkGuide(t *testing.T) {
 
 	// Update SourceFile to absolute path for testing
 	absFixtureDir, _ := filepath.Abs(fixtureDir)
-	for i := range plan.Chunks[0].Resources {
-		if plan.Chunks[0].Resources[i].SourceFile != "" {
-			plan.Chunks[0].Resources[i].SourceFile = filepath.Join(absFixtureDir, plan.Chunks[0].Resources[i].SourceFile)
+	for i := range plan.Steps[0].Resources {
+		if plan.Steps[0].Resources[i].SourceFile != "" {
+			plan.Steps[0].Resources[i].SourceFile = filepath.Join(absFixtureDir, plan.Steps[0].Resources[i].SourceFile)
 		}
 	}
 
-	// Create chunk guide
-	guide := driftadopt.NewChunkGuide(absFixtureDir)
+	// Create step guide
+	guide := driftadopt.NewStepGuide(absFixtureDir)
 
-	// Get chunk info
-	info, err := guide.ShowChunk(&plan, "chunk-001")
+	// Get step info
+	info, err := guide.ShowStep(&plan, "step-001")
 	require.NoError(t, err)
 
-	// Verify chunk info
-	assert.Equal(t, "chunk-001", info.ChunkID)
-	assert.Equal(t, driftadopt.ChunkPending, info.Status)
+	// Verify step info
+	assert.Equal(t, "step-001", info.StepID)
+	assert.Equal(t, driftadopt.StepPending, info.Status)
 	assert.Len(t, info.Resources, 1)
 	assert.Equal(t, "my-bucket", info.Resources[0].Name)
 
@@ -214,7 +214,7 @@ func TestChunkGuide(t *testing.T) {
 	assert.NotEmpty(t, info.CurrentCode)
 }
 
-// TestSkipFunctionality tests skipping a chunk
+// TestSkipFunctionality tests skipping a step
 func TestSkipFunctionality(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "e2e-skip-*")
 	require.NoError(t, err)
@@ -224,24 +224,24 @@ func TestSkipFunctionality(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 2,
-		Chunks: []driftadopt.DriftChunk{
+		TotalSteps:  2,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:     "chunk-001",
+				ID:     "step-001",
 				Order:  0,
-				Status: driftadopt.ChunkPending,
+				Status: driftadopt.StepPending,
 				Resources: []driftadopt.ResourceDiff{
 					{URN: "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket1", Name: "bucket1", Type: "aws:s3/bucket:Bucket"},
 				},
 			},
 			{
-				ID:     "chunk-002",
+				ID:     "step-002",
 				Order:  1,
-				Status: driftadopt.ChunkPending,
+				Status: driftadopt.StepPending,
 				Resources: []driftadopt.ResourceDiff{
 					{URN: "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket2", Name: "bucket2", Type: "aws:s3/bucket:Bucket"},
 				},
-				Dependencies: []string{"chunk-001"},
+				Dependencies: []string{"step-001"},
 			},
 		},
 	}
@@ -251,8 +251,8 @@ func TestSkipFunctionality(t *testing.T) {
 	err = driftadopt.WritePlanFile(planFile, plan)
 	require.NoError(t, err)
 
-	// Skip first chunk
-	plan.Chunks[0].Status = driftadopt.ChunkSkipped
+	// Skip first step
+	plan.Steps[0].Status = driftadopt.StepSkipped
 	err = driftadopt.WritePlanFile(planFile, plan)
 	require.NoError(t, err)
 
@@ -261,30 +261,30 @@ func TestSkipFunctionality(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify skip persisted
-	assert.Equal(t, driftadopt.ChunkSkipped, loadedPlan.Chunks[0].Status)
+	assert.Equal(t, driftadopt.StepSkipped, loadedPlan.Steps[0].Status)
 
-	// Next pending chunk should be chunk-002
-	nextChunk := loadedPlan.GetNextPendingChunk()
-	require.NotNil(t, nextChunk)
-	assert.Equal(t, "chunk-002", nextChunk.ID)
+	// Next pending step should be step-002
+	nextStep := loadedPlan.GetNextPendingStep()
+	require.NotNil(t, nextStep)
+	assert.Equal(t, "step-002", nextStep.ID)
 }
 
-// TestFailureRecovery tests handling of failed chunks
+// TestFailureRecovery tests handling of failed steps
 func TestFailureRecovery(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "e2e-failure-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	// Create a plan with a failed chunk
+	// Create a plan with a failed step
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
+		TotalSteps:  1,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:        "chunk-001",
+				ID:        "step-001",
 				Order:     0,
-				Status:    driftadopt.ChunkFailed,
+				Status:    driftadopt.StepFailed,
 				LastError: "Compilation failed",
 				Attempt:   1,
 				Resources: []driftadopt.ResourceDiff{
@@ -299,16 +299,16 @@ func TestFailureRecovery(t *testing.T) {
 	err = driftadopt.WritePlanFile(planFile, plan)
 	require.NoError(t, err)
 
-	// Get failed chunks
-	failedChunks := plan.GetFailedChunks()
-	assert.Len(t, failedChunks, 1)
-	assert.Equal(t, "chunk-001", failedChunks[0].ID)
-	assert.Equal(t, "Compilation failed", failedChunks[0].LastError)
+	// Get failed steps
+	failedSteps := plan.GetFailedSteps()
+	assert.Len(t, failedSteps, 1)
+	assert.Equal(t, "step-001", failedSteps[0].ID)
+	assert.Equal(t, "Compilation failed", failedSteps[0].LastError)
 
-	// Retry chunk
-	plan.Chunks[0].Status = driftadopt.ChunkPending
-	plan.Chunks[0].Attempt++
-	plan.Chunks[0].LastError = ""
+	// Retry step
+	plan.Steps[0].Status = driftadopt.StepPending
+	plan.Steps[0].Attempt++
+	plan.Steps[0].LastError = ""
 
 	err = driftadopt.WritePlanFile(planFile, plan)
 	require.NoError(t, err)
@@ -316,16 +316,16 @@ func TestFailureRecovery(t *testing.T) {
 	// Verify retry was recorded
 	loadedPlan, err := driftadopt.ReadPlanFile(planFile)
 	require.NoError(t, err)
-	assert.Equal(t, driftadopt.ChunkPending, loadedPlan.Chunks[0].Status)
-	assert.Equal(t, 2, loadedPlan.Chunks[0].Attempt)
+	assert.Equal(t, driftadopt.StepPending, loadedPlan.Steps[0].Status)
+	assert.Equal(t, 2, loadedPlan.Steps[0].Attempt)
 }
 
 // Helper functions
 
 func contains(s, substr string) bool {
 	return len(s) >= len(substr) && s[len(s)-len(substr):] == substr ||
-		   (len(s) > len(substr) && s[0:len(substr)] == substr) ||
-		   (len(s) > len(substr) && findSubstring(s, substr))
+		(len(s) > len(substr) && s[0:len(substr)] == substr) ||
+		(len(s) > len(substr) && findSubstring(s, substr))
 }
 
 func findSubstring(s, substr string) bool {
@@ -337,7 +337,7 @@ func findSubstring(s, substr string) bool {
 	return false
 }
 
-func createChunksFromDependencies(resources []driftadopt.ResourceDiff, graph *driftadopt.Graph) []driftadopt.DriftChunk {
+func createStepsFromDependencies(resources []driftadopt.ResourceDiff, graph *driftadopt.Graph) []driftadopt.DriftStep {
 	// Calculate dependency depth for each resource
 	depths := make(map[string]int)
 	calculateDepths(graph, depths)
@@ -353,29 +353,29 @@ func createChunksFromDependencies(resources []driftadopt.ResourceDiff, graph *dr
 		}
 	}
 
-	// Create chunks
-	var chunks []driftadopt.DriftChunk
+	// Create steps
+	var steps []driftadopt.DriftStep
 	for i := 0; i <= maxDepth; i++ {
 		if len(levels[i]) == 0 {
 			continue
 		}
 
-		chunkID := "chunk-" + padInt(len(chunks)+1, 3)
-		chunk := driftadopt.DriftChunk{
-			ID:        chunkID,
-			Order:     len(chunks),
+		stepID := "step-" + padInt(len(steps)+1, 3)
+		step := driftadopt.DriftStep{
+			ID:        stepID,
+			Order:     len(steps),
 			Resources: levels[i],
-			Status:    driftadopt.ChunkPending,
+			Status:    driftadopt.StepPending,
 		}
 
-		if len(chunks) > 0 {
-			chunk.Dependencies = []string{"chunk-" + padInt(len(chunks), 3)}
+		if len(steps) > 0 {
+			step.Dependencies = []string{"step-" + padInt(len(steps), 3)}
 		}
 
-		chunks = append(chunks, chunk)
+		steps = append(steps, step)
 	}
 
-	return chunks
+	return steps
 }
 
 // calculateDepths calculates the maximum dependency depth for each node

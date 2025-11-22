@@ -24,14 +24,14 @@ This command:
 }
 
 var (
-	applyChunkID string
+	applyStepID string
 	applyFiles   []string
 )
 
 func init() {
-	applyDiffCmd.Flags().StringVar(&applyChunkID, "chunk", "", "Chunk ID (required)")
+	applyDiffCmd.Flags().StringVar(&applyStepID, "step", "", "Step ID (required)")
 	applyDiffCmd.Flags().StringSliceVar(&applyFiles, "files", []string{}, "Files to update (format: path:content or @path)")
-	applyDiffCmd.MarkFlagRequired("chunk")
+	applyDiffCmd.MarkFlagRequired("step")
 	applyDiffCmd.MarkFlagRequired("files")
 }
 
@@ -50,18 +50,18 @@ func runApplyDiff(cmd *cobra.Command, args []string) error {
 	orchestrator := driftadopt.NewApplyOrchestrator(projectDir, nil, nil)
 
 	// Apply the diff
-	result, err := orchestrator.ApplyDiff(context.Background(), planFile, applyChunkID, changes)
+	result, err := orchestrator.ApplyDiff(context.Background(), planFile, applyStepID, changes)
 	if err != nil {
 		return fmt.Errorf("apply diff: %w", err)
 	}
 
 	// Display result
-	fmt.Printf("Chunk: %s\n", result.ChunkID)
+	fmt.Printf("Step: %s\n", result.StepID)
 	fmt.Printf("Status: %s\n", result.Status)
 	fmt.Printf("Diff ID: %s\n", result.DiffID)
 	fmt.Println()
 
-	if result.Status == driftadopt.ChunkCompleted {
+	if result.Status == driftadopt.StepCompleted {
 		fmt.Println("✅ Successfully applied and validated!")
 		fmt.Println()
 		fmt.Println("Next:")

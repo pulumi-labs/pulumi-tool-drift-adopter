@@ -22,12 +22,12 @@ func TestApplyOrchestrator_SuccessfulApplication(t *testing.T) {
 	// Create a simple plan
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
+		TotalSteps: 1,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:     "chunk-001",
+				ID:     "step-001",
 				Order:  1,
-				Status: driftadopt.ChunkPending,
+				Status: driftadopt.StepPending,
 				Resources: []driftadopt.ResourceDiff{
 					{
 						URN:  "urn:test",
@@ -48,7 +48,7 @@ func TestApplyOrchestrator_SuccessfulApplication(t *testing.T) {
 	// Create source file
 	sourceFile := filepath.Join(tmpDir, "index.ts")
 	os.WriteFile(sourceFile, []byte(`export const x = "old";`), 0644)
-	plan.Chunks[0].Resources[0].SourceFile = sourceFile
+	plan.Steps[0].Resources[0].SourceFile = sourceFile
 	driftadopt.WritePlanFile(planFile, plan)
 
 	// Create mock validator that always succeeds
@@ -75,18 +75,18 @@ func TestApplyOrchestrator_SuccessfulApplication(t *testing.T) {
 	}
 
 	// Act
-	result, err := orchestrator.ApplyDiff(context.Background(), planFile, "chunk-001", changes)
+	result, err := orchestrator.ApplyDiff(context.Background(), planFile, "step-001", changes)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, driftadopt.ChunkCompleted, result.Status)
+	assert.Equal(t, driftadopt.StepCompleted, result.Status)
 	assert.True(t, result.CompileSuccess)
 	assert.True(t, result.DiffMatches)
 	assert.NotEmpty(t, result.DiffID)
 
 	// Verify plan was updated
 	updatedPlan, _ := driftadopt.ReadPlanFile(planFile)
-	assert.Equal(t, driftadopt.ChunkCompleted, updatedPlan.Chunks[0].Status)
+	assert.Equal(t, driftadopt.StepCompleted, updatedPlan.Steps[0].Status)
 }
 
 func TestApplyOrchestrator_CompilationFailure(t *testing.T) {
@@ -96,12 +96,12 @@ func TestApplyOrchestrator_CompilationFailure(t *testing.T) {
 
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
+		TotalSteps: 1,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:        "chunk-001",
+				ID:        "step-001",
 				Order:     1,
-				Status:    driftadopt.ChunkPending,
+				Status:    driftadopt.StepPending,
 				Resources: []driftadopt.ResourceDiff{{URN: "urn:test"}},
 			},
 		},
@@ -126,18 +126,18 @@ func TestApplyOrchestrator_CompilationFailure(t *testing.T) {
 	}
 
 	// Act
-	result, err := orchestrator.ApplyDiff(context.Background(), planFile, "chunk-001", changes)
+	result, err := orchestrator.ApplyDiff(context.Background(), planFile, "step-001", changes)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, driftadopt.ChunkFailed, result.Status)
+	assert.Equal(t, driftadopt.StepFailed, result.Status)
 	assert.False(t, result.CompileSuccess)
 	assert.Contains(t, result.ErrorMessage, "Compilation failed")
 	assert.NotEmpty(t, result.Suggestions)
 
-	// Verify chunk marked as failed in plan
+	// Verify step marked as failed in plan
 	updatedPlan, _ := driftadopt.ReadPlanFile(planFile)
-	assert.Equal(t, driftadopt.ChunkFailed, updatedPlan.Chunks[0].Status)
+	assert.Equal(t, driftadopt.StepFailed, updatedPlan.Steps[0].Status)
 }
 
 func TestApplyOrchestrator_DiffMismatch(t *testing.T) {
@@ -147,12 +147,12 @@ func TestApplyOrchestrator_DiffMismatch(t *testing.T) {
 
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
+		TotalSteps: 1,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:     "chunk-001",
+				ID:     "step-001",
 				Order:  1,
-				Status: driftadopt.ChunkPending,
+				Status: driftadopt.StepPending,
 				Resources: []driftadopt.ResourceDiff{
 					{
 						URN: "urn:test",
@@ -190,18 +190,18 @@ func TestApplyOrchestrator_DiffMismatch(t *testing.T) {
 	}
 
 	// Act
-	result, err := orchestrator.ApplyDiff(context.Background(), planFile, "chunk-001", changes)
+	result, err := orchestrator.ApplyDiff(context.Background(), planFile, "step-001", changes)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, driftadopt.ChunkFailed, result.Status)
+	assert.Equal(t, driftadopt.StepFailed, result.Status)
 	assert.True(t, result.CompileSuccess)
 	assert.False(t, result.DiffMatches)
 	assert.Contains(t, result.ErrorMessage, "Preview mismatch")
 
-	// Verify chunk marked as failed
+	// Verify step marked as failed
 	updatedPlan, _ := driftadopt.ReadPlanFile(planFile)
-	assert.Equal(t, driftadopt.ChunkFailed, updatedPlan.Chunks[0].Status)
+	assert.Equal(t, driftadopt.StepFailed, updatedPlan.Steps[0].Status)
 }
 
 func TestApplyOrchestrator_AutomaticRollback(t *testing.T) {
@@ -211,9 +211,9 @@ func TestApplyOrchestrator_AutomaticRollback(t *testing.T) {
 
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Order: 1, Status: driftadopt.ChunkPending, Resources: []driftadopt.ResourceDiff{{URN: "urn:test"}}},
+		TotalSteps: 1,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Order: 1, Status: driftadopt.StepPending, Resources: []driftadopt.ResourceDiff{{URN: "urn:test"}}},
 		},
 	}
 	driftadopt.WritePlanFile(planFile, plan)
@@ -231,26 +231,26 @@ func TestApplyOrchestrator_AutomaticRollback(t *testing.T) {
 	}
 
 	// Act
-	result, err := orchestrator.ApplyDiff(context.Background(), planFile, "chunk-001", changes)
+	result, err := orchestrator.ApplyDiff(context.Background(), planFile, "step-001", changes)
 
 	// Assert
 	require.NoError(t, err)
-	assert.Equal(t, driftadopt.ChunkFailed, result.Status)
+	assert.Equal(t, driftadopt.StepFailed, result.Status)
 
 	// Verify file was rolled back to original content
 	content, _ := os.ReadFile(sourceFile)
 	assert.Equal(t, originalContent, string(content), "File should be rolled back on compilation failure")
 }
 
-func TestApplyOrchestrator_ChunkNotFound(t *testing.T) {
+func TestApplyOrchestrator_StepNotFound(t *testing.T) {
 	// Arrange
 	tmpDir := t.TempDir()
 	planFile := filepath.Join(tmpDir, "drift-plan.json")
 
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
-		TotalChunks: 1,
-		Chunks:      []driftadopt.DriftChunk{{ID: "chunk-001", Order: 1, Resources: []driftadopt.ResourceDiff{}}},
+		TotalSteps: 1,
+		Steps:      []driftadopt.DriftStep{{ID: "step-001", Order: 1, Resources: []driftadopt.ResourceDiff{}}},
 	}
 	driftadopt.WritePlanFile(planFile, plan)
 
@@ -261,7 +261,7 @@ func TestApplyOrchestrator_ChunkNotFound(t *testing.T) {
 
 	// Assert
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "chunk not found")
+	assert.Contains(t, err.Error(), "step not found")
 }
 
 // MockValidator for testing

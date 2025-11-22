@@ -20,10 +20,10 @@ func TestDriftPlan_Serialization(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: now,
-		TotalChunks: 2,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Order: 0, Status: driftadopt.ChunkPending},
-			{ID: "chunk-002", Order: 1, Status: driftadopt.ChunkPending},
+		TotalSteps: 2,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Order: 0, Status: driftadopt.StepPending},
+			{ID: "step-002", Order: 1, Status: driftadopt.StepPending},
 		},
 	}
 
@@ -38,33 +38,33 @@ func TestDriftPlan_Serialization(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, plan.Stack, unmarshaled.Stack)
-	assert.Equal(t, plan.TotalChunks, unmarshaled.TotalChunks)
+	assert.Equal(t, plan.TotalSteps, unmarshaled.TotalSteps)
 	assert.Equal(t, plan.GeneratedAt.Unix(), unmarshaled.GeneratedAt.Unix())
-	assert.Len(t, unmarshaled.Chunks, 2)
-	assert.Equal(t, "chunk-001", unmarshaled.Chunks[0].ID)
-	assert.Equal(t, "chunk-002", unmarshaled.Chunks[1].ID)
+	assert.Len(t, unmarshaled.Steps, 2)
+	assert.Equal(t, "step-001", unmarshaled.Steps[0].ID)
+	assert.Equal(t, "step-002", unmarshaled.Steps[1].ID)
 }
 
-func TestDriftChunk_Ordering(t *testing.T) {
-	// Arrange - Chunks out of order
-	chunks := []driftadopt.DriftChunk{
-		{ID: "chunk-003", Order: 2},
-		{ID: "chunk-001", Order: 0},
-		{ID: "chunk-002", Order: 1},
+func TestDriftStep_Ordering(t *testing.T) {
+	// Arrange - Steps out of order
+	steps := []driftadopt.DriftStep{
+		{ID: "step-003", Order: 2},
+		{ID: "step-001", Order: 0},
+		{ID: "step-002", Order: 1},
 	}
 
 	// Act - Sort by order
-	sort.Slice(chunks, func(i, j int) bool {
-		return chunks[i].Order < chunks[j].Order
+	sort.Slice(steps, func(i, j int) bool {
+		return steps[i].Order < steps[j].Order
 	})
 
 	// Assert - Correct order
-	assert.Equal(t, "chunk-001", chunks[0].ID)
-	assert.Equal(t, "chunk-002", chunks[1].ID)
-	assert.Equal(t, "chunk-003", chunks[2].ID)
-	assert.Equal(t, 0, chunks[0].Order)
-	assert.Equal(t, 1, chunks[1].Order)
-	assert.Equal(t, 2, chunks[2].Order)
+	assert.Equal(t, "step-001", steps[0].ID)
+	assert.Equal(t, "step-002", steps[1].ID)
+	assert.Equal(t, "step-003", steps[2].ID)
+	assert.Equal(t, 0, steps[0].Order)
+	assert.Equal(t, 1, steps[1].Order)
+	assert.Equal(t, 2, steps[2].Order)
 }
 
 func TestResourceDiff_PropertyPaths(t *testing.T) {
@@ -167,19 +167,19 @@ func TestDiffType_Constants(t *testing.T) {
 	assert.Equal(t, driftadopt.DiffType("replace"), driftadopt.DiffTypeReplace)
 }
 
-func TestChunkStatus_Constants(t *testing.T) {
-	// Test that ChunkStatus constants are defined correctly
-	assert.Equal(t, driftadopt.ChunkStatus("pending"), driftadopt.ChunkPending)
-	assert.Equal(t, driftadopt.ChunkStatus("in_progress"), driftadopt.ChunkInProgress)
-	assert.Equal(t, driftadopt.ChunkStatus("completed"), driftadopt.ChunkCompleted)
-	assert.Equal(t, driftadopt.ChunkStatus("failed"), driftadopt.ChunkFailed)
-	assert.Equal(t, driftadopt.ChunkStatus("skipped"), driftadopt.ChunkSkipped)
+func TestStepStatus_Constants(t *testing.T) {
+	// Test that StepStatus constants are defined correctly
+	assert.Equal(t, driftadopt.StepStatus("pending"), driftadopt.StepPending)
+	assert.Equal(t, driftadopt.StepStatus("in_progress"), driftadopt.StepInProgress)
+	assert.Equal(t, driftadopt.StepStatus("completed"), driftadopt.StepCompleted)
+	assert.Equal(t, driftadopt.StepStatus("failed"), driftadopt.StepFailed)
+	assert.Equal(t, driftadopt.StepStatus("skipped"), driftadopt.StepSkipped)
 }
 
-func TestDriftChunk_CompleteStructure(t *testing.T) {
-	// Test a complete chunk with all fields
-	chunk := driftadopt.DriftChunk{
-		ID:    "chunk-001",
+func TestDriftStep_CompleteStructure(t *testing.T) {
+	// Test a complete step with all fields
+	step := driftadopt.DriftStep{
+		ID:    "step-001",
 		Order: 0,
 		Resources: []driftadopt.ResourceDiff{
 			{
@@ -199,39 +199,39 @@ func TestDriftChunk_CompleteStructure(t *testing.T) {
 				SourceLine: 42,
 			},
 		},
-		Status:       driftadopt.ChunkPending,
-		Dependencies: []string{"chunk-000"},
+		Status:       driftadopt.StepPending,
+		Dependencies: []string{"step-000"},
 		Attempt:      0,
 		LastError:    "",
 	}
 
 	// Act - Serialize and deserialize
-	data, err := json.Marshal(chunk)
+	data, err := json.Marshal(step)
 	require.NoError(t, err)
 
-	var unmarshaled driftadopt.DriftChunk
+	var unmarshaled driftadopt.DriftStep
 	err = json.Unmarshal(data, &unmarshaled)
 	require.NoError(t, err)
 
 	// Assert - All fields preserved
-	assert.Equal(t, chunk.ID, unmarshaled.ID)
-	assert.Equal(t, chunk.Order, unmarshaled.Order)
+	assert.Equal(t, step.ID, unmarshaled.ID)
+	assert.Equal(t, step.Order, unmarshaled.Order)
 	assert.Len(t, unmarshaled.Resources, 1)
-	assert.Equal(t, chunk.Resources[0].URN, unmarshaled.Resources[0].URN)
-	assert.Equal(t, chunk.Resources[0].Type, unmarshaled.Resources[0].Type)
-	assert.Equal(t, chunk.Resources[0].DiffType, unmarshaled.Resources[0].DiffType)
-	assert.Equal(t, chunk.Status, unmarshaled.Status)
-	assert.Equal(t, chunk.Dependencies, unmarshaled.Dependencies)
-	assert.Equal(t, chunk.Attempt, unmarshaled.Attempt)
+	assert.Equal(t, step.Resources[0].URN, unmarshaled.Resources[0].URN)
+	assert.Equal(t, step.Resources[0].Type, unmarshaled.Resources[0].Type)
+	assert.Equal(t, step.Resources[0].DiffType, unmarshaled.Resources[0].DiffType)
+	assert.Equal(t, step.Status, unmarshaled.Status)
+	assert.Equal(t, step.Dependencies, unmarshaled.Dependencies)
+	assert.Equal(t, step.Attempt, unmarshaled.Attempt)
 }
 
-func TestDriftPlan_EmptyChunks(t *testing.T) {
-	// Test plan with no chunks
+func TestDriftPlan_EmptySteps(t *testing.T) {
+	// Test plan with no steps
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now(),
-		TotalChunks: 0,
-		Chunks:      []driftadopt.DriftChunk{},
+		TotalSteps: 0,
+		Steps:      []driftadopt.DriftStep{},
 	}
 
 	// Act
@@ -243,6 +243,6 @@ func TestDriftPlan_EmptyChunks(t *testing.T) {
 	require.NoError(t, err)
 
 	// Assert
-	assert.Equal(t, 0, unmarshaled.TotalChunks)
-	assert.Empty(t, unmarshaled.Chunks)
+	assert.Equal(t, 0, unmarshaled.TotalSteps)
+	assert.Empty(t, unmarshaled.Steps)
 }

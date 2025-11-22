@@ -11,11 +11,11 @@ Single AWS S3 bucket with property drift in tags.
 
 ## Expected Behavior
 1. Tool detects drift via preview
-2. Creates single chunk (no dependencies)
+2. Creates single step (no dependencies)
 3. Agent generates code to update tags
 4. Tool validates TypeScript compilation
 5. Tool verifies preview matches expected diff
-6. Chunk marked as completed
+6. Step marked as completed
 
 ## Files
 - `index.ts` - Pulumi program (current state in code)

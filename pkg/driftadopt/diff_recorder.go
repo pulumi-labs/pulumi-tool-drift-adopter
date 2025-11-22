@@ -18,7 +18,7 @@ type DiffRecorder struct {
 // DiffRecord represents a recorded code change
 type DiffRecord struct {
 	ID        string            `json:"id"`        // "001", "002", etc.
-	ChunkID   string            `json:"chunkID"`   // Associated chunk
+	StepID   string            `json:"stepID"`   // Associated step
 	Timestamp time.Time         `json:"timestamp"`
 	Files     map[string]string `json:"files"`  // filepath -> original content
 	Applied   bool              `json:"applied"` // Currently applied?

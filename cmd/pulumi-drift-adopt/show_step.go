@@ -7,24 +7,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var showChunkCmd = &cobra.Command{
-	Use:   "show-chunk",
-	Short: "Display detailed information about a chunk",
-	Long: `Shows chunk details including resources, current code, and expected changes.
+var showStepCmd = &cobra.Command{
+	Use:   "show-step",
+	Short: "Display detailed information about a step",
+	Long: `Shows step details including resources, current code, and expected changes.
 
 This command is designed for agent consumption - it outputs structured information
 that agents can use to generate code updates.`,
-	RunE: runShowChunk,
+	RunE: runShowStep,
 }
 
-var chunkID string
+var stepID string
 
 func init() {
-	showChunkCmd.Flags().StringVar(&chunkID, "chunk", "", "Chunk ID to display (required)")
-	showChunkCmd.MarkFlagRequired("chunk")
+	showStepCmd.Flags().StringVar(&stepID, "step", "", "Step ID to display (required)")
+	showStepCmd.MarkFlagRequired("step")
 }
 
-func runShowChunk(cmd *cobra.Command, args []string) error {
+func runShowStep(cmd *cobra.Command, args []string) error {
 	planFile, _ := cmd.Flags().GetString("plan")
 	projectDir, _ := cmd.Flags().GetString("project")
 
@@ -34,15 +34,15 @@ func runShowChunk(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("read plan: %w", err)
 	}
 
-	// Get chunk info
-	guide := driftadopt.NewChunkGuide(projectDir)
-	info, err := guide.ShowChunk(plan, chunkID)
+	// Get step info
+	guide := driftadopt.NewStepGuide(projectDir)
+	info, err := guide.ShowStep(plan, stepID)
 	if err != nil {
-		return fmt.Errorf("show chunk: %w", err)
+		return fmt.Errorf("show step: %w", err)
 	}
 
-	// Display chunk information
-	fmt.Printf("Chunk: %s (Order: %d, Status: %s)\n", info.ChunkID, plan.GetChunk(chunkID).Order, info.Status)
+	// Display step information
+	fmt.Printf("Step: %s (Order: %d, Status: %s)\n", info.StepID, plan.GetStep(stepID).Order, info.Status)
 	fmt.Println()
 
 	// Display resources

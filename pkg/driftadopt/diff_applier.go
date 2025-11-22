@@ -33,7 +33,7 @@ func (d *DiffApplier) GetRecorder() *DiffRecorder {
 }
 
 // ApplyChanges applies code changes and records them for rollback
-func (d *DiffApplier) ApplyChanges(chunkID string, changes []FileChange) (string, error) {
+func (d *DiffApplier) ApplyChanges(stepID string, changes []FileChange) (string, error) {
 	// 1. Record original state
 	originalFiles := make(map[string]string)
 	for _, change := range changes {
@@ -50,7 +50,7 @@ func (d *DiffApplier) ApplyChanges(chunkID string, changes []FileChange) (string
 	// 3. Record diff
 	diffRecord := &DiffRecord{
 		ID:        diffID,
-		ChunkID:   chunkID,
+		StepID:   stepID,
 		Timestamp: time.Now(),
 		Files:     originalFiles,
 		Applied:   true,

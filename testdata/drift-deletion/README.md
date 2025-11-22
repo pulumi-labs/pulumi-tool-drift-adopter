@@ -10,11 +10,11 @@ Resource deleted in cloud but still defined in IaC code.
 
 ## Expected Behavior
 1. Tool detects deletion via preview (diffType: "delete")
-2. Creates single chunk for the deleted resource
+2. Creates single step for the deleted resource
 3. Agent generates code to remove the resource definition
 4. Tool validates TypeScript compilation
 5. Tool verifies preview shows resource will be removed
-6. Chunk marked as completed
+6. Step marked as completed
 
 ## Notes
 - Deletion drift typically requires removing code rather than updating it

@@ -38,7 +38,7 @@ func runRollback(cmd *cobra.Command, args []string) error {
 
 	// Display what will be rolled back
 	fmt.Printf("🔄 Rolling back diff: %s\n", rollbackDiffID)
-	fmt.Printf("Chunk: %s\n", diff.ChunkID)
+	fmt.Printf("Step: %s\n", diff.StepID)
 	fmt.Printf("Applied: %s\n", diff.Timestamp.Format("2006-01-02 15:04:05"))
 	fmt.Println()
 	fmt.Printf("Files to restore: %d\n", len(diff.Files))

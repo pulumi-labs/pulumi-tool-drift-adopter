@@ -13,10 +13,10 @@ var statusCmd = &cobra.Command{
 	Long: `Displays the current status of drift adoption plan.
 
 Shows:
-- Total chunks and completion progress
-- Chunk breakdown by status (pending/completed/failed/skipped)
-- Current chunk if in progress
-- Failed chunks with error messages`,
+- Total steps and completion progress
+- Step breakdown by status (pending/completed/failed/skipped)
+- Current step if in progress
+- Failed steps with error messages`,
 	RunE: runStatus,
 }
 
@@ -37,35 +37,35 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Display overall progress
-	completed := statusCounts[driftadopt.ChunkCompleted] + statusCounts[driftadopt.ChunkSkipped]
-	progress := float64(completed) / float64(plan.TotalChunks) * 100
-	fmt.Printf("Progress: %d/%d (%.1f%%)\n", completed, plan.TotalChunks, progress)
+	completed := statusCounts[driftadopt.StepCompleted] + statusCounts[driftadopt.StepSkipped]
+	progress := float64(completed) / float64(plan.TotalSteps) * 100
+	fmt.Printf("Progress: %d/%d (%.1f%%)\n", completed, plan.TotalSteps, progress)
 	fmt.Println()
 
 	// Display status breakdown
 	fmt.Println("Status breakdown:")
-	fmt.Printf("  ✅ Completed: %d\n", statusCounts[driftadopt.ChunkCompleted])
-	fmt.Printf("  ⏳ Pending:   %d\n", statusCounts[driftadopt.ChunkPending])
-	fmt.Printf("  ❌ Failed:    %d\n", statusCounts[driftadopt.ChunkFailed])
-	fmt.Printf("  ⏭️  Skipped:   %d\n", statusCounts[driftadopt.ChunkSkipped])
+	fmt.Printf("  ✅ Completed: %d\n", statusCounts[driftadopt.StepCompleted])
+	fmt.Printf("  ⏳ Pending:   %d\n", statusCounts[driftadopt.StepPending])
+	fmt.Printf("  ❌ Failed:    %d\n", statusCounts[driftadopt.StepFailed])
+	fmt.Printf("  ⏭️  Skipped:   %d\n", statusCounts[driftadopt.StepSkipped])
 	fmt.Println()
 
-	// Show next pending chunk if any
-	nextChunk := plan.GetNextPendingChunk()
-	if nextChunk != nil {
-		fmt.Printf("Next chunk: %s (Order: %d)\n", nextChunk.ID, nextChunk.Order)
-		fmt.Printf("  Resources: %d\n", len(nextChunk.Resources))
+	// Show next pending step if any
+	nextStep := plan.GetNextPendingStep()
+	if nextStep != nil {
+		fmt.Printf("Next step: %s (Order: %d)\n", nextStep.ID, nextStep.Order)
+		fmt.Printf("  Resources: %d\n", len(nextStep.Resources))
 		fmt.Println()
 	}
 
-	// Show failed chunks if any
-	failedChunks := plan.GetFailedChunks()
-	if len(failedChunks) > 0 {
-		fmt.Println("Failed chunks:")
-		for _, chunk := range failedChunks {
-			fmt.Printf("  - %s (Order: %d)\n", chunk.ID, chunk.Order)
-			if chunk.LastError != "" {
-				fmt.Printf("    Error: %s\n", chunk.LastError)
+	// Show failed steps if any
+	failedSteps := plan.GetFailedSteps()
+	if len(failedSteps) > 0 {
+		fmt.Println("Failed steps:")
+		for _, step := range failedSteps {
+			fmt.Printf("  - %s (Order: %d)\n", step.ID, step.Order)
+			if step.LastError != "" {
+				fmt.Printf("    Error: %s\n", step.LastError)
 			}
 		}
 		fmt.Println()
@@ -81,7 +81,7 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	for i := 1; i <= 10 && diffCount < 3; i++ {
 		diffID := fmt.Sprintf("diff-%03d", i)
 		if diff, err := recorder.GetDiff(diffID); err == nil {
-			fmt.Printf("  %s - Chunk: %s (%s)\n", diffID, diff.ChunkID, diff.Timestamp.Format("2006-01-02 15:04:05"))
+			fmt.Printf("  %s - Step: %s (%s)\n", diffID, diff.StepID, diff.Timestamp.Format("2006-01-02 15:04:05"))
 			diffCount++
 		}
 	}
@@ -91,15 +91,15 @@ func runStatus(cmd *cobra.Command, args []string) error {
 	fmt.Println()
 
 	// Show next command suggestion
-	if nextChunk != nil {
+	if nextStep != nil {
 		fmt.Println("Next:")
 		fmt.Println("  pulumi-drift-adopt next")
-	} else if len(failedChunks) > 0 {
+	} else if len(failedSteps) > 0 {
 		fmt.Println("Action needed:")
-		fmt.Println("  Fix failed chunks or skip them")
+		fmt.Println("  Fix failed steps or skip them")
 		fmt.Println("  pulumi-drift-adopt next")
 	} else {
-		fmt.Println("✅ All chunks completed!")
+		fmt.Println("✅ All steps completed!")
 	}
 
 	return nil

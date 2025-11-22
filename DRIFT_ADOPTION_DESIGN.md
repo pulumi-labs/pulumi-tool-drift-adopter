@@ -336,8 +336,8 @@ The drift adoption process involves:
 
 2. **Drift Adoption**: Incorporating drift back into IaC
    - Generate an adoption plan by analyzing the dependency tree
-   - Process drift in chunks, starting with leaf resources (no dependents)
-   - LLM generates code updates for each chunk
+   - Process drift in steps, starting with leaf resources (no dependents)
+   - LLM generates code updates for each step
    - Validate compilation and preview
    - Iterate until all drift is adopted
 
@@ -348,17 +348,17 @@ The drift adoption process involves:
 │   CLI Commands                               │
 │   - next: orchestrator (like terraform-mig) │
 │   - generate-plan: creates adoption plan     │
-│   - show-chunk: displays chunk for agents    │
+│   - show-step: displays step for agents    │
 │   - apply-diff: applies agent-submitted code │
 │   - rollback: undoes applied diffs           │
 │   - status: shows drift summary              │
-│   - skip: marks chunk to skip                │
+│   - skip: marks step to skip                │
 └──────────────┬───────────────────────────────┘
                │
 ┌──────────────▼───────────────────────────────┐
 │   Core Logic (pkg/driftadopt/)              │
-│   - DriftPlan: dependency-ordered chunks     │
-│   - ChunkGuide: agent guidance generation    │
+│   - DriftPlan: dependency-ordered steps     │
+│   - StepGuide: agent guidance generation    │
 │   - DiffApplier: applies code changes        │
 │   - DiffRecorder: records for rollback       │
 │   - DiffMatcher: validates preview matches   │
@@ -377,11 +377,11 @@ The drift adoption process involves:
 
 Agent (Claude) Workflow:
   1. Agent calls: pulumi-drift-adopt next
-  2. Tool responds with chunk info and guidance
+  2. Tool responds with step info and guidance
   3. Agent generates code using LLM
   4. Agent calls: pulumi-drift-adopt apply-diff
   5. Tool validates and applies changes
-  6. Repeat until all chunks complete
+  6. Repeat until all steps complete
 ```
 
 ## Workflow Gates (Sequential)
@@ -393,7 +393,7 @@ The `next` command implements these sequential gates:
 3. **ensureRefreshCompleted**: Run `pulumi refresh` to update state
 4. **ensureDriftPlanExists**: Create `drift-plan.json` via dependency analysis
 5. **ensurePlanIntegrity**: Validate drift-plan.json structure
-6. **ensureChunksAdopted**: Iteratively process drift chunks (main loop)
+6. **ensureStepsAdopted**: Iteratively process drift steps (main loop)
 7. **ensurePreviewClean**: Verify no remaining drift
 8. **STOP**: Signal completion, suggest creating PR
 
@@ -405,16 +405,16 @@ The `next` command implements these sequential gates:
 type DriftPlan struct {
     Stack       string        `json:"stack"`
     GeneratedAt time.Time     `json:"generatedAt"`
-    TotalChunks int           `json:"totalChunks"`
-    Chunks      []DriftChunk  `json:"chunks"`
+    TotalSteps int           `json:"totalSteps"`
+    Steps      []DriftStep  `json:"steps"`
 }
 
-type DriftChunk struct {
-    ID           string         `json:"id"`           // "chunk-001"
+type DriftStep struct {
+    ID           string         `json:"id"`           // "step-001"
     Order        int            `json:"order"`        // Processing order (leaves first)
     Resources    []ResourceDiff `json:"resources"`    // Resources to fix together
-    Status       ChunkStatus    `json:"status"`       // pending/in_progress/completed/failed
-    Dependencies []string       `json:"dependencies"` // IDs of chunks that depend on this
+    Status       StepStatus    `json:"status"`       // pending/in_progress/completed/failed
+    Dependencies []string       `json:"dependencies"` // IDs of steps that depend on this
     Attempt      int            `json:"attempt"`      // Retry counter
     LastError    string         `json:"lastError"`    // Error message from last attempt
 }
@@ -443,13 +443,13 @@ type PropChange struct {
     DiffKind string      `json:"diffKind"`    // "add", "delete", "update"
 }
 
-type ChunkStatus string
+type StepStatus string
 const (
-    ChunkPending    ChunkStatus = "pending"
-    ChunkInProgress ChunkStatus = "in_progress"
-    ChunkCompleted  ChunkStatus = "completed"
-    ChunkFailed     ChunkStatus = "failed"
-    ChunkSkipped    ChunkStatus = "skipped"
+    StepPending    StepStatus = "pending"
+    StepInProgress StepStatus = "in_progress"
+    StepCompleted  StepStatus = "completed"
+    StepFailed     StepStatus = "failed"
+    StepSkipped    StepStatus = "skipped"
 )
 ```
 
@@ -466,7 +466,7 @@ type DriftPlanGenerator interface {
 type driftPlanGenerator struct {
     previewParser  PreviewParser
     graphBuilder   DependencyGraphBuilder
-    chunkGrouper   ChunkGrouper
+    stepGrouper   StepGrouper
 }
 ```
 
@@ -475,38 +475,38 @@ type driftPlanGenerator struct {
 2. Parse preview output to identify drifted resources
 3. Load state file and extract dependency graph
 4. Topologically sort resources (process leaves first - resources with no dependents)
-5. Group related changes into chunks
+5. Group related changes into steps
 6. Serialize to `drift-plan.json`
 
-**Chunking Strategy**:
+**Steping Strategy**:
 - Group resources by dependency level
-- Keep chunks small (1-5 resources)
-- Resources with same dependencies can be in same chunk
+- Keep steps small (1-5 resources)
+- Resources with same dependencies can be in same step
 - Related property changes grouped together
 
-### 2. ChunkGuide (Agent Guidance)
+### 2. StepGuide (Agent Guidance)
 
 ```go
-type ChunkGuide interface {
-    // Provides detailed information about a chunk for agent consumption
-    ShowChunk(ctx context.Context, plan *DriftPlan, chunkID string) (*ChunkInfo, error)
+type StepGuide interface {
+    // Provides detailed information about a step for agent consumption
+    ShowStep(ctx context.Context, plan *DriftPlan, stepID string) (*StepInfo, error)
 }
 
-type ChunkInfo struct {
-    ChunkID         string
+type StepInfo struct {
+    StepID         string
     Resources       []ResourceDiff
     CurrentCode     map[string]string  // filepath -> code
     ExpectedChanges []string           // Human-readable change descriptions
-    Dependencies    []string           // Chunk IDs this depends on
-    Status          ChunkStatus
+    Dependencies    []string           // Step IDs this depends on
+    Status          StepStatus
 }
 ```
 
-**Purpose**: The tool provides detailed chunk information to agents, who then generate code changes.
+**Purpose**: The tool provides detailed step information to agents, who then generate code changes.
 
 **Agent Workflow**:
 1. Agent calls `pulumi-drift-adopt next`
-2. Tool outputs chunk info: resources, current code, expected changes
+2. Tool outputs step info: resources, current code, expected changes
 3. Agent generates code using LLM (Claude, GPT, etc.)
 4. Agent submits code via `pulumi-drift-adopt apply-diff`
 5. Tool validates and applies the changes
@@ -516,12 +516,12 @@ type ChunkInfo struct {
 ```go
 type DiffApplier interface {
     // Applies agent-submitted code changes
-    ApplyDiff(ctx context.Context, plan *DriftPlan, chunkID string, changes []FileChange) (*ApplyResult, error)
+    ApplyDiff(ctx context.Context, plan *DriftPlan, stepID string, changes []FileChange) (*ApplyResult, error)
 }
 
 type ApplyResult struct {
-    ChunkID         string
-    Status          ChunkStatus
+    StepID         string
+    Status          StepStatus
     DiffID          string           // Unique ID for this diff (for rollback)
     CompileSuccess  bool
     PreviewOutput   string
@@ -542,8 +542,8 @@ type FileChange struct {
 3. Apply submitted code changes to files
 4. Validate compilation (language-specific)
 5. Run `pulumi preview --diff --json`
-6. Compare preview with expected chunk diff
-7. Update chunk status in plan
+6. Compare preview with expected step diff
+7. Update step status in plan
 8. Return validation result with guidance
 
 ### 3. CompilationValidator
@@ -606,7 +606,7 @@ func (v *GoValidator) Validate(ctx context.Context, projectPath string) (*Valida
 
 ```go
 type DiffMatcher interface {
-    // Compares actual preview diff with expected chunk diff
+    // Compares actual preview diff with expected step diff
     Matches(expected []ResourceDiff, actual string) (*MatchResult, error)
 }
 
@@ -621,7 +621,7 @@ type MatchResult struct {
 **Implementation**:
 - Parse `pulumi preview --diff` output
 - Extract resource URNs and property changes
-- Compare with expected chunk diff
+- Compare with expected step diff
 - Validate:
   - Expected resources show changes
   - Property paths match
@@ -646,7 +646,7 @@ type DiffRecorder interface {
 
 type DiffRecord struct {
     ID          string            `json:"id"`          // "001", "002", etc.
-    ChunkID     string            `json:"chunkID"`     // Associated chunk
+    StepID     string            `json:"stepID"`     // Associated step
     Timestamp   time.Time         `json:"timestamp"`
     Files       map[string]string `json:"files"`       // filepath -> original content
     Applied     bool              `json:"applied"`     // Currently applied?
@@ -663,9 +663,9 @@ type DiffRecord struct {
 **Storage Structure**:
 ```
 code-diffs/
-  001.json  # First diff (chunk-001)
-  002.json  # Second diff (chunk-002)
-  003.json  # Third diff (chunk-003)
+  001.json  # First diff (step-001)
+  002.json  # Second diff (step-002)
+  003.json  # Third diff (step-003)
   manifest.json  # List of all diffs with status
 ```
 
@@ -722,8 +722,8 @@ func next(planFile string) error {
         return nil  // Suggests: verify drift-plan.json
     }
 
-    if !ensureChunksAdopted(planFile) {
-        return nil  // Main loop - suggests adopt-chunk for next pending chunk
+    if !ensureStepsAdopted(planFile) {
+        return nil  // Main loop - suggests adopt-step for next pending step
     }
 
     if !ensurePreviewClean() {
@@ -750,31 +750,31 @@ func generatePlan(stack string, output string) error {
     // 5. Parse drift from preview
     // 6. Load state file, extract dependency graph
     // 7. Topologically sort resources
-    // 8. Group into chunks
+    // 8. Group into steps
     // 9. Write drift-plan.json
 
     fmt.Printf("Generated drift adoption plan: %s\n", output)
-    fmt.Printf("Total chunks: %d\n", plan.TotalChunks)
+    fmt.Printf("Total steps: %d\n", plan.TotalSteps)
     fmt.Printf("\nNext: pulumi-drift-adopt next\n")
     return nil
 }
 ```
 
-### `pulumi-drift-adopt show-chunk`
+### `pulumi-drift-adopt show-step`
 
-**Purpose**: Display detailed information about a chunk for agent consumption.
+**Purpose**: Display detailed information about a step for agent consumption.
 
 ```go
-func showChunk(planFile, chunkID string) error {
+func showStep(planFile, stepID string) error {
     plan := loadPlan(planFile)
-    chunk := plan.GetChunk(chunkID)
+    step := plan.GetStep(stepID)
 
-    // 1. Display chunk metadata
-    fmt.Printf("Chunk: %s (Order: %d, Status: %s)\n", chunk.ID, chunk.Order, chunk.Status)
+    // 1. Display step metadata
+    fmt.Printf("Step: %s (Order: %d, Status: %s)\n", step.ID, step.Order, step.Status)
 
     // 2. Display resources and expected changes
     fmt.Println("\nResources:")
-    for _, res := range chunk.Resources {
+    for _, res := range step.Resources {
         fmt.Printf("  - %s (%s)\n", res.Name, res.Type)
         fmt.Printf("    URN: %s\n", res.URN)
         fmt.Printf("    Diff Type: %s\n", res.DiffType)
@@ -801,8 +801,8 @@ func showChunk(planFile, chunkID string) error {
     }
 
     // 5. Display dependencies
-    if len(chunk.Dependencies) > 0 {
-        fmt.Printf("\nDependencies: %s\n", strings.Join(chunk.Dependencies, ", "))
+    if len(step.Dependencies) > 0 {
+        fmt.Printf("\nDependencies: %s\n", strings.Join(step.Dependencies, ", "))
     }
 
     return nil
@@ -814,9 +814,9 @@ func showChunk(planFile, chunkID string) error {
 **Purpose**: Apply agent-generated code changes and validate them.
 
 ```go
-func applyDiff(planFile, chunkID string, changes []FileChange) error {
+func applyDiff(planFile, stepID string, changes []FileChange) error {
     plan := loadPlan(planFile)
-    chunk := plan.GetChunk(chunkID)
+    step := plan.GetStep(stepID)
 
     // 1. Record original state for rollback
     diffID := generateDiffID()  // e.g., "001"
@@ -827,7 +827,7 @@ func applyDiff(planFile, chunkID string, changes []FileChange) error {
 
     diffRecord := &DiffRecord{
         ID:        diffID,
-        ChunkID:   chunkID,
+        StepID:   stepID,
         Timestamp: time.Now(),
         Files:     originalFiles,
         Applied:   false,
@@ -848,8 +848,8 @@ func applyDiff(planFile, chunkID string, changes []FileChange) error {
         }
         fmt.Printf("\nRollback with: pulumi-drift-adopt rollback %s\n", diffID)
 
-        chunk.Status = ChunkFailed
-        chunk.LastError = "Compilation failed"
+        step.Status = StepFailed
+        step.LastError = "Compilation failed"
         savePlan(plan)
         return fmt.Errorf("compilation failed")
     }
@@ -861,7 +861,7 @@ func applyDiff(planFile, chunkID string, changes []FileChange) error {
     previewOutput := runPreview(ctx)
 
     // 5. Validate preview matches expected diff
-    matchResult := diffMatcher.Matches(chunk.Resources, previewOutput)
+    matchResult := diffMatcher.Matches(step.Resources, previewOutput)
     if !matchResult.Matches {
         fmt.Println("❌ Preview diff mismatch:")
 
@@ -881,8 +881,8 @@ func applyDiff(planFile, chunkID string, changes []FileChange) error {
 
         fmt.Printf("\nRollback with: pulumi-drift-adopt rollback %s\n", diffID)
 
-        chunk.Status = ChunkFailed
-        chunk.LastError = "Preview mismatch"
+        step.Status = StepFailed
+        step.LastError = "Preview mismatch"
         savePlan(plan)
         return fmt.Errorf("preview mismatch")
     }
@@ -891,10 +891,10 @@ func applyDiff(planFile, chunkID string, changes []FileChange) error {
     diffRecord.Applied = true
     recorder.RecordDiff(ctx, diffRecord)
 
-    chunk.Status = ChunkCompleted
+    step.Status = StepCompleted
     savePlan(plan)
 
-    fmt.Printf("✅ Chunk %s adopted successfully (diff %s)\n", chunkID, diffID)
+    fmt.Printf("✅ Step %s adopted successfully (diff %s)\n", stepID, diffID)
     fmt.Printf("\nNext: pulumi-drift-adopt next\n")
     return nil
 }
@@ -925,14 +925,14 @@ func rollback(diffID string) error {
     diff.Applied = false
     recorder.RecordDiff(ctx, diff)
 
-    // 4. Update chunk status
+    // 4. Update step status
     plan := loadPlan(planFile)
-    chunk := plan.GetChunk(diff.ChunkID)
-    chunk.Status = ChunkPending
-    chunk.LastError = ""
+    step := plan.GetStep(diff.StepID)
+    step.Status = StepPending
+    step.LastError = ""
     savePlan(plan)
 
-    fmt.Printf("✅ Rolled back diff %s for chunk %s\n", diffID, diff.ChunkID)
+    fmt.Printf("✅ Rolled back diff %s for step %s\n", diffID, diff.StepID)
     fmt.Printf("\nNext: pulumi-drift-adopt next\n")
     return nil
 }
@@ -951,29 +951,29 @@ func status(planFile string) error {
 
     // Count by status
     counts := plan.CountByStatus()
-    fmt.Printf("Progress: %d/%d chunks completed\n", counts[ChunkCompleted], plan.TotalChunks)
-    fmt.Printf("  Completed: %d\n", counts[ChunkCompleted])
-    fmt.Printf("  Pending:   %d\n", counts[ChunkPending])
-    fmt.Printf("  Failed:    %d\n", counts[ChunkFailed])
-    fmt.Printf("  Skipped:   %d\n", counts[ChunkSkipped])
+    fmt.Printf("Progress: %d/%d steps completed\n", counts[StepCompleted], plan.TotalSteps)
+    fmt.Printf("  Completed: %d\n", counts[StepCompleted])
+    fmt.Printf("  Pending:   %d\n", counts[StepPending])
+    fmt.Printf("  Failed:    %d\n", counts[StepFailed])
+    fmt.Printf("  Skipped:   %d\n", counts[StepSkipped])
 
-    // Show next chunk to process
-    nextChunk := plan.GetNextPendingChunk()
-    if nextChunk != nil {
-        fmt.Printf("\nNext chunk: %s\n", nextChunk.ID)
-        fmt.Printf("  Resources: %d\n", len(nextChunk.Resources))
-        for _, r := range nextChunk.Resources {
+    // Show next step to process
+    nextStep := plan.GetNextPendingStep()
+    if nextStep != nil {
+        fmt.Printf("\nNext step: %s\n", nextStep.ID)
+        fmt.Printf("  Resources: %d\n", len(nextStep.Resources))
+        for _, r := range nextStep.Resources {
             fmt.Printf("    - %s (%s)\n", r.Name, r.DiffType)
         }
-        fmt.Printf("\nRun: pulumi-drift-adopt adopt-chunk %s %s\n", planFile, nextChunk.ID)
+        fmt.Printf("\nRun: pulumi-drift-adopt adopt-step %s %s\n", planFile, nextStep.ID)
     }
 
     // Show recent failures
-    failed := plan.GetFailedChunks()
+    failed := plan.GetFailedSteps()
     if len(failed) > 0 {
-        fmt.Printf("\nFailed chunks:\n")
-        for _, chunk := range failed {
-            fmt.Printf("  %s: %s\n", chunk.ID, chunk.LastError)
+        fmt.Printf("\nFailed steps:\n")
+        for _, step := range failed {
+            fmt.Printf("  %s: %s\n", step.ID, step.LastError)
         }
     }
 
@@ -984,34 +984,34 @@ func status(planFile string) error {
 ### `pulumi-drift-adopt skip`
 
 ```go
-func skip(planFile, chunkID string, reason string) error {
+func skip(planFile, stepID string, reason string) error {
     plan := loadPlan(planFile)
-    chunk := plan.GetChunk(chunkID)
+    step := plan.GetStep(stepID)
 
-    chunk.Status = ChunkSkipped
-    chunk.LastError = fmt.Sprintf("Skipped by user: %s", reason)
+    step.Status = StepSkipped
+    step.LastError = fmt.Sprintf("Skipped by user: %s", reason)
     savePlan(plan)
 
-    fmt.Printf("Chunk %s marked as skipped\n", chunkID)
+    fmt.Printf("Step %s marked as skipped\n", stepID)
     fmt.Printf("\nNext: pulumi-drift-adopt next\n")
     return nil
 }
 ```
 
-### `pulumi-drift-adopt reset-chunk`
+### `pulumi-drift-adopt reset-step`
 
 ```go
-func resetChunk(planFile, chunkID string) error {
+func resetStep(planFile, stepID string) error {
     plan := loadPlan(planFile)
-    chunk := plan.GetChunk(chunkID)
+    step := plan.GetStep(stepID)
 
-    chunk.Status = ChunkPending
-    chunk.Attempt = 0
-    chunk.LastError = ""
+    step.Status = StepPending
+    step.Attempt = 0
+    step.LastError = ""
     savePlan(plan)
 
-    fmt.Printf("Chunk %s reset to pending\n", chunkID)
-    fmt.Printf("\nNext: pulumi-drift-adopt adopt-chunk %s %s\n", planFile, chunkID)
+    fmt.Printf("Step %s reset to pending\n", stepID)
+    fmt.Printf("\nNext: pulumi-drift-adopt adopt-step %s %s\n", planFile, stepID)
     return nil
 }
 ```
@@ -1034,21 +1034,21 @@ $ pulumi-drift-adopt next
 $ pulumi-drift-adopt generate-plan --stack dev --output drift-plan.json
 
 > Generated drift adoption plan: drift-plan.json
-> Total chunks: 5
+> Total steps: 5
 > Next: pulumi-drift-adopt next
 
 $ pulumi-drift-adopt next
 
-> Next step: Adopt chunk-001
+> Next step: Adopt step-001
 > Resources: aws:s3/bucket:Bucket (update)
-> Run: pulumi-drift-adopt adopt-chunk drift-plan.json chunk-001
+> Run: pulumi-drift-adopt adopt-step drift-plan.json step-001
 
 # ... and so on until STOP
 ```
 
 ### 2. Code Generation (Internal LLM)
 
-Inside `adopt-chunk`, the tool calls an LLM (Claude API) to generate code:
+Inside `adopt-step`, the tool calls an LLM (Claude API) to generate code:
 
 ```go
 type CodeGenerator struct {
@@ -1067,7 +1067,7 @@ func (g *CodeGenerator) GenerateCode(prompt string) (string, error) {
     // Extract and return code
 }
 
-func buildPrompt(chunk *DriftChunk, sourceCode string) string {
+func buildPrompt(step *DriftStep, sourceCode string) string {
     return fmt.Sprintf(`You are helping adopt infrastructure drift into Pulumi IaC.
 
 Current source code:
@@ -1082,7 +1082,7 @@ Only modify the specified properties.
 
 Return the complete updated code.`,
         sourceCode,
-        formatChanges(chunk.Resources),
+        formatChanges(step.Resources),
     )
 }
 ```
@@ -1093,7 +1093,7 @@ Return the complete updated code.`,
 
 ```go
 type AdoptionError struct {
-    ChunkID      string
+    StepID      string
     Phase        string  // "compilation", "preview", "diff-match", "llm"
     Message      string
     Suggestion   string  // Human-readable next step
@@ -1101,7 +1101,7 @@ type AdoptionError struct {
 }
 
 func (e *AdoptionError) Error() string {
-    return fmt.Sprintf("%s error in chunk %s: %s", e.Phase, e.ChunkID, e.Message)
+    return fmt.Sprintf("%s error in step %s: %s", e.Phase, e.StepID, e.Message)
 }
 ```
 
@@ -1109,7 +1109,7 @@ func (e *AdoptionError) Error() string {
 
 **Compilation Errors**:
 ```
-Error: Compilation failed for chunk-003
+Error: Compilation failed for step-003
 
   File: index.ts:42
   Error: Type 'string' is not assignable to type 'number'
@@ -1117,15 +1117,15 @@ Error: Compilation failed for chunk-003
 Suggestions:
   1. Review generated code changes
   2. Fix manually and retry:
-     pulumi-drift-adopt reset-chunk drift-plan.json chunk-003
-     pulumi-drift-adopt adopt-chunk drift-plan.json chunk-003
-  3. Skip this chunk:
-     pulumi-drift-adopt skip drift-plan.json chunk-003 "manual fix needed"
+     pulumi-drift-adopt reset-step drift-plan.json step-003
+     pulumi-drift-adopt adopt-step drift-plan.json step-003
+  3. Skip this step:
+     pulumi-drift-adopt skip drift-plan.json step-003 "manual fix needed"
 ```
 
 **Preview Errors**:
 ```
-Error: Preview failed for chunk-004
+Error: Preview failed for step-004
 
   error: Preview failed: missing required property 'region'
 
@@ -1133,12 +1133,12 @@ Suggestions:
   1. Check Pulumi state is up to date: pulumi refresh
   2. Verify resource configuration
   3. Skip and handle manually:
-     pulumi-drift-adopt skip drift-plan.json chunk-004
+     pulumi-drift-adopt skip drift-plan.json step-004
 ```
 
 **Diff Mismatch**:
 ```
-Error: Preview diff doesn't match expected changes for chunk-002
+Error: Preview diff doesn't match expected changes for step-002
 
 Expected:
   ~ tags.Environment: "dev" => "production"
@@ -1152,7 +1152,7 @@ Suggestions:
   2. If correct, regenerate plan:
      pulumi-drift-adopt generate-plan --stack dev --output drift-plan.json
   3. If incorrect, reset and retry:
-     pulumi-drift-adopt reset-chunk drift-plan.json chunk-002
+     pulumi-drift-adopt reset-step drift-plan.json step-002
 ```
 
 ### Recovery Strategies
@@ -1163,13 +1163,13 @@ Suggestions:
    - Max 3 attempts
 
 2. **Manual Intervention**: For persistent errors
-   - Mark chunk as failed
+   - Mark step as failed
    - Provide detailed error message
    - Suggest manual fix or skip
 
 3. **Rollback**: If changes break compilation
    - Revert code changes
-   - Keep chunk as pending
+   - Keep step as pending
    - Suggest different approach
 
 ## Testing Strategy
@@ -1197,7 +1197,7 @@ This plan follows strict Test-Driven Development principles:
 | 3 | Code generation | LLM integration, prompt templates |
 | 4 | Compilation | Language validators (TS, Py, Go) |
 | 5 | Diff matching | Preview comparison logic |
-| 6 | Chunk adopter | Full adoption orchestration |
+| 6 | Step adopter | Full adoption orchestration |
 | 7 | CLI commands | User-facing commands |
 | 8 | E2E testing | Integration tests with fixtures |
 | 9 | Polish | Error messages, docs, examples |
@@ -1217,10 +1217,10 @@ func TestDriftPlan_Serialization(t *testing.T) {
     plan := &DriftPlan{
         Stack:       "dev",
         GeneratedAt: time.Now(),
-        TotalChunks: 2,
-        Chunks: []DriftChunk{
-            {ID: "chunk-001", Order: 0, Status: ChunkPending},
-            {ID: "chunk-002", Order: 1, Status: ChunkPending},
+        TotalSteps: 2,
+        Steps: []DriftStep{
+            {ID: "step-001", Order: 0, Status: StepPending},
+            {ID: "step-002", Order: 1, Status: StepPending},
         },
     }
 
@@ -1234,27 +1234,27 @@ func TestDriftPlan_Serialization(t *testing.T) {
 
     // Assert
     assert.Equal(t, plan.Stack, unmarshaled.Stack)
-    assert.Equal(t, plan.TotalChunks, unmarshaled.TotalChunks)
-    assert.Len(t, unmarshaled.Chunks, 2)
+    assert.Equal(t, plan.TotalSteps, unmarshaled.TotalSteps)
+    assert.Len(t, unmarshaled.Steps, 2)
 }
 
-func TestDriftChunk_Ordering(t *testing.T) {
+func TestDriftStep_Ordering(t *testing.T) {
     // Arrange
-    chunks := []DriftChunk{
-        {ID: "chunk-003", Order: 2},
-        {ID: "chunk-001", Order: 0},
-        {ID: "chunk-002", Order: 1},
+    steps := []DriftStep{
+        {ID: "step-003", Order: 2},
+        {ID: "step-001", Order: 0},
+        {ID: "step-002", Order: 1},
     }
 
     // Act
-    sort.Slice(chunks, func(i, j int) bool {
-        return chunks[i].Order < chunks[j].Order
+    sort.Slice(steps, func(i, j int) bool {
+        return steps[i].Order < steps[j].Order
     })
 
     // Assert
-    assert.Equal(t, "chunk-001", chunks[0].ID)
-    assert.Equal(t, "chunk-002", chunks[1].ID)
-    assert.Equal(t, "chunk-003", chunks[2].ID)
+    assert.Equal(t, "step-001", steps[0].ID)
+    assert.Equal(t, "step-002", steps[1].ID)
+    assert.Equal(t, "step-003", steps[2].ID)
 }
 
 func TestResourceDiff_PropertyPaths(t *testing.T) {
@@ -1337,15 +1337,15 @@ func TestPropChange_Types(t *testing.T) {
 type DriftPlan struct {
     Stack       string       `json:"stack"`
     GeneratedAt time.Time    `json:"generatedAt"`
-    TotalChunks int          `json:"totalChunks"`
-    Chunks      []DriftChunk `json:"chunks"`
+    TotalSteps int          `json:"totalSteps"`
+    Steps      []DriftStep `json:"steps"`
 }
 
-type DriftChunk struct {
+type DriftStep struct {
     ID           string         `json:"id"`
     Order        int            `json:"order"`
     Resources    []ResourceDiff `json:"resources"`
-    Status       ChunkStatus    `json:"status"`
+    Status       StepStatus    `json:"status"`
     Dependencies []string       `json:"dependencies"`
     Attempt      int            `json:"attempt"`
     LastError    string         `json:"lastError,omitempty"`
@@ -1376,14 +1376,14 @@ type PropChange struct {
     DiffKind string      `json:"diffKind"`
 }
 
-type ChunkStatus string
+type StepStatus string
 
 const (
-    ChunkPending    ChunkStatus = "pending"
-    ChunkInProgress ChunkStatus = "in_progress"
-    ChunkCompleted  ChunkStatus = "completed"
-    ChunkFailed     ChunkStatus = "failed"
-    ChunkSkipped    ChunkStatus = "skipped"
+    StepPending    StepStatus = "pending"
+    StepInProgress StepStatus = "in_progress"
+    StepCompleted  StepStatus = "completed"
+    StepFailed     StepStatus = "failed"
+    StepSkipped    StepStatus = "skipped"
 )
 ```
 
@@ -1401,9 +1401,9 @@ func TestPlanFile_ReadWrite(t *testing.T) {
     plan := &DriftPlan{
         Stack:       "dev",
         GeneratedAt: time.Now(),
-        TotalChunks: 1,
-        Chunks: []DriftChunk{
-            {ID: "chunk-001", Status: ChunkPending},
+        TotalSteps: 1,
+        Steps: []DriftStep{
+            {ID: "step-001", Status: StepPending},
         },
     }
 
@@ -1417,25 +1417,25 @@ func TestPlanFile_ReadWrite(t *testing.T) {
 
     // Assert
     assert.Equal(t, plan.Stack, loaded.Stack)
-    assert.Equal(t, plan.TotalChunks, loaded.TotalChunks)
+    assert.Equal(t, plan.TotalSteps, loaded.TotalSteps)
 }
 
-func TestPlanFile_UpdateChunkStatus(t *testing.T) {
+func TestPlanFile_UpdateStepStatus(t *testing.T) {
     // Arrange
     tempDir := t.TempDir()
     planPath := filepath.Join(tempDir, "drift-plan.json")
 
     plan := &DriftPlan{
         Stack:       "dev",
-        TotalChunks: 1,
-        Chunks: []DriftChunk{
-            {ID: "chunk-001", Status: ChunkPending},
+        TotalSteps: 1,
+        Steps: []DriftStep{
+            {ID: "step-001", Status: StepPending},
         },
     }
     WritePlanFile(planPath, plan)
 
     // Act
-    plan.Chunks[0].Status = ChunkCompleted
+    plan.Steps[0].Status = StepCompleted
     err := WritePlanFile(planPath, plan)
     require.NoError(t, err)
 
@@ -1444,7 +1444,7 @@ func TestPlanFile_UpdateChunkStatus(t *testing.T) {
     require.NoError(t, err)
 
     // Assert
-    assert.Equal(t, ChunkCompleted, loaded.Chunks[0].Status)
+    assert.Equal(t, StepCompleted, loaded.Steps[0].Status)
 }
 
 func TestPlanFile_InvalidJSON(t *testing.T) {
@@ -1508,66 +1508,66 @@ func WritePlanFile(path string, plan *DriftPlan) error {
 ```go
 // pkg/driftadopt/plan_methods_test.go
 
-func TestDriftPlan_GetChunk(t *testing.T) {
+func TestDriftPlan_GetStep(t *testing.T) {
     plan := &DriftPlan{
-        Chunks: []DriftChunk{
-            {ID: "chunk-001"},
-            {ID: "chunk-002"},
+        Steps: []DriftStep{
+            {ID: "step-001"},
+            {ID: "step-002"},
         },
     }
 
     // Found
-    chunk := plan.GetChunk("chunk-001")
-    require.NotNil(t, chunk)
-    assert.Equal(t, "chunk-001", chunk.ID)
+    step := plan.GetStep("step-001")
+    require.NotNil(t, step)
+    assert.Equal(t, "step-001", step.ID)
 
     // Not found
-    chunk = plan.GetChunk("chunk-999")
-    assert.Nil(t, chunk)
+    step = plan.GetStep("step-999")
+    assert.Nil(t, step)
 }
 
-func TestDriftPlan_GetNextPendingChunk(t *testing.T) {
+func TestDriftPlan_GetNextPendingStep(t *testing.T) {
     plan := &DriftPlan{
-        Chunks: []DriftChunk{
-            {ID: "chunk-001", Order: 0, Status: ChunkCompleted},
-            {ID: "chunk-002", Order: 1, Status: ChunkPending},
-            {ID: "chunk-003", Order: 2, Status: ChunkPending},
+        Steps: []DriftStep{
+            {ID: "step-001", Order: 0, Status: StepCompleted},
+            {ID: "step-002", Order: 1, Status: StepPending},
+            {ID: "step-003", Order: 2, Status: StepPending},
         },
     }
 
-    chunk := plan.GetNextPendingChunk()
-    require.NotNil(t, chunk)
-    assert.Equal(t, "chunk-002", chunk.ID)
+    step := plan.GetNextPendingStep()
+    require.NotNil(t, step)
+    assert.Equal(t, "step-002", step.ID)
 }
 
 func TestDriftPlan_CountByStatus(t *testing.T) {
     plan := &DriftPlan{
-        Chunks: []DriftChunk{
-            {Status: ChunkCompleted},
-            {Status: ChunkCompleted},
-            {Status: ChunkPending},
-            {Status: ChunkFailed},
+        Steps: []DriftStep{
+            {Status: StepCompleted},
+            {Status: StepCompleted},
+            {Status: StepPending},
+            {Status: StepFailed},
         },
     }
 
     counts := plan.CountByStatus()
-    assert.Equal(t, 2, counts[ChunkCompleted])
-    assert.Equal(t, 1, counts[ChunkPending])
-    assert.Equal(t, 1, counts[ChunkFailed])
+    assert.Equal(t, 2, counts[StepCompleted])
+    assert.Equal(t, 1, counts[StepPending])
+    assert.Equal(t, 1, counts[StepFailed])
 }
 
-func TestDriftPlan_GetFailedChunks(t *testing.T) {
+func TestDriftPlan_GetFailedSteps(t *testing.T) {
     plan := &DriftPlan{
-        Chunks: []DriftChunk{
-            {ID: "chunk-001", Status: ChunkCompleted},
-            {ID: "chunk-002", Status: ChunkFailed, LastError: "error 1"},
-            {ID: "chunk-003", Status: ChunkFailed, LastError: "error 2"},
+        Steps: []DriftStep{
+            {ID: "step-001", Status: StepCompleted},
+            {ID: "step-002", Status: StepFailed, LastError: "error 1"},
+            {ID: "step-003", Status: StepFailed, LastError: "error 2"},
         },
     }
 
-    failed := plan.GetFailedChunks()
+    failed := plan.GetFailedSteps()
     assert.Len(t, failed, 2)
-    assert.Equal(t, "chunk-002", failed[0].ID)
+    assert.Equal(t, "step-002", failed[0].ID)
 }
 ```
 
@@ -1575,37 +1575,37 @@ func TestDriftPlan_GetFailedChunks(t *testing.T) {
 ```go
 // pkg/driftadopt/plan_methods.go
 
-func (p *DriftPlan) GetChunk(id string) *DriftChunk {
-    for i := range p.Chunks {
-        if p.Chunks[i].ID == id {
-            return &p.Chunks[i]
+func (p *DriftPlan) GetStep(id string) *DriftStep {
+    for i := range p.Steps {
+        if p.Steps[i].ID == id {
+            return &p.Steps[i]
         }
     }
     return nil
 }
 
-func (p *DriftPlan) GetNextPendingChunk() *DriftChunk {
-    for i := range p.Chunks {
-        if p.Chunks[i].Status == ChunkPending {
-            return &p.Chunks[i]
+func (p *DriftPlan) GetNextPendingStep() *DriftStep {
+    for i := range p.Steps {
+        if p.Steps[i].Status == StepPending {
+            return &p.Steps[i]
         }
     }
     return nil
 }
 
-func (p *DriftPlan) CountByStatus() map[ChunkStatus]int {
-    counts := make(map[ChunkStatus]int)
-    for _, chunk := range p.Chunks {
-        counts[chunk.Status]++
+func (p *DriftPlan) CountByStatus() map[StepStatus]int {
+    counts := make(map[StepStatus]int)
+    for _, step := range p.Steps {
+        counts[step.Status]++
     }
     return counts
 }
 
-func (p *DriftPlan) GetFailedChunks() []*DriftChunk {
-    var failed []*DriftChunk
-    for i := range p.Chunks {
-        if p.Chunks[i].Status == ChunkFailed {
-            failed = append(failed, &p.Chunks[i])
+func (p *DriftPlan) GetFailedSteps() []*DriftStep {
+    var failed []*DriftStep
+    for i := range p.Steps {
+        if p.Steps[i].Status == StepFailed {
+            failed = append(failed, &p.Steps[i])
         }
     }
     return failed
@@ -1990,7 +1990,7 @@ func TestDiffApplier_ApplyChanges(t *testing.T) {
     }
 
     // Act
-    diffID, err := applier.ApplyChanges("chunk-001", changes)
+    diffID, err := applier.ApplyChanges("step-001", changes)
     require.NoError(t, err)
 
     // Assert
@@ -2011,14 +2011,14 @@ func TestDiffApplier_RecordsOriginalState(t *testing.T) {
     changes := []FileChange{{FilePath: filePath, NewCode: "const x = 2;"}}
 
     // Act
-    diffID, err := applier.ApplyChanges("chunk-001", changes)
+    diffID, err := applier.ApplyChanges("step-001", changes)
     require.NoError(t, err)
 
     // Assert - check that original is recorded
     recorder := applier.GetRecorder()
     diff, err := recorder.GetDiff(diffID)
     require.NoError(t, err)
-    assert.Equal(t, "chunk-001", diff.ChunkID)
+    assert.Equal(t, "step-001", diff.StepID)
     assert.Equal(t, originalCode, diff.Files[filePath])
     assert.True(t, diff.Applied)
 }
@@ -2038,7 +2038,7 @@ func TestDiffApplier_MultipleFiles(t *testing.T) {
     }
 
     // Act
-    diffID, err := applier.ApplyChanges("chunk-001", changes)
+    diffID, err := applier.ApplyChanges("step-001", changes)
     require.NoError(t, err)
 
     // Assert - both files updated
@@ -2074,7 +2074,7 @@ func (d *DiffApplier) GetRecorder() *DiffRecorder {
     return d.recorder
 }
 
-func (d *DiffApplier) ApplyChanges(chunkID string, changes []FileChange) (string, error) {
+func (d *DiffApplier) ApplyChanges(stepID string, changes []FileChange) (string, error) {
     // 1. Record original state
     originalFiles := make(map[string]string)
     for _, change := range changes {
@@ -2091,7 +2091,7 @@ func (d *DiffApplier) ApplyChanges(chunkID string, changes []FileChange) (string
     // 3. Record diff
     diffRecord := &DiffRecord{
         ID:        diffID,
-        ChunkID:   chunkID,
+        StepID:   stepID,
         Timestamp: time.Now(),
         Files:     originalFiles,
         Applied:   true,
@@ -2127,7 +2127,7 @@ func TestDiffRecorder_RecordAndRetrieve(t *testing.T) {
 
     diff := &DiffRecord{
         ID:        "001",
-        ChunkID:   "chunk-001",
+        StepID:   "step-001",
         Timestamp: time.Now(),
         Files: map[string]string{
             "/path/to/file.ts": "original content",
@@ -2143,7 +2143,7 @@ func TestDiffRecorder_RecordAndRetrieve(t *testing.T) {
     retrieved, err := recorder.GetDiff("001")
     require.NoError(t, err)
     assert.Equal(t, "001", retrieved.ID)
-    assert.Equal(t, "chunk-001", retrieved.ChunkID)
+    assert.Equal(t, "step-001", retrieved.StepID)
     assert.True(t, retrieved.Applied)
     assert.Equal(t, "original content", retrieved.Files["/path/to/file.ts"])
 }
@@ -2153,8 +2153,8 @@ func TestDiffRecorder_ListDiffs(t *testing.T) {
     tmpDir := t.TempDir()
     recorder := NewDiffRecorder(tmpDir)
 
-    recorder.RecordDiff(&DiffRecord{ID: "001", ChunkID: "chunk-001", Applied: true})
-    recorder.RecordDiff(&DiffRecord{ID: "002", ChunkID: "chunk-002", Applied: false})
+    recorder.RecordDiff(&DiffRecord{ID: "001", StepID: "step-001", Applied: true})
+    recorder.RecordDiff(&DiffRecord{ID: "002", StepID: "step-002", Applied: false})
 
     // Act
     diffs, err := recorder.ListDiffs()
@@ -2175,7 +2175,7 @@ func TestDiffRecorder_Rollback(t *testing.T) {
     recorder := NewDiffRecorder(filepath.Join(tmpDir, "diffs"))
     diff := &DiffRecord{
         ID:      "001",
-        ChunkID: "chunk-001",
+        StepID: "step-001",
         Files: map[string]string{
             filePath: "original content",
         },
@@ -2203,7 +2203,7 @@ func TestDiffRecorder_NextID(t *testing.T) {
 
     // Act
     id1 := recorder.NextID()
-    recorder.RecordDiff(&DiffRecord{ID: id1, ChunkID: "c1"})
+    recorder.RecordDiff(&DiffRecord{ID: id1, StepID: "c1"})
     id2 := recorder.NextID()
 
     // Assert
@@ -2222,7 +2222,7 @@ type DiffRecorder struct {
 
 type DiffRecord struct {
     ID        string            `json:"id"`
-    ChunkID   string            `json:"chunkID"`
+    StepID   string            `json:"stepID"`
     Timestamp time.Time         `json:"timestamp"`
     Files     map[string]string `json:"files"` // filepath -> original content
     Applied   bool              `json:"applied"`
@@ -2320,13 +2320,13 @@ func (r *DiffRecorder) Rollback(diffID string) error {
 }
 ```
 
-### Day 5: ChunkGuide (Agent Guidance)
+### Day 5: StepGuide (Agent Guidance)
 
 **Test First**:
 ```go
-// pkg/driftadopt/chunk_guide_test.go
+// pkg/driftadopt/step_guide_test.go
 
-func TestChunkGuide_ShowChunk(t *testing.T) {
+func TestStepGuide_ShowStep(t *testing.T) {
     // Arrange
     tmpDir := t.TempDir()
     filePath := filepath.Join(tmpDir, "index.ts")
@@ -2334,9 +2334,9 @@ func TestChunkGuide_ShowChunk(t *testing.T) {
     os.WriteFile(filePath, []byte(code), 0644)
 
     plan := &DriftPlan{
-        Chunks: []DriftChunk{
+        Steps: []DriftStep{
             {
-                ID:    "chunk-001",
+                ID:    "step-001",
                 Order: 1,
                 Resources: []ResourceDiff{
                     {
@@ -2355,28 +2355,28 @@ func TestChunkGuide_ShowChunk(t *testing.T) {
                         },
                     },
                 },
-                Status: ChunkPending,
+                Status: StepPending,
             },
         },
     }
 
-    guide := NewChunkGuide(tmpDir)
+    guide := NewStepGuide(tmpDir)
 
     // Act
-    info, err := guide.ShowChunk(plan, "chunk-001")
+    info, err := guide.ShowStep(plan, "step-001")
     require.NoError(t, err)
 
     // Assert
-    assert.Equal(t, "chunk-001", info.ChunkID)
+    assert.Equal(t, "step-001", info.StepID)
     assert.Len(t, info.Resources, 1)
     assert.Contains(t, info.CurrentCode[filePath], "my-bucket")
     assert.Contains(t, info.ExpectedChanges[0], "tags.Environment")
     assert.Contains(t, info.ExpectedChanges[0], "production")
 }
 
-func TestChunkGuide_FormatsExpectedChanges(t *testing.T) {
+func TestStepGuide_FormatsExpectedChanges(t *testing.T) {
     // Arrange
-    guide := NewChunkGuide("")
+    guide := NewStepGuide("")
 
     propChange := PropChange{
         Path:     "tags.Owner",
@@ -2398,34 +2398,34 @@ func TestChunkGuide_FormatsExpectedChanges(t *testing.T) {
 
 **Implementation**:
 ```go
-// pkg/driftadopt/chunk_guide.go
+// pkg/driftadopt/step_guide.go
 
-type ChunkGuide struct {
+type StepGuide struct {
     projectDir string
 }
 
-type ChunkInfo struct {
-    ChunkID         string
+type StepInfo struct {
+    StepID         string
     Resources       []ResourceDiff
     CurrentCode     map[string]string // filepath -> code
     ExpectedChanges []string          // Human-readable descriptions
     Dependencies    []string
-    Status          ChunkStatus
+    Status          StepStatus
 }
 
-func NewChunkGuide(projectDir string) *ChunkGuide {
-    return &ChunkGuide{projectDir: projectDir}
+func NewStepGuide(projectDir string) *StepGuide {
+    return &StepGuide{projectDir: projectDir}
 }
 
-func (g *ChunkGuide) ShowChunk(plan *DriftPlan, chunkID string) (*ChunkInfo, error) {
-    chunk := plan.GetChunk(chunkID)
-    if chunk == nil {
-        return nil, fmt.Errorf("chunk not found: %s", chunkID)
+func (g *StepGuide) ShowStep(plan *DriftPlan, stepID string) (*StepInfo, error) {
+    step := plan.GetStep(stepID)
+    if step == nil {
+        return nil, fmt.Errorf("step not found: %s", stepID)
     }
 
     // Read current code for affected files
     currentCode := make(map[string]string)
-    for _, res := range chunk.Resources {
+    for _, res := range step.Resources {
         if res.SourceFile != "" {
             content, err := os.ReadFile(res.SourceFile)
             if err != nil {
@@ -2437,23 +2437,23 @@ func (g *ChunkGuide) ShowChunk(plan *DriftPlan, chunkID string) (*ChunkInfo, err
 
     // Format expected changes as human-readable descriptions
     var expectedChanges []string
-    for _, res := range chunk.Resources {
+    for _, res := range step.Resources {
         for _, prop := range res.PropertyDiff {
             expectedChanges = append(expectedChanges, g.FormatPropertyChange(prop))
         }
     }
 
-    return &ChunkInfo{
-        ChunkID:         chunk.ID,
-        Resources:       chunk.Resources,
+    return &StepInfo{
+        StepID:         step.ID,
+        Resources:       step.Resources,
         CurrentCode:     currentCode,
         ExpectedChanges: expectedChanges,
-        Dependencies:    chunk.Dependencies,
-        Status:          chunk.Status,
+        Dependencies:    step.Dependencies,
+        Status:          step.Status,
     }, nil
 }
 
-func (g *ChunkGuide) FormatPropertyChange(prop PropChange) string {
+func (g *StepGuide) FormatPropertyChange(prop PropChange) string {
     switch prop.DiffKind {
     case "add":
         return fmt.Sprintf("Add %s = %v", prop.Path, prop.NewValue)
@@ -3140,22 +3140,22 @@ func TestDiffMatcher_NullValues(t *testing.T) {
 
 ---
 
-## Phase 6: Chunk Adopter (Week 6)
+## Phase 6: Step Adopter (Week 6)
 
-### Day 1-3: ChunkAdopter Implementation
+### Day 1-3: StepAdopter Implementation
 
 **Test First**:
 ```go
 // pkg/driftadopt/adopter_test.go
 
-func TestChunkAdopter_Success(t *testing.T) {
+func TestStepAdopter_Success(t *testing.T) {
     // Arrange
     tempDir := createTestProject(t)
     plan := &DriftPlan{
-        Chunks: []DriftChunk{
+        Steps: []DriftStep{
             {
-                ID:     "chunk-001",
-                Status: ChunkPending,
+                ID:     "step-001",
+                Status: StepPending,
                 Resources: []ResourceDiff{
                     {
                         URN:        "urn:test",
@@ -3175,50 +3175,50 @@ func TestChunkAdopter_Success(t *testing.T) {
         });`,
     }
 
-    adopter := NewChunkAdopter(mockLLM, tempDir)
+    adopter := NewStepAdopter(mockLLM, tempDir)
 
     // Act
-    result, err := adopter.AdoptChunk(context.Background(), plan, "chunk-001")
+    result, err := adopter.AdoptStep(context.Background(), plan, "step-001")
     require.NoError(t, err)
 
     // Assert
-    assert.Equal(t, ChunkCompleted, result.Status)
+    assert.Equal(t, StepCompleted, result.Status)
     assert.True(t, result.CompileSuccess)
     assert.True(t, result.DiffMatches)
 }
 
-func TestChunkAdopter_CompilationFailure(t *testing.T) {
+func TestStepAdopter_CompilationFailure(t *testing.T) {
     // Arrange - Mock LLM returns invalid code
     mockLLM := &MockLLMClient{
         Response: `const x: number = "string";`, // Type error
     }
 
-    adopter := NewChunkAdopter(mockLLM, tempDir)
+    adopter := NewStepAdopter(mockLLM, tempDir)
 
     // Act
-    result, err := adopter.AdoptChunk(ctx, plan, "chunk-001")
+    result, err := adopter.AdoptStep(ctx, plan, "step-001")
     require.NoError(t, err)
 
     // Assert
-    assert.Equal(t, ChunkFailed, result.Status)
+    assert.Equal(t, StepFailed, result.Status)
     assert.False(t, result.CompileSuccess)
     assert.Contains(t, result.ErrorMessage, "compilation")
 }
 
-func TestChunkAdopter_DiffMismatch(t *testing.T) {
+func TestStepAdopter_DiffMismatch(t *testing.T) {
     // Arrange - Generated code doesn't fix drift
     mockLLM := &MockLLMClient{
         Response: `// Code that doesn't fix the drift`,
     }
 
-    adopter := NewChunkAdopter(mockLLM, tempDir)
+    adopter := NewStepAdopter(mockLLM, tempDir)
 
     // Act
-    result, err := adopter.AdoptChunk(ctx, plan, "chunk-001")
+    result, err := adopter.AdoptStep(ctx, plan, "step-001")
     require.NoError(t, err)
 
     // Assert
-    assert.Equal(t, ChunkFailed, result.Status)
+    assert.Equal(t, StepFailed, result.Status)
     assert.False(t, result.DiffMatches)
 }
 ```
@@ -3227,17 +3227,17 @@ func TestChunkAdopter_DiffMismatch(t *testing.T) {
 ```go
 // pkg/driftadopt/adopter.go
 
-type ChunkAdopter struct {
+type StepAdopter struct {
     codeGen   *CodeGenerator
     validator CompilationValidator
     diffMatch *DiffMatcher
     projectPath string
 }
 
-func NewChunkAdopter(llmClient LLMClient, projectPath string) *ChunkAdopter {
+func NewStepAdopter(llmClient LLMClient, projectPath string) *StepAdopter {
     validator, _ := DetectValidator(projectPath)
 
-    return &ChunkAdopter{
+    return &StepAdopter{
         codeGen:     NewCodeGenerator(llmClient),
         validator:   validator,
         diffMatch:   NewDiffMatcher(),
@@ -3245,47 +3245,47 @@ func NewChunkAdopter(llmClient LLMClient, projectPath string) *ChunkAdopter {
     }
 }
 
-func (a *ChunkAdopter) AdoptChunk(ctx context.Context, plan *DriftPlan, chunkID string) (*AdoptionResult, error) {
-    chunk := plan.GetChunk(chunkID)
-    if chunk == nil {
-        return nil, fmt.Errorf("chunk not found: %s", chunkID)
+func (a *StepAdopter) AdoptStep(ctx context.Context, plan *DriftPlan, stepID string) (*AdoptionResult, error) {
+    step := plan.GetStep(stepID)
+    if step == nil {
+        return nil, fmt.Errorf("step not found: %s", stepID)
     }
 
     result := &AdoptionResult{
-        ChunkID: chunkID,
-        Status:  ChunkInProgress,
+        StepID: stepID,
+        Status:  StepInProgress,
     }
 
     // 1. Read source files
-    sourceCode, err := a.readSourceFiles(chunk.Resources)
+    sourceCode, err := a.readSourceFiles(step.Resources)
     if err != nil {
-        result.Status = ChunkFailed
+        result.Status = StepFailed
         result.ErrorMessage = fmt.Sprintf("read source: %v", err)
         return result, nil
     }
 
     // 2. Generate code changes
-    newCode, err := a.codeGen.GenerateCode(chunk, sourceCode)
+    newCode, err := a.codeGen.GenerateCode(step, sourceCode)
     if err != nil {
-        result.Status = ChunkFailed
+        result.Status = StepFailed
         result.ErrorMessage = fmt.Sprintf("code generation: %v", err)
         return result, nil
     }
 
     // 3. Apply changes
-    changes := a.applyChanges(chunk.Resources, newCode)
+    changes := a.applyChanges(step.Resources, newCode)
     result.CodeChanges = changes
 
     // 4. Validate compilation
     validationResult, err := a.validator.Validate(ctx, a.projectPath)
     if err != nil {
-        result.Status = ChunkFailed
+        result.Status = StepFailed
         result.ErrorMessage = fmt.Sprintf("validation error: %v", err)
         return result, nil
     }
 
     if !validationResult.Success {
-        result.Status = ChunkFailed
+        result.Status = StepFailed
         result.CompileSuccess = false
         result.ErrorMessage = formatValidationErrors(validationResult.Errors)
         // Rollback changes
@@ -3297,7 +3297,7 @@ func (a *ChunkAdopter) AdoptChunk(ctx context.Context, plan *DriftPlan, chunkID 
     // 5. Run preview
     previewOutput, err := a.runPreview(ctx)
     if err != nil {
-        result.Status = ChunkFailed
+        result.Status = StepFailed
         result.ErrorMessage = fmt.Sprintf("preview error: %v", err)
         // Rollback
         a.rollbackChanges(changes)
@@ -3306,15 +3306,15 @@ func (a *ChunkAdopter) AdoptChunk(ctx context.Context, plan *DriftPlan, chunkID 
     result.PreviewOutput = previewOutput
 
     // 6. Validate diff matches
-    matchResult, err := a.diffMatch.Matches(chunk.Resources, previewOutput)
+    matchResult, err := a.diffMatch.Matches(step.Resources, previewOutput)
     if err != nil {
-        result.Status = ChunkFailed
+        result.Status = StepFailed
         result.ErrorMessage = fmt.Sprintf("diff matching error: %v", err)
         return result, nil
     }
 
     if !matchResult.Matches {
-        result.Status = ChunkFailed
+        result.Status = StepFailed
         result.DiffMatches = false
         result.ErrorMessage = formatMatchErrors(matchResult)
         // Rollback
@@ -3324,34 +3324,34 @@ func (a *ChunkAdopter) AdoptChunk(ctx context.Context, plan *DriftPlan, chunkID 
     result.DiffMatches = true
 
     // Success!
-    result.Status = ChunkCompleted
-    chunk.Status = ChunkCompleted
+    result.Status = StepCompleted
+    step.Status = StepCompleted
 
     return result, nil
 }
 
-func (a *ChunkAdopter) readSourceFiles(resources []ResourceDiff) (string, error) {
+func (a *StepAdopter) readSourceFiles(resources []ResourceDiff) (string, error) {
     // Read source files for resources
     // Combine into single string for LLM
     // Implementation details...
     return "", nil
 }
 
-func (a *ChunkAdopter) applyChanges(resources []ResourceDiff, newCode string) []FileChange {
+func (a *StepAdopter) applyChanges(resources []ResourceDiff, newCode string) []FileChange {
     // Apply code changes to files
     // Track old/new for rollback
     // Implementation details...
     return nil
 }
 
-func (a *ChunkAdopter) rollbackChanges(changes []FileChange) {
+func (a *StepAdopter) rollbackChanges(changes []FileChange) {
     // Restore old code
     for _, change := range changes {
         os.WriteFile(change.FilePath, []byte(change.OldCode), 0644)
     }
 }
 
-func (a *ChunkAdopter) runPreview(ctx context.Context) (string, error) {
+func (a *StepAdopter) runPreview(ctx context.Context) (string, error) {
     // Run: pulumi preview --diff
     cmd := exec.CommandContext(ctx, "pulumi", "preview", "--diff")
     cmd.Dir = a.projectPath
@@ -3428,11 +3428,11 @@ func TestNextCommand_NoPlan(t *testing.T) {
     assert.Contains(t, output, "generate-plan")
 }
 
-func TestNextCommand_PendingChunks(t *testing.T) {
+func TestNextCommand_PendingSteps(t *testing.T) {
     tempDir := t.TempDir()
     plan := &DriftPlan{
-        Chunks: []DriftChunk{
-            {ID: "chunk-001", Status: ChunkPending},
+        Steps: []DriftStep{
+            {ID: "step-001", Status: StepPending},
         },
     }
     planPath := filepath.Join(tempDir, "drift-plan.json")
@@ -3445,15 +3445,15 @@ func TestNextCommand_PendingChunks(t *testing.T) {
         cmd.Execute()
     })
 
-    assert.Contains(t, output, "adopt-chunk")
-    assert.Contains(t, output, "chunk-001")
+    assert.Contains(t, output, "adopt-step")
+    assert.Contains(t, output, "step-001")
 }
 
 func TestNextCommand_Complete(t *testing.T) {
     tempDir := t.TempDir()
     plan := &DriftPlan{
-        Chunks: []DriftChunk{
-            {ID: "chunk-001", Status: ChunkCompleted},
+        Steps: []DriftStep{
+            {ID: "step-001", Status: StepCompleted},
         },
     }
     planPath := filepath.Join(tempDir, "drift-plan.json")
@@ -3508,26 +3508,26 @@ func runNext(planFile string) error {
         return nil
     }
 
-    // Gate 3: Check for pending chunks
-    nextChunk := plan.GetNextPendingChunk()
-    if nextChunk != nil {
-        fmt.Printf("Next step: Adopt chunk %s\n\n", nextChunk.ID)
+    // Gate 3: Check for pending steps
+    nextStep := plan.GetNextPendingStep()
+    if nextStep != nil {
+        fmt.Printf("Next step: Adopt step %s\n\n", nextStep.ID)
         fmt.Printf("Resources:\n")
-        for _, res := range nextChunk.Resources {
+        for _, res := range nextStep.Resources {
             fmt.Printf("  - %s (%s)\n", res.Name, res.DiffType)
         }
         fmt.Printf("\nRun:\n")
-        fmt.Printf("  pulumi-drift-adopt adopt-chunk %s %s\n", planFile, nextChunk.ID)
+        fmt.Printf("  pulumi-drift-adopt adopt-step %s %s\n", planFile, nextStep.ID)
         return nil
     }
 
-    // Gate 4: Check for failed chunks
-    failed := plan.GetFailedChunks()
+    // Gate 4: Check for failed steps
+    failed := plan.GetFailedSteps()
     if len(failed) > 0 {
-        fmt.Printf("There are %d failed chunks.\n\n", len(failed))
+        fmt.Printf("There are %d failed steps.\n\n", len(failed))
         fmt.Println("Options:")
         fmt.Println("  1. Reset and retry:")
-        fmt.Printf("     pulumi-drift-adopt reset-chunk %s %s\n", planFile, failed[0].ID)
+        fmt.Printf("     pulumi-drift-adopt reset-step %s %s\n", planFile, failed[0].ID)
         fmt.Println("  2. Skip:")
         fmt.Printf("     pulumi-drift-adopt skip %s %s\n", planFile, failed[0].ID)
         return nil
@@ -3562,10 +3562,10 @@ func runNext(planFile string) error {
 
 Implement:
 - `generate-plan.go`
-- `adopt-chunk.go`
+- `adopt-step.go`
 - `status.go`
 - `skip.go`
-- `reset-chunk.go`
+- `reset-step.go`
 
 Following similar TDD pattern as above.
 
@@ -3624,27 +3624,27 @@ func TestE2E_SimpleDrift(t *testing.T) {
     // 2. Verify plan created
     plan, err := ReadPlanFile(filepath.Join(testDir, "drift-plan.json"))
     require.NoError(t, err)
-    assert.Greater(t, len(plan.Chunks), 0)
+    assert.Greater(t, len(plan.Steps), 0)
 
-    // 3. Run next (should suggest adopt-chunk)
+    // 3. Run next (should suggest adopt-step)
     cmd = exec.Command("pulumi-drift-adopt", "next")
     cmd.Dir = testDir
     output, err = cmd.CombinedOutput()
     require.NoError(t, err)
-    assert.Contains(t, string(output), "adopt-chunk")
+    assert.Contains(t, string(output), "adopt-step")
 
-    // 4. Adopt all chunks
+    // 4. Adopt all steps
     for {
-        // Get next chunk
+        // Get next step
         plan, _ = ReadPlanFile(filepath.Join(testDir, "drift-plan.json"))
-        nextChunk := plan.GetNextPendingChunk()
-        if nextChunk == nil {
+        nextStep := plan.GetNextPendingStep()
+        if nextStep == nil {
             break
         }
 
         // Adopt it
-        cmd = exec.Command("pulumi-drift-adopt", "adopt-chunk",
-            "drift-plan.json", nextChunk.ID)
+        cmd = exec.Command("pulumi-drift-adopt", "adopt-step",
+            "drift-plan.json", nextStep.ID)
         cmd.Dir = testDir
         output, err = cmd.CombinedOutput()
         require.NoError(t, err, string(output))
@@ -3714,7 +3714,7 @@ type MockPulumiClient struct {
 
 // assertions.go
 func AssertPlanValid(t *testing.T, plan *DriftPlan)
-func AssertChunkCompleted(t *testing.T, chunk *DriftChunk)
+func AssertStepCompleted(t *testing.T, step *DriftStep)
 ```
 
 ### CI/CD Pipeline

@@ -1,50 +1,50 @@
 package driftadopt
 
-// GetChunk returns the chunk with the given ID, or nil if not found
-func (p *DriftPlan) GetChunk(id string) *DriftChunk {
-	for i := range p.Chunks {
-		if p.Chunks[i].ID == id {
-			return &p.Chunks[i]
+// GetStep returns the step with the given ID, or nil if not found
+func (p *DriftPlan) GetStep(id string) *DriftStep {
+	for i := range p.Steps {
+		if p.Steps[i].ID == id {
+			return &p.Steps[i]
 		}
 	}
 	return nil
 }
 
-// GetNextPendingChunk returns the first chunk with status "pending",
-// or nil if no pending chunks exist
-func (p *DriftPlan) GetNextPendingChunk() *DriftChunk {
-	for i := range p.Chunks {
-		if p.Chunks[i].Status == ChunkPending {
-			return &p.Chunks[i]
+// GetNextPendingStep returns the first step with status "pending",
+// or nil if no pending steps exist
+func (p *DriftPlan) GetNextPendingStep() *DriftStep {
+	for i := range p.Steps {
+		if p.Steps[i].Status == StepPending {
+			return &p.Steps[i]
 		}
 	}
 	return nil
 }
 
-// CountByStatus returns a map of chunk status to count
-func (p *DriftPlan) CountByStatus() map[ChunkStatus]int {
-	counts := make(map[ChunkStatus]int)
+// CountByStatus returns a map of step status to count
+func (p *DriftPlan) CountByStatus() map[StepStatus]int {
+	counts := make(map[StepStatus]int)
 
-	for _, chunk := range p.Chunks {
-		counts[chunk.Status]++
+	for _, step := range p.Steps {
+		counts[step.Status]++
 	}
 
 	return counts
 }
 
-// GetFailedChunks returns all chunks with status "failed"
-func (p *DriftPlan) GetFailedChunks() []*DriftChunk {
-	var failed []*DriftChunk
+// GetFailedSteps returns all steps with status "failed"
+func (p *DriftPlan) GetFailedSteps() []*DriftStep {
+	var failed []*DriftStep
 
-	for i := range p.Chunks {
-		if p.Chunks[i].Status == ChunkFailed {
-			failed = append(failed, &p.Chunks[i])
+	for i := range p.Steps {
+		if p.Steps[i].Status == StepFailed {
+			failed = append(failed, &p.Steps[i])
 		}
 	}
 
 	// Return empty slice instead of nil for consistency
 	if failed == nil {
-		return []*DriftChunk{}
+		return []*DriftStep{}
 	}
 
 	return failed

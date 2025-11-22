@@ -29,21 +29,21 @@ func TestNextCommand_NoPlan(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestNextCommand_WithPendingChunk(t *testing.T) {
+func TestNextCommand_WithPendingStep(t *testing.T) {
 	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "drift-adopt-test-*")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	// Create a plan with a pending chunk
+	// Create a plan with a pending step
 	plan := &driftadopt.DriftPlan{
-		Stack:       "test-stack",
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
+		Stack:      "test-stack",
+		TotalSteps: 1,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:     "chunk-001",
+				ID:     "step-001",
 				Order:  1,
-				Status: driftadopt.ChunkPending,
+				Status: driftadopt.StepPending,
 				Resources: []driftadopt.ResourceDiff{
 					{
 						URN:  "urn:pulumi:test::test::test:index:Test::mytest",
@@ -63,7 +63,7 @@ func TestNextCommand_WithPendingChunk(t *testing.T) {
 	rootCmd.SetArgs([]string{"--plan", planFile, "next"})
 	err = rootCmd.Execute()
 
-	// Should guide user to view chunk
+	// Should guide user to view step
 	assert.NoError(t, err)
 }
 
@@ -75,38 +75,38 @@ func TestStatusCommand_WithPlan(t *testing.T) {
 
 	// Create a plan with various statuses
 	plan := &driftadopt.DriftPlan{
-		Stack:       "test-stack",
-		TotalChunks: 4,
-		Chunks: []driftadopt.DriftChunk{
+		Stack:      "test-stack",
+		TotalSteps: 4,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:     "chunk-001",
+				ID:     "step-001",
 				Order:  1,
-				Status: driftadopt.ChunkCompleted,
+				Status: driftadopt.StepCompleted,
 				Resources: []driftadopt.ResourceDiff{
 					{URN: "urn:pulumi:test::test::test:index:Test::test1", Type: "test:index:Test", Name: "test1"},
 				},
 			},
 			{
-				ID:     "chunk-002",
+				ID:     "step-002",
 				Order:  2,
-				Status: driftadopt.ChunkPending,
+				Status: driftadopt.StepPending,
 				Resources: []driftadopt.ResourceDiff{
 					{URN: "urn:pulumi:test::test::test:index:Test::test2", Type: "test:index:Test", Name: "test2"},
 				},
 			},
 			{
-				ID:        "chunk-003",
+				ID:        "step-003",
 				Order:     3,
-				Status:    driftadopt.ChunkFailed,
+				Status:    driftadopt.StepFailed,
 				LastError: "Compilation failed",
 				Resources: []driftadopt.ResourceDiff{
 					{URN: "urn:pulumi:test::test::test:index:Test::test3", Type: "test:index:Test", Name: "test3"},
 				},
 			},
 			{
-				ID:     "chunk-004",
+				ID:     "step-004",
 				Order:  4,
-				Status: driftadopt.ChunkSkipped,
+				Status: driftadopt.StepSkipped,
 				Resources: []driftadopt.ResourceDiff{
 					{URN: "urn:pulumi:test::test::test:index:Test::test4", Type: "test:index:Test", Name: "test4"},
 				},
@@ -132,15 +132,15 @@ func TestSkipCommand(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpDir)
 
-	// Create a plan with a pending chunk
+	// Create a plan with a pending step
 	plan := &driftadopt.DriftPlan{
-		Stack:       "test-stack",
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
+		Stack:      "test-stack",
+		TotalSteps: 1,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:     "chunk-001",
+				ID:     "step-001",
 				Order:  1,
-				Status: driftadopt.ChunkPending,
+				Status: driftadopt.StepPending,
 				Resources: []driftadopt.ResourceDiff{
 					{URN: "urn:pulumi:test::test::test:index:Test::mytest", Type: "test:index:Test", Name: "mytest"},
 				},
@@ -153,17 +153,17 @@ func TestSkipCommand(t *testing.T) {
 	require.NoError(t, err)
 
 	// Execute skip command
-	rootCmd.SetArgs([]string{"--plan", planFile, "skip", "--chunk", "chunk-001", "--reason", "Too complex"})
+	rootCmd.SetArgs([]string{"--plan", planFile, "skip", "--step", "step-001", "--reason", "Too complex"})
 	err = rootCmd.Execute()
 	require.NoError(t, err)
 
-	// Verify chunk was skipped
+	// Verify step was skipped
 	updatedPlan, err := driftadopt.ReadPlanFile(planFile)
 	require.NoError(t, err)
 
-	chunk := updatedPlan.GetChunk("chunk-001")
-	assert.Equal(t, driftadopt.ChunkSkipped, chunk.Status)
-	assert.Contains(t, chunk.LastError, "Too complex")
+	step := updatedPlan.GetStep("step-001")
+	assert.Equal(t, driftadopt.StepSkipped, step.Status)
+	assert.Contains(t, step.LastError, "Too complex")
 }
 
 func TestRollbackCommand_InvalidDiff(t *testing.T) {
@@ -180,7 +180,7 @@ func TestRollbackCommand_InvalidDiff(t *testing.T) {
 	assert.Error(t, err)
 }
 
-func TestShowChunkCommand_InvalidChunk(t *testing.T) {
+func TestShowStepCommand_InvalidStep(t *testing.T) {
 	// Create temp directory
 	tmpDir, err := os.MkdirTemp("", "drift-adopt-test-*")
 	require.NoError(t, err)
@@ -188,19 +188,19 @@ func TestShowChunkCommand_InvalidChunk(t *testing.T) {
 
 	// Create a plan
 	plan := &driftadopt.DriftPlan{
-		Stack:       "test-stack",
-		TotalChunks: 0,
-		Chunks:      []driftadopt.DriftChunk{},
+		Stack:      "test-stack",
+		TotalSteps: 0,
+		Steps:      []driftadopt.DriftStep{},
 	}
 
 	planFile := filepath.Join(tmpDir, "drift-plan.json")
 	err = driftadopt.WritePlanFile(planFile, plan)
 	require.NoError(t, err)
 
-	// Execute show-chunk command with non-existent chunk
-	rootCmd.SetArgs([]string{"--plan", planFile, "--project", tmpDir, "show-chunk", "--chunk", "chunk-999"})
+	// Execute show-step command with non-existent step
+	rootCmd.SetArgs([]string{"--plan", planFile, "--project", tmpDir, "show-step", "--step", "step-999"})
 	err = rootCmd.Execute()
 
-	// Should error because chunk doesn't exist
+	// Should error because step doesn't exist
 	assert.Error(t, err)
 }

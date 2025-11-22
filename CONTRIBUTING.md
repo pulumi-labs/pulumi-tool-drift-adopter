@@ -64,7 +64,7 @@ func TestDriftPlan_Serialization(t *testing.T) {
     // Arrange
     plan := &DriftPlan{
         Stack: "dev",
-        TotalChunks: 1,
+        TotalSteps: 1,
     }
 
     // Act
@@ -228,7 +228,7 @@ The project is being developed in phases (see [issues](https://github.com/pulumi
 3. **Phase 3**: Code generation with LLM
 4. **Phase 4**: Compilation validation
 5. **Phase 5**: Diff matching
-6. **Phase 6**: Chunk adopter orchestration
+6. **Phase 6**: Step adopter orchestration
 7. **Phase 7**: CLI commands
 8. **Phase 8**: E2E testing
 9. **Phase 9**: Polish & documentation

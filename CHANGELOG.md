@@ -15,10 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Sequential gate pattern orchestration via `next` command
 - CLI commands:
   - `next` - Shows next step in workflow
-  - `show-chunk` - Displays chunk details for agents
+  - `show-step` - Displays step details for agents
   - `apply-diff` - Applies and validates code changes
   - `status` - Shows adoption progress
-  - `skip` - Skips a chunk
+  - `skip` - Skips a step
   - `rollback` - Rolls back changes
   - `generate-plan` - Plan generation (placeholder)
 - Dependency graph analysis with topological sorting (Kahn's algorithm)

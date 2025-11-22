@@ -21,9 +21,9 @@ func TestPlanFile_ReadWrite(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now().UTC().Truncate(time.Second),
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Status: driftadopt.ChunkPending, Order: 0},
+		TotalSteps: 1,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Status: driftadopt.StepPending, Order: 0},
 		},
 	}
 
@@ -37,14 +37,14 @@ func TestPlanFile_ReadWrite(t *testing.T) {
 
 	// Assert
 	assert.Equal(t, plan.Stack, loaded.Stack)
-	assert.Equal(t, plan.TotalChunks, loaded.TotalChunks)
+	assert.Equal(t, plan.TotalSteps, loaded.TotalSteps)
 	assert.Equal(t, plan.GeneratedAt.Unix(), loaded.GeneratedAt.Unix())
-	assert.Len(t, loaded.Chunks, 1)
-	assert.Equal(t, "chunk-001", loaded.Chunks[0].ID)
-	assert.Equal(t, driftadopt.ChunkPending, loaded.Chunks[0].Status)
+	assert.Len(t, loaded.Steps, 1)
+	assert.Equal(t, "step-001", loaded.Steps[0].ID)
+	assert.Equal(t, driftadopt.StepPending, loaded.Steps[0].Status)
 }
 
-func TestPlanFile_UpdateChunkStatus(t *testing.T) {
+func TestPlanFile_UpdateStepStatus(t *testing.T) {
 	// Arrange
 	tempDir := t.TempDir()
 	planPath := filepath.Join(tempDir, "drift-plan.json")
@@ -52,10 +52,10 @@ func TestPlanFile_UpdateChunkStatus(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now().UTC().Truncate(time.Second),
-		TotalChunks: 2,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Status: driftadopt.ChunkPending, Order: 0},
-			{ID: "chunk-002", Status: driftadopt.ChunkPending, Order: 1},
+		TotalSteps: 2,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Status: driftadopt.StepPending, Order: 0},
+			{ID: "step-002", Status: driftadopt.StepPending, Order: 1},
 		},
 	}
 
@@ -64,8 +64,8 @@ func TestPlanFile_UpdateChunkStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	// Act - Update status
-	plan.Chunks[0].Status = driftadopt.ChunkCompleted
-	plan.Chunks[0].Attempt = 1
+	plan.Steps[0].Status = driftadopt.StepCompleted
+	plan.Steps[0].Attempt = 1
 	err = driftadopt.WritePlanFile(planPath, plan)
 	require.NoError(t, err)
 
@@ -74,9 +74,9 @@ func TestPlanFile_UpdateChunkStatus(t *testing.T) {
 	require.NoError(t, err)
 
 	// Assert
-	assert.Equal(t, driftadopt.ChunkCompleted, loaded.Chunks[0].Status)
-	assert.Equal(t, 1, loaded.Chunks[0].Attempt)
-	assert.Equal(t, driftadopt.ChunkPending, loaded.Chunks[1].Status)
+	assert.Equal(t, driftadopt.StepCompleted, loaded.Steps[0].Status)
+	assert.Equal(t, 1, loaded.Steps[0].Attempt)
+	assert.Equal(t, driftadopt.StepPending, loaded.Steps[1].Status)
 }
 
 func TestPlanFile_InvalidJSON(t *testing.T) {
@@ -109,17 +109,17 @@ func TestPlanFile_NotExists(t *testing.T) {
 }
 
 func TestPlanFile_ComplexPlan(t *testing.T) {
-	// Arrange - Complex plan with multiple chunks and dependencies
+	// Arrange - Complex plan with multiple steps and dependencies
 	tempDir := t.TempDir()
 	planPath := filepath.Join(tempDir, "drift-plan.json")
 
 	plan := &driftadopt.DriftPlan{
 		Stack:       "production",
 		GeneratedAt: time.Now().UTC().Truncate(time.Second),
-		TotalChunks: 3,
-		Chunks: []driftadopt.DriftChunk{
+		TotalSteps: 3,
+		Steps: []driftadopt.DriftStep{
 			{
-				ID:    "chunk-001",
+				ID:    "step-001",
 				Order: 0,
 				Resources: []driftadopt.ResourceDiff{
 					{
@@ -139,25 +139,25 @@ func TestPlanFile_ComplexPlan(t *testing.T) {
 						SourceLine: 15,
 					},
 				},
-				Status:       driftadopt.ChunkCompleted,
+				Status:       driftadopt.StepCompleted,
 				Dependencies: []string{},
 				Attempt:      1,
 				LastError:    "",
 			},
 			{
-				ID:           "chunk-002",
+				ID:           "step-002",
 				Order:        1,
 				Resources:    []driftadopt.ResourceDiff{},
-				Status:       driftadopt.ChunkFailed,
-				Dependencies: []string{"chunk-003"},
+				Status:       driftadopt.StepFailed,
+				Dependencies: []string{"step-003"},
 				Attempt:      2,
 				LastError:    "compilation failed",
 			},
 			{
-				ID:           "chunk-003",
+				ID:           "step-003",
 				Order:        2,
 				Resources:    []driftadopt.ResourceDiff{},
-				Status:       driftadopt.ChunkSkipped,
+				Status:       driftadopt.StepSkipped,
 				Dependencies: []string{},
 				Attempt:      0,
 				LastError:    "skipped by user",
@@ -174,26 +174,26 @@ func TestPlanFile_ComplexPlan(t *testing.T) {
 
 	// Assert - All complex fields preserved
 	assert.Equal(t, plan.Stack, loaded.Stack)
-	assert.Equal(t, plan.TotalChunks, loaded.TotalChunks)
-	assert.Len(t, loaded.Chunks, 3)
+	assert.Equal(t, plan.TotalSteps, loaded.TotalSteps)
+	assert.Len(t, loaded.Steps, 3)
 
-	// Check first chunk details
-	assert.Equal(t, "chunk-001", loaded.Chunks[0].ID)
-	assert.Equal(t, driftadopt.ChunkCompleted, loaded.Chunks[0].Status)
-	assert.Len(t, loaded.Chunks[0].Resources, 1)
-	assert.Equal(t, "data", loaded.Chunks[0].Resources[0].Name)
-	assert.Equal(t, driftadopt.DiffTypeUpdate, loaded.Chunks[0].Resources[0].DiffType)
-	assert.Len(t, loaded.Chunks[0].Resources[0].PropertyDiff, 1)
+	// Check first step details
+	assert.Equal(t, "step-001", loaded.Steps[0].ID)
+	assert.Equal(t, driftadopt.StepCompleted, loaded.Steps[0].Status)
+	assert.Len(t, loaded.Steps[0].Resources, 1)
+	assert.Equal(t, "data", loaded.Steps[0].Resources[0].Name)
+	assert.Equal(t, driftadopt.DiffTypeUpdate, loaded.Steps[0].Resources[0].DiffType)
+	assert.Len(t, loaded.Steps[0].Resources[0].PropertyDiff, 1)
 
-	// Check failed chunk
-	assert.Equal(t, driftadopt.ChunkFailed, loaded.Chunks[1].Status)
-	assert.Equal(t, 2, loaded.Chunks[1].Attempt)
-	assert.Equal(t, "compilation failed", loaded.Chunks[1].LastError)
-	assert.Contains(t, loaded.Chunks[1].Dependencies, "chunk-003")
+	// Check failed step
+	assert.Equal(t, driftadopt.StepFailed, loaded.Steps[1].Status)
+	assert.Equal(t, 2, loaded.Steps[1].Attempt)
+	assert.Equal(t, "compilation failed", loaded.Steps[1].LastError)
+	assert.Contains(t, loaded.Steps[1].Dependencies, "step-003")
 
-	// Check skipped chunk
-	assert.Equal(t, driftadopt.ChunkSkipped, loaded.Chunks[2].Status)
-	assert.Equal(t, "skipped by user", loaded.Chunks[2].LastError)
+	// Check skipped step
+	assert.Equal(t, driftadopt.StepSkipped, loaded.Steps[2].Status)
+	assert.Equal(t, "skipped by user", loaded.Steps[2].LastError)
 }
 
 func TestPlanFile_PrettyPrinted(t *testing.T) {
@@ -204,9 +204,9 @@ func TestPlanFile_PrettyPrinted(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now().UTC().Truncate(time.Second),
-		TotalChunks: 1,
-		Chunks: []driftadopt.DriftChunk{
-			{ID: "chunk-001", Status: driftadopt.ChunkPending, Order: 0},
+		TotalSteps: 1,
+		Steps: []driftadopt.DriftStep{
+			{ID: "step-001", Status: driftadopt.StepPending, Order: 0},
 		},
 	}
 
@@ -233,8 +233,8 @@ func TestPlanFile_WriteCreatesDirectory(t *testing.T) {
 	plan := &driftadopt.DriftPlan{
 		Stack:       "dev",
 		GeneratedAt: time.Now().UTC().Truncate(time.Second),
-		TotalChunks: 0,
-		Chunks:      []driftadopt.DriftChunk{},
+		TotalSteps: 0,
+		Steps:      []driftadopt.DriftStep{},
 	}
 
 	// Act - Write to nested path (parent dirs don't exist)

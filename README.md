@@ -17,7 +17,7 @@ Drift occurs when infrastructure is modified directly in the cloud console or vi
 2. **Analyzing dependencies** - Understanding which resources to update first
 3. **Generating code** - Agent generates code to match actual state
 4. **Validating changes** - Tool validates compilation and preview
-5. **Iterating** - Processing drift chunk by chunk until complete
+5. **Iterating** - Processing drift step by step until complete
 
 ## Architecture
 
@@ -96,10 +96,10 @@ Expected plan structure:
 {
   "stack": "dev",
   "generatedAt": "2024-01-15T10:00:00Z",
-  "totalChunks": 2,
-  "chunks": [
+  "totalSteps": 2,
+  "steps": [
     {
-      "id": "chunk-001",
+      "id": "step-001",
       "order": 0,
       "resources": [{
         "urn": "urn:pulumi:dev::proj::aws:s3/bucket:Bucket::my-bucket",
@@ -131,15 +131,15 @@ The typical workflow with an AI agent (like Claude):
 # Agent calls: What should I do next?
 pulumi-drift-adopt next
 
-# Tool responds: "Next chunk ready: chunk-001 (Order: 0)"
-# "View chunk details:"
-# "  pulumi-drift-adopt show-chunk --chunk chunk-001"
+# Tool responds: "Next step ready: step-001 (Order: 0)"
+# "View step details:"
+# "  pulumi-drift-adopt show-step --step step-001"
 
-# Agent views chunk details
-pulumi-drift-adopt show-chunk --chunk chunk-001
+# Agent views step details
+pulumi-drift-adopt show-step --step step-001
 
 # Agent generates code changes and applies them
-pulumi-drift-adopt apply-diff --chunk chunk-001 --files file1.ts file2.ts
+pulumi-drift-adopt apply-diff --step step-001 --files file1.ts file2.ts
 
 # Agent calls next again
 pulumi-drift-adopt next
@@ -179,30 +179,30 @@ pulumi-drift-adopt next [--plan drift-plan.json] [--project .]
 **Gates:**
 1. Check if plan exists
 2. Load plan
-3. Check for pending chunks
-4. Check for failed chunks
+3. Check for pending steps
+4. Check for failed steps
 5. All complete - output "STOP"
 
-### `show-chunk`
+### `show-step`
 
-Displays detailed information about a chunk for agent consumption.
+Displays detailed information about a step for agent consumption.
 
 ```bash
-pulumi-drift-adopt show-chunk --chunk CHUNK_ID [--plan drift-plan.json] [--project .]
+pulumi-drift-adopt show-step --step CHUNK_ID [--plan drift-plan.json] [--project .]
 ```
 
 Shows:
-- Resources in chunk
+- Resources in step
 - Current source code
 - Expected property changes
-- Dependencies on other chunks
+- Dependencies on other steps
 
 ### `apply-diff`
 
 Applies agent-generated code changes and validates them.
 
 ```bash
-pulumi-drift-adopt apply-diff --chunk CHUNK_ID --files file1:content file2:content [--plan drift-plan.json] [--project .]
+pulumi-drift-adopt apply-diff --step CHUNK_ID --files file1:content file2:content [--plan drift-plan.json] [--project .]
 ```
 
 Process:
@@ -210,7 +210,7 @@ Process:
 2. Validates compilation
 3. Runs pulumi preview (optional)
 4. Matches diff with expected changes
-5. Updates chunk status
+5. Updates step status
 6. Rolls back on failure
 
 ### `status`
@@ -224,16 +224,16 @@ pulumi-drift-adopt status [--plan drift-plan.json] [--project .]
 Displays:
 - Overall progress percentage
 - Status breakdown (completed/pending/failed/skipped)
-- Next pending chunk
-- Failed chunks with error messages
+- Next pending step
+- Failed steps with error messages
 - Recent changes
 
 ### `skip`
 
-Marks a chunk as skipped for manual handling later.
+Marks a step as skipped for manual handling later.
 
 ```bash
-pulumi-drift-adopt skip --chunk CHUNK_ID [--reason "reason"] [--plan drift-plan.json]
+pulumi-drift-adopt skip --step CHUNK_ID [--reason "reason"] [--plan drift-plan.json]
 ```
 
 ### `rollback`
@@ -266,18 +266,18 @@ VPC (order 0, no dependencies)
 
 Resources are processed in dependency order, ensuring dependencies are adopted before dependents.
 
-### 2. Chunking
+### 2. Steping
 
-Resources at the same dependency level are grouped into chunks. Each chunk can be processed independently from chunks at other levels.
+Resources at the same dependency level are grouped into steps. Each step can be processed independently from steps at other levels.
 
 **Example:**
-- Chunk 1 (order 0): VPC
-- Chunk 2 (order 1): Subnet + SecurityGroup
+- Step 1 (order 0): VPC
+- Step 2 (order 1): Subnet + SecurityGroup
 
 ### 3. Agent Code Generation
 
-For each chunk, the agent:
-1. Calls `show-chunk` to see current code and expected changes
+For each step, the agent:
+1. Calls `show-step` to see current code and expected changes
 2. Generates updated code
 3. Calls `apply-diff` to submit changes
 
@@ -306,7 +306,7 @@ All applied changes are recorded with:
 - Unique diff ID
 - Original file contents
 - Timestamp
-- Associated chunk ID
+- Associated step ID
 
 This enables rollback and audit trail.
 
@@ -371,10 +371,10 @@ go tool cover -html=coverage.out
 │       ├── main.go            # Entry point
 │       ├── root.go            # Root command
 │       ├── next.go            # Sequential gate pattern
-│       ├── show_chunk.go      # Display chunk for agents
+│       ├── show_step.go      # Display step for agents
 │       ├── apply_diff.go      # Apply and validate changes
 │       ├── status.go          # Show progress
-│       ├── skip.go            # Skip chunk
+│       ├── skip.go            # Skip step
 │       └── rollback.go        # Rollback changes
 ├── pkg/
 │   └── driftadopt/            # Core logic
@@ -384,7 +384,7 @@ go tool cover -html=coverage.out
 │       ├── graph.go           # Dependency graph
 │       ├── diff_recorder.go   # Diff tracking
 │       ├── diff_applier.go    # Apply changes
-│       ├── chunk_guide.go     # Agent guidance
+│       ├── step_guide.go     # Agent guidance
 │       ├── diffmatch.go       # Diff comparison
 │       ├── apply_orchestrator.go  # Coordination
 │       ├── preview.go         # Pulumi preview

@@ -33,7 +33,7 @@ func TestDiffApplier_ApplyChanges(t *testing.T) {
 	}
 
 	// Act
-	diffID, err := applier.ApplyChanges("chunk-001", changes)
+	diffID, err := applier.ApplyChanges("step-001", changes)
 	require.NoError(t, err)
 
 	// Assert
@@ -55,14 +55,14 @@ func TestDiffApplier_RecordsOriginalState(t *testing.T) {
 	changes := []driftadopt.FileChange{{FilePath: filePath, NewCode: "const x = 2;"}}
 
 	// Act
-	diffID, err := applier.ApplyChanges("chunk-001", changes)
+	diffID, err := applier.ApplyChanges("step-001", changes)
 	require.NoError(t, err)
 
 	// Assert - check that original is recorded
 	recorder := applier.GetRecorder()
 	diff, err := recorder.GetDiff(diffID)
 	require.NoError(t, err)
-	assert.Equal(t, "chunk-001", diff.ChunkID)
+	assert.Equal(t, "step-001", diff.StepID)
 	assert.Equal(t, originalCode, diff.Files[filePath])
 	assert.True(t, diff.Applied)
 }
@@ -84,7 +84,7 @@ func TestDiffApplier_MultipleFiles(t *testing.T) {
 	}
 
 	// Act
-	diffID, err := applier.ApplyChanges("chunk-001", changes)
+	diffID, err := applier.ApplyChanges("step-001", changes)
 	require.NoError(t, err)
 
 	// Assert - both files updated
@@ -108,7 +108,7 @@ func TestDiffApplier_FileNotFound(t *testing.T) {
 	}
 
 	// Act
-	_, err := applier.ApplyChanges("chunk-001", changes)
+	_, err := applier.ApplyChanges("step-001", changes)
 
 	// Assert
 	assert.Error(t, err)
@@ -121,7 +121,7 @@ func TestDiffApplier_EmptyChanges(t *testing.T) {
 	applier := driftadopt.NewDiffApplier(tmpDir)
 
 	// Act
-	diffID, err := applier.ApplyChanges("chunk-001", []driftadopt.FileChange{})
+	diffID, err := applier.ApplyChanges("step-001", []driftadopt.FileChange{})
 
 	// Assert
 	require.NoError(t, err)
@@ -137,13 +137,13 @@ func TestDiffApplier_SequentialDiffIDs(t *testing.T) {
 	applier := driftadopt.NewDiffApplier(tmpDir)
 
 	// Act
-	diffID1, err1 := applier.ApplyChanges("chunk-001", []driftadopt.FileChange{
+	diffID1, err1 := applier.ApplyChanges("step-001", []driftadopt.FileChange{
 		{FilePath: filePath, NewCode: "v2"},
 	})
 	require.NoError(t, err1)
 
 	os.WriteFile(filePath, []byte("v2"), 0644)
-	diffID2, err2 := applier.ApplyChanges("chunk-002", []driftadopt.FileChange{
+	diffID2, err2 := applier.ApplyChanges("step-002", []driftadopt.FileChange{
 		{FilePath: filePath, NewCode: "v3"},
 	})
 	require.NoError(t, err2)

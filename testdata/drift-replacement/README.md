@@ -10,11 +10,11 @@ Resource with immutable property changed, requiring replacement.
 
 ## Expected Behavior
 1. Tool detects replacement drift via preview (diffType: "replace")
-2. Creates single chunk for the resource
+2. Creates single step for the resource
 3. Agent generates code to update the bucket name
 4. Tool validates TypeScript compilation
 5. Tool verifies preview matches expected diff
-6. Chunk marked as completed
+6. Step marked as completed
 
 ## Notes
 - Replacement drift is more complex than simple updates

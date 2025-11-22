@@ -10,31 +10,31 @@ type DriftPlan struct {
 	// GeneratedAt is when this plan was created
 	GeneratedAt time.Time `json:"generatedAt"`
 
-	// TotalChunks is the number of chunks in this plan
-	TotalChunks int `json:"totalChunks"`
+	// TotalSteps is the number of steps in this plan
+	TotalSteps int `json:"totalSteps"`
 
-	// Chunks are the drift adoption chunks, ordered by dependencies
-	Chunks []DriftChunk `json:"chunks"`
+	// Steps are the drift adoption steps, ordered by dependencies
+	Steps []DriftStep `json:"steps"`
 }
 
-// DriftChunk represents a group of related drift changes to be adopted together
-type DriftChunk struct {
-	// ID is the unique identifier for this chunk (e.g., "chunk-001")
+// DriftStep represents a group of related drift changes to be adopted together
+type DriftStep struct {
+	// ID is the unique identifier for this step (e.g., "step-001")
 	ID string `json:"id"`
 
 	// Order is the processing order (0 = process first)
 	Order int `json:"order"`
 
-	// Resources are the resources with drift in this chunk
+	// Resources are the resources with drift in this step
 	Resources []ResourceDiff `json:"resources"`
 
-	// Status is the current status of this chunk
-	Status ChunkStatus `json:"status"`
+	// Status is the current status of this step
+	Status StepStatus `json:"status"`
 
-	// Dependencies are the chunk IDs that depend on this chunk
+	// Dependencies are the step IDs that depend on this step
 	Dependencies []string `json:"dependencies,omitempty"`
 
-	// Attempt is the number of adoption attempts for this chunk
+	// Attempt is the number of adoption attempts for this step
 	Attempt int `json:"attempt"`
 
 	// LastError is the error message from the last failed attempt
@@ -94,22 +94,22 @@ const (
 	DiffTypeReplace DiffType = "replace"
 )
 
-// ChunkStatus represents the status of a drift chunk
-type ChunkStatus string
+// StepStatus represents the status of a drift step
+type StepStatus string
 
 const (
-	// ChunkPending indicates the chunk hasn't been processed yet
-	ChunkPending ChunkStatus = "pending"
+	// StepPending indicates the step hasn't been processed yet
+	StepPending StepStatus = "pending"
 
-	// ChunkInProgress indicates the chunk is currently being processed
-	ChunkInProgress ChunkStatus = "in_progress"
+	// StepInProgress indicates the step is currently being processed
+	StepInProgress StepStatus = "in_progress"
 
-	// ChunkCompleted indicates the chunk was successfully adopted
-	ChunkCompleted ChunkStatus = "completed"
+	// StepCompleted indicates the step was successfully adopted
+	StepCompleted StepStatus = "completed"
 
-	// ChunkFailed indicates the chunk adoption failed
-	ChunkFailed ChunkStatus = "failed"
+	// StepFailed indicates the step adoption failed
+	StepFailed StepStatus = "failed"
 
-	// ChunkSkipped indicates the chunk was manually skipped
-	ChunkSkipped ChunkStatus = "skipped"
+	// StepSkipped indicates the step was manually skipped
+	StepSkipped StepStatus = "skipped"
 )

@@ -1,10 +1,10 @@
 {
   "stack": "dev",
   "generatedAt": "2024-01-15T10:00:00Z",
-  "totalChunks": 1,
-  "chunks": [
+  "totalSteps": 1,
+  "steps": [
     {
-      "id": "chunk-001",
+      "id": "step-001",
       "order": 0,
       "resources": [
         {

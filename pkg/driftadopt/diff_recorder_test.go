@@ -20,7 +20,7 @@ func TestDiffRecorder_RecordAndRetrieve(t *testing.T) {
 
 	diff := &driftadopt.DiffRecord{
 		ID:        "001",
-		ChunkID:   "chunk-001",
+		StepID:   "step-001",
 		Timestamp: time.Now(),
 		Files: map[string]string{
 			"/path/to/file.ts": "original content",
@@ -36,7 +36,7 @@ func TestDiffRecorder_RecordAndRetrieve(t *testing.T) {
 	retrieved, err := recorder.GetDiff("001")
 	require.NoError(t, err)
 	assert.Equal(t, "001", retrieved.ID)
-	assert.Equal(t, "chunk-001", retrieved.ChunkID)
+	assert.Equal(t, "step-001", retrieved.StepID)
 	assert.True(t, retrieved.Applied)
 	assert.Equal(t, "original content", retrieved.Files["/path/to/file.ts"])
 }
@@ -46,8 +46,8 @@ func TestDiffRecorder_ListDiffs(t *testing.T) {
 	tmpDir := t.TempDir()
 	recorder := driftadopt.NewDiffRecorder(tmpDir)
 
-	recorder.RecordDiff(&driftadopt.DiffRecord{ID: "001", ChunkID: "chunk-001", Applied: true})
-	recorder.RecordDiff(&driftadopt.DiffRecord{ID: "002", ChunkID: "chunk-002", Applied: false})
+	recorder.RecordDiff(&driftadopt.DiffRecord{ID: "001", StepID: "step-001", Applied: true})
+	recorder.RecordDiff(&driftadopt.DiffRecord{ID: "002", StepID: "step-002", Applied: false})
 
 	// Act
 	diffs, err := recorder.ListDiffs()
@@ -69,7 +69,7 @@ func TestDiffRecorder_Rollback(t *testing.T) {
 	recorder := driftadopt.NewDiffRecorder(filepath.Join(tmpDir, "diffs"))
 	diff := &driftadopt.DiffRecord{
 		ID:      "001",
-		ChunkID: "chunk-001",
+		StepID: "step-001",
 		Files: map[string]string{
 			filePath: "original content",
 		},
@@ -97,7 +97,7 @@ func TestDiffRecorder_NextID(t *testing.T) {
 
 	// Act
 	id1 := recorder.NextID()
-	recorder.RecordDiff(&driftadopt.DiffRecord{ID: id1, ChunkID: "c1"})
+	recorder.RecordDiff(&driftadopt.DiffRecord{ID: id1, StepID: "c1"})
 	id2 := recorder.NextID()
 
 	// Assert
@@ -124,7 +124,7 @@ func TestDiffRecorder_Rollback_NotApplied(t *testing.T) {
 
 	diff := &driftadopt.DiffRecord{
 		ID:      "001",
-		ChunkID: "chunk-001",
+		StepID: "step-001",
 		Files:   map[string]string{},
 		Applied: false,
 	}
@@ -158,7 +158,7 @@ func TestDiffRecorder_UpdateExistingDiff(t *testing.T) {
 
 	diff := &driftadopt.DiffRecord{
 		ID:      "001",
-		ChunkID: "chunk-001",
+		StepID: "step-001",
 		Applied: true,
 	}
 	recorder.RecordDiff(diff)
