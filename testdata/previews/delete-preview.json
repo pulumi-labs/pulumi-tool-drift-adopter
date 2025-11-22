@@ -1,9 +1,0 @@
-{
-  "steps": [
-    {
-      "op": "delete",
-      "urn": "urn:pulumi:dev::myapp::aws:s3/bucket:Bucket::old-bucket",
-      "type": "aws:s3/bucket:Bucket"
-    }
-  ]
-}

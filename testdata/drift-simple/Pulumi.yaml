@@ -1,3 +1,0 @@
-name: drift-simple
-runtime: nodejs
-description: Simple drift test - single resource with property changes

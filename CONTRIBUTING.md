@@ -13,8 +13,6 @@ This project adheres to the Pulumi Community Code of Conduct. By participating, 
 - Go 1.21 or later
 - Git
 - [Pulumi CLI](https://www.pulumi.com/docs/install/)
-- Node.js (for TypeScript validation testing)
-- Python 3.8+ (for Python validation testing)
 
 ### Development Setup
 
@@ -31,86 +29,10 @@ cd pulumi-drift-adoption-tool
 go mod download
 ```
 
-3. **Run tests to verify setup**
+3. **Build the tool**
 
 ```bash
-# Run unit tests
-go test -tags=unit ./...
-
-# Run all tests
-go test -tags=unit,integration ./...
-```
-
-## Development Workflow
-
-This project follows **Test-Driven Development (TDD)** principles:
-
-### 1. Red-Green-Refactor Cycle
-
-```
-1. RED: Write a failing test
-2. GREEN: Write minimal code to pass the test
-3. REFACTOR: Clean up and optimize
-4. REPEAT: Move to the next feature
-```
-
-### 2. Writing Tests
-
-**Always write tests before implementation:**
-
-```go
-// Example: Test first
-func TestDriftPlan_Serialization(t *testing.T) {
-    // Arrange
-    plan := &DriftPlan{
-        Stack: "dev",
-        TotalSteps: 1,
-    }
-
-    // Act
-    data, err := json.Marshal(plan)
-    require.NoError(t, err)
-
-    // Assert
-    var unmarshaled DriftPlan
-    err = json.Unmarshal(data, &unmarshaled)
-    require.NoError(t, err)
-    assert.Equal(t, plan.Stack, unmarshaled.Stack)
-}
-```
-
-### 3. Test Categories
-
-Use build tags to categorize tests:
-
-```go
-//go:build unit
-// Fast tests, no external dependencies
-
-//go:build integration
-// Tests with filesystem, mock services
-
-//go:build e2e
-// Full workflow tests
-```
-
-### 4. Running Tests
-
-```bash
-# Unit tests only (fast)
-go test -tags=unit ./...
-
-# Integration tests
-go test -tags=integration ./...
-
-# E2E tests
-go test -tags=e2e ./e2e/...
-
-# All tests with coverage
-go test -tags=unit,integration -coverprofile=coverage.out ./...
-
-# View coverage
-go tool cover -html=coverage.out
+go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
 ```
 
 ## Project Structure
@@ -118,17 +40,15 @@ go tool cover -html=coverage.out
 ```
 .
 ├── cmd/
-│   └── pulumi-drift-adopt/    # CLI entry point and commands
-├── pkg/
-│   └── driftadopt/            # Core logic
-│       ├── validator/         # Language-specific validators
-│       ├── editor/            # Code manipulation
-│       └── testutil/          # Test utilities
-├── e2e/                       # End-to-end tests
-├── testdata/                  # Test fixtures
-├── .github/                   # GitHub workflows and templates
-└── DRIFT_ADOPTION_DESIGN.md   # Detailed design document
+│   └── pulumi-drift-adopt/    # CLI
+│       ├── main.go            # Entry point
+│       ├── root.go            # Root command
+│       └── next.go            # Main command (~180 lines)
+├── bin/                       # Built binary
+└── .github/                   # GitHub workflows and templates
 ```
+
+The entire tool logic is in `cmd/pulumi-drift-adopt/next.go` - a single, self-contained file (~180 lines).
 
 ## Making Changes
 
@@ -143,32 +63,24 @@ git checkout -b feature/your-feature-name
 - Use `gofmt` and `goimports` for formatting
 - Run `golangci-lint` for linting
 - Follow [Effective Go](https://golang.org/doc/effective_go)
-- Add godoc comments for exported functions
+- Add comments for non-obvious logic
 
-### 3. Write Tests First (TDD)
-
-For every new feature:
-1. Write test(s) that fail
-2. Implement the feature
-3. Ensure tests pass
-4. Refactor if needed
-
-### 4. Keep Commits Atomic
+### 3. Keep Commits Atomic
 
 - One logical change per commit
 - Write clear, descriptive commit messages
 - Reference issue numbers when applicable
 
 ```bash
-git commit -m "feat: add DriftPlan serialization (#2)
+git commit -m "feat: add source location to output (#42)
 
-Implements JSON marshaling/unmarshaling for DriftPlan type.
-Includes comprehensive tests for edge cases.
+Extracts file and line information from preview output
+and includes it in the resource change JSON.
 
-Fixes #2"
+Fixes #42"
 ```
 
-### 5. Run Quality Checks
+### 4. Run Quality Checks
 
 Before pushing:
 
@@ -177,16 +89,11 @@ Before pushing:
 gofmt -w .
 goimports -w .
 
-# Run linter
+# Run linter (if installed)
 golangci-lint run
 
-# Run tests
-go test -tags=unit,integration ./...
-
-# Check coverage
-go test -tags=unit -coverprofile=coverage.out ./...
-go tool cover -func=coverage.out | grep total
-# Target: >80% coverage
+# Build
+go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
 ```
 
 ## Pull Request Process
@@ -194,21 +101,21 @@ go tool cover -func=coverage.out | grep total
 ### 1. Update Documentation
 
 - Update README.md if adding user-facing features
-- Add/update godoc comments
-- Update CHANGELOG.md (if exists)
+- Update CHANGELOG.md with your changes
+- Add comments to code for complex logic
 
 ### 2. Create Pull Request
 
 - Use the PR template
 - Link related issues
 - Provide clear description of changes
-- Add screenshots if applicable
+- Show example output if applicable
 
 ### 3. PR Checklist
 
-- [ ] Tests written and passing
 - [ ] Code formatted (`gofmt`, `goimports`)
-- [ ] Linter passing (`golangci-lint`)
+- [ ] Linter passing (if using `golangci-lint`)
+- [ ] Binary builds successfully
 - [ ] Documentation updated
 - [ ] Commits are atomic and well-described
 - [ ] PR description is clear
@@ -219,71 +126,49 @@ go tool cover -func=coverage.out | grep total
 - Discuss design decisions if needed
 - Keep PR scope focused
 
-## Development Phases
-
-The project is being developed in phases (see [issues](https://github.com/pulumi/pulumi-drift-adoption-tool/issues)):
-
-1. **Phase 1**: Core data structures
-2. **Phase 2**: Dependency graph analysis
-3. **Phase 3**: Code generation with LLM
-4. **Phase 4**: Compilation validation
-5. **Phase 5**: Diff matching
-6. **Phase 6**: Step adopter orchestration
-7. **Phase 7**: CLI commands
-8. **Phase 8**: E2E testing
-9. **Phase 9**: Polish & documentation
-
-Check current phase in issues before starting work.
-
 ## Common Tasks
 
-### Adding a New Command
+### Modifying the `next` Command
 
-1. Create test file: `cmd/pulumi-drift-adopt/mycommand_test.go`
-2. Write failing tests
-3. Create command file: `cmd/pulumi-drift-adopt/mycommand.go`
-4. Implement command using Cobra
-5. Register in `root.go`
-6. Update README.md
+Since all logic is in one file (`cmd/pulumi-drift-adopt/next.go`):
 
-### Adding a New Validator
-
-1. Create test file: `pkg/driftadopt/validator/mylang_test.go`
-2. Write tests for valid/invalid code
-3. Implement validator: `pkg/driftadopt/validator/mylang.go`
-4. Update factory to detect the language
-5. Add integration tests
-
-### Adding Test Fixtures
-
-```bash
-# Create fixture directory
-mkdir -p testdata/my-scenario
-
-# Add files
-testdata/my-scenario/
-  ├── input.json          # Input data
-  ├── expected.json       # Expected output
-  └── README.md           # Scenario description
-```
+1. Read the existing code to understand the flow
+2. Make your changes
+3. Test manually with a Pulumi project
+4. Verify the JSON output is correct
+5. Update documentation
 
 ## Debugging
 
-### Running with Debug Output
+### Running Locally
 
 ```bash
-# Set verbose mode (when implemented)
-pulumi-drift-adopt --verbose next
+# Build
+go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
 
-# Run with debugger
-dlv debug ./cmd/pulumi-drift-adopt -- next
+# Run in a Pulumi project
+cd /path/to/pulumi/project
+/path/to/bin/pulumi-drift-adopt next
+```
+
+### Debug Output
+
+Add debug prints to `next.go`:
+
+```go
+fmt.Fprintf(os.Stderr, "DEBUG: found %d resources\n", len(resources))
 ```
 
 ### Common Issues
 
-**Tests fail with missing modules:**
+**Build fails:**
 ```bash
 go mod tidy
+```
+
+**Import errors:**
+```bash
+goimports -w .
 ```
 
 **Linter errors:**
@@ -291,16 +176,10 @@ go mod tidy
 golangci-lint run --fix
 ```
 
-**Coverage too low:**
-```bash
-# Find untested code
-go test -coverprofile=coverage.out ./...
-go tool cover -html=coverage.out
-```
-
 ## Getting Help
 
-- 📖 Read [DRIFT_ADOPTION_DESIGN.md](DRIFT_ADOPTION_DESIGN.md) for architecture details
+- 📖 Read [DRIFT_ADOPTION_DESIGN.md](DRIFT_ADOPTION_DESIGN.md) for design details
+- 📖 Read [README.md](README.md) for usage examples
 - 🐛 Search [existing issues](https://github.com/pulumi/pulumi-drift-adoption-tool/issues)
 - 💬 Join [Pulumi Community Slack](https://slack.pulumi.com/)
 - ❓ Ask questions in issue comments
@@ -313,8 +192,8 @@ Use the bug report template and include:
 - Clear description of the issue
 - Steps to reproduce
 - Expected vs actual behavior
-- Environment details (OS, Go version, etc.)
-- Relevant logs or error messages
+- Environment details (OS, Go version, Pulumi version)
+- Relevant command output or error messages
 
 ### Feature Requests
 
@@ -322,7 +201,19 @@ Use the feature request template and include:
 - Problem you're trying to solve
 - Proposed solution
 - Alternative approaches considered
+- Example use case
 - Willingness to implement
+
+## Design Philosophy
+
+The tool follows a **simple, stateless** design:
+- Single command that does one thing well
+- No external state or plan files
+- Straightforward preview parsing with inverted logic
+- JSON output for easy agent consumption
+- Minimal dependencies
+
+When proposing changes, keep this philosophy in mind.
 
 ## License
 
@@ -333,6 +224,5 @@ By contributing, you agree that your contributions will be licensed under the Ap
 Contributors will be recognized in:
 - GitHub contributors page
 - Release notes (for significant contributions)
-- Project documentation
 
 Thank you for contributing! 🎉

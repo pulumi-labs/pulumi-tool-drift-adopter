@@ -1,3 +1,0 @@
-name: drift-dependencies
-runtime: nodejs
-description: Multi-resource drift test with dependencies (VPC → Subnet, VPC → SecurityGroup)

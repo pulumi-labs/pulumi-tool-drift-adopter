@@ -240,22 +240,6 @@ Add the bucket to your code.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 
-### Running Tests
-
-```bash
-# Unit tests
-go test -tags=unit ./...
-
-# Integration tests
-go test -tags=integration ./...
-
-# E2E tests
-go test -tags=e2e ./e2e/
-
-# All tests
-go test -tags=unit,integration,e2e ./...
-```
-
 ### Project Structure
 
 ```
@@ -264,17 +248,8 @@ go test -tags=unit,integration,e2e ./...
 │   └── pulumi-drift-adopt/    # CLI
 │       ├── main.go            # Entry point
 │       ├── root.go            # Root command
-│       └── next.go            # Main command
-├── pkg/
-│   └── driftadopt/            # Core logic
-│       ├── types.go           # Data structures
-│       ├── preview.go         # Preview parsing
-│       └── validator/         # Language validators
-│           ├── types.go
-│           ├── typescript.go
-│           ├── python.go
-│           └── go.go
-└── e2e/                       # E2E tests
+│       └── next.go            # Main command (all logic)
+└── bin/                       # Built binary
 ```
 
 ## Contributing

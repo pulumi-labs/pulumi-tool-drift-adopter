@@ -128,9 +128,9 @@ Each command adds complexity. One command that does one thing well is easier to 
 
 ### Key Files
 
-- `cmd/pulumi-drift-adopt/next.go` - Main command implementation
-- `pkg/driftadopt/types.go` - Data structures (ResourceDiff, PropChange, DiffType)
-- `pkg/driftadopt/preview.go` - Preview JSON parsing (legacy, could be removed)
+- `cmd/pulumi-drift-adopt/main.go` - Entry point
+- `cmd/pulumi-drift-adopt/root.go` - Root command setup
+- `cmd/pulumi-drift-adopt/next.go` - Main command (all logic and types defined inline)
 
 ### Dependencies
 
@@ -140,10 +140,7 @@ Each command adds complexity. One command that does one thing well is easier to 
 
 ### Testing
 
-Tests focus on core functionality:
-- Preview parsing
-- Language validators (TypeScript, Python, Go)
-- Basic integration tests
+The tool is simple enough that manual testing with real Pulumi projects is sufficient. The logic is straightforward preview parsing with minimal complexity.
 
 ## Future Enhancements
 
@@ -152,22 +149,3 @@ Possible improvements:
 - Suggested code snippets for additions
 - Diff output formatting options
 - Support for more Pulumi features (stacks, config, etc.)
-
-## Comparison to Previous Architecture
-
-The tool previously had:
-- Plan files with dependency graphs
-- Step-by-step orchestration
-- State management and checkpointing
-- Multiple commands (generate-plan, show-step, apply-diff, status, skip, rollback)
-- Diff recording and rollback
-- Compilation validation
-
-This was over-engineered. The current simple version:
-- No files, no state
-- Single command
-- Stateless
-- ~50% less code
-- Easier to understand and maintain
-
-The core insight: `pulumi preview` already solves the hard problems. We just need to reformat its output for agent consumption.
