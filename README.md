@@ -13,10 +13,9 @@ A simple tool for adopting infrastructure drift back into Pulumi IaC, designed t
 
 Drift occurs when infrastructure is modified directly in the cloud console or via other tools, causing your infrastructure's actual state to diverge from what's defined in your IaC. Drift adoption is the process of:
 
-1. **Run refresh** - Update Pulumi state to match actual infrastructure
-2. **Detect drift** - Run preview to see differences between code and state
-3. **Update code** - Agent updates code to match the actual state
-4. **Iterate** - Repeat until preview is clean
+1. **Detect drift** - Run preview with refresh to see actual infrastructure vs code
+2. **Update code** - Agent updates code to match the actual state
+3. **Iterate** - Repeat until preview is clean
 
 ## How It Works
 
@@ -34,7 +33,9 @@ The tool follows a simple stateless pattern:
 
 ### Key Concept: Inverted Logic
 
-After running `pulumi refresh`, the state represents the actual infrastructure (what you want), and your code represents what's currently written (what needs to be updated).
+The tool automatically runs `pulumi preview --refresh`, which updates state to match actual infrastructure, then compares it to your code.
+
+After refresh, the state represents the actual infrastructure (what you want), and your code represents what's currently written (what needs to be updated).
 
 When `pulumi preview` shows:
 - **Create operation** → Resource is in code but not in state → **DELETE from code**
@@ -71,24 +72,19 @@ go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
 
 ## Quick Start
 
-### 1. Ensure State is Up-to-Date
+### 1. Run the Tool
 
-First, refresh your Pulumi state to match actual infrastructure:
+The tool automatically refreshes state and detects drift:
 
 ```bash
 cd your-pulumi-project
-pulumi refresh
-```
-
-### 2. Run the Tool
-
-The tool will run `pulumi preview` and tell you what code changes are needed:
-
-```bash
 pulumi-drift-adopt next
+
+# Or specify a stack
+pulumi-drift-adopt next --stack dev
 ```
 
-### 3. Example Output
+### 2. Example Output
 
 ```json
 {
@@ -134,10 +130,10 @@ When all drift is resolved:
 
 ### `next`
 
-Runs `pulumi preview --json` and analyzes the output to determine what code changes are needed.
+Runs `pulumi preview --json --refresh` to automatically detect drift and analyzes the output.
 
 ```bash
-pulumi-drift-adopt next [--project .]
+pulumi-drift-adopt next [--project .] [--stack <stack-name>]
 ```
 
 **Output Status:**
@@ -147,6 +143,7 @@ pulumi-drift-adopt next [--project .]
 
 **Flags:**
 - `--project string` - Project directory (default: ".")
+- `--stack string` - Pulumi stack name (optional, uses current stack if not specified)
 
 ## Workflow with AI Agent
 
@@ -173,6 +170,33 @@ pulumi-drift-adopt next
 - **Clear**: JSON output easy for agents to parse
 - **Safe**: Only reads, never modifies files
 - **Lightweight**: No LLM API dependencies
+
+## Claude Skill
+
+A Claude skill is provided in `skills/drift-adopt.md` that encapsulates the complete workflow for using this tool. The skill provides Claude with:
+
+- Step-by-step instructions for running the tool
+- How to interpret each JSON output status
+- What actions to take for each resource change type
+- How to iterate until drift is resolved
+- Troubleshooting guidance
+
+### Using the Skill
+
+If you're using Claude (via API or CLI), you can reference the skill:
+
+```
+I need you to adopt infrastructure drift using the drift-adopt skill.
+Please read skills/drift-adopt.md and follow the workflow to fix all drift.
+```
+
+Claude will:
+1. Run `pulumi-drift-adopt next`
+2. Parse the JSON output
+3. Make necessary code changes
+4. Repeat until status is "clean"
+
+See `test/e2e/README.md` for an automated test that demonstrates this workflow.
 
 ## Examples
 
@@ -249,6 +273,12 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup and guidelines.
 │       ├── main.go            # Entry point
 │       ├── root.go            # Root command
 │       └── next.go            # Main command (all logic)
+├── skills/
+│   └── drift-adopt.md         # Claude skill for drift adoption
+├── test/
+│   └── e2e/                   # E2E tests with Claude SDK
+│       ├── drift_adoption_test.go
+│       └── README.md
 └── bin/                       # Built binary
 ```
 

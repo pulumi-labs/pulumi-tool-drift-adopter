@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Claude skill (`skills/drift-adopt.md`) that encapsulates the complete drift adoption workflow
+- E2E test using pulumitest and Claude SDK to validate the full workflow
+- Test demonstrates: deploy stack → create drift → invoke Claude → verify fixes
+- `--stack` flag to `next` command to specify Pulumi stack name
+
+### Changed
+- `next` command now automatically runs `pulumi preview --refresh`
+- No need to manually run `pulumi refresh` before using the tool
+- Updated all documentation to reflect automatic refresh behavior
+
 ## [1.0.0] - 2025-11-21
 
 ### Added

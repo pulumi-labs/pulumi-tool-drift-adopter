@@ -14,15 +14,19 @@ import (
 var nextCmd = &cobra.Command{
 	Use:   "next",
 	Short: "Run preview and show what code changes are needed",
-	Long: `Runs pulumi preview and analyzes the output to determine what code changes are needed.
+	Long: `Runs pulumi preview with --refresh to detect drift and analyzes the output.
 
-This command assumes 'pulumi refresh' has already been run, so the state represents
-the actual infrastructure. The preview shows differences between code and state:
+The command automatically refreshes state to match actual infrastructure, then shows
+differences between code and state:
 - Old values (state) = what we want (desired)
 - New values (code) = what currently exists in code (current/incorrect)
 
 The tool inverts the preview logic to tell you what to change in your code.`,
 	RunE: runNext,
+}
+
+func init() {
+	nextCmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
 }
 
 // NextOutput is the JSON structure returned by the next command
@@ -51,9 +55,15 @@ type PropertyChange struct {
 
 func runNext(cmd *cobra.Command, args []string) error {
 	projectDir, _ := cmd.Flags().GetString("project")
+	stack, _ := cmd.Flags().GetString("stack")
 
-	// Run pulumi preview with JSON output
-	previewCmd := exec.Command("pulumi", "preview", "--json", "--non-interactive")
+	// Build pulumi preview command with JSON output and refresh
+	cmdArgs := []string{"preview", "--json", "--non-interactive", "--refresh"}
+	if stack != "" {
+		cmdArgs = append(cmdArgs, "--stack", stack)
+	}
+
+	previewCmd := exec.Command("pulumi", cmdArgs...)
 	previewCmd.Dir = projectDir
 	previewCmd.Stderr = os.Stderr
 
@@ -171,7 +181,9 @@ func outputError(errMsg string) error {
 	}
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
-	encoder.Encode(output)
+	if err := encoder.Encode(output); err != nil {
+		return fmt.Errorf("failed to encode error message %s with error %w", errMsg, err)
+	}
 	return fmt.Errorf("%s", errMsg)
 }
 

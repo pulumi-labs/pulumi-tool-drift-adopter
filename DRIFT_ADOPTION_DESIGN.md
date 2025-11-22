@@ -14,7 +14,7 @@ No plan files. No state management. No orchestration. Just preview → parse →
 
 ### Why Stateless?
 
-After `pulumi refresh`, the Pulumi state already represents the actual infrastructure (what we want). The code represents what's currently written (what needs updating). `pulumi preview` compares these and shows differences.
+The tool runs `pulumi preview --refresh` which automatically updates state to match actual infrastructure, then compares it to code. The state represents the actual infrastructure (what we want), and the code represents what's currently written (what needs updating).
 
 The tool simply reformats this information for agent consumption.
 
@@ -37,13 +37,14 @@ The tool inverts this perspective and tells the agent: "here's what your code sh
 Single command that does everything:
 
 ```bash
-pulumi-drift-adopt next [--project .]
+pulumi-drift-adopt next [--project .] [--stack <stack-name>]
 ```
 
 ### Process
 
-1. Run `pulumi preview --json --non-interactive` in the project directory
-2. Parse newline-delimited JSON events
+1. Run `pulumi preview --json --non-interactive --refresh` in the project directory
+2. Optionally specify a stack with `--stack` flag
+3. Parse newline-delimited JSON events
 3. For each `resource-step` event:
    - Extract operation (`create`, `delete`, `update`, `replace`)
    - Extract resource metadata (URN, type, name)
@@ -87,19 +88,16 @@ Status can be:
 ## Workflow
 
 ```
-1. User runs: pulumi refresh
-   (State now matches actual infrastructure)
+1. Agent runs: pulumi-drift-adopt next
+   (Tool automatically refreshes state and runs preview)
 
-2. Agent runs: pulumi-drift-adopt next
-   (Tool runs preview and returns changes needed)
-
-3. Agent reads output and updates code files
+2. Agent reads output and updates code files
    (Changes properties, adds/removes resources)
 
-4. Agent runs: pulumi-drift-adopt next
+3. Agent runs: pulumi-drift-adopt next
    (Verify changes)
 
-5. Repeat until status = "clean"
+4. Repeat until status = "clean"
 ```
 
 ## Design Decisions
