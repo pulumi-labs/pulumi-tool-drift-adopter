@@ -108,18 +108,28 @@ jobs:
       - name: Install Pulumi CLI
         uses: pulumi/actions@v5
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-west-2
+
       - name: Download dependencies
         run: go mod download
 
+      - name: Build pulumi-drift-adopt tool
+        run: go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
+
       - name: Run E2E tests
-        run: go test -tags=e2e -v -timeout=30m ./e2e/...
+        run: go test -tags=e2e -v -timeout=30m -run TestDriftAdoptionWorkflow ./test/e2e/
         env:
-          # E2E tests will need these for real testing
-          # For now, they can be empty/mock
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          AWS_REGION: us-west-2
 
       - name: Upload E2E test coverage
+        if: always()
         uses: codecov/codecov-action@v5
         with:
           files: ./coverage-e2e.out
