@@ -40,3 +40,6 @@ bin/
 testdata/*/actual/
 *.tmp.json
 drift-plan.json
+
+# Personal scripts
+scripts/

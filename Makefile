@@ -1,4 +1,4 @@
-.PHONY: help build test test-unit test-integration test-e2e lint lint-go lint-workflows clean install-tools
+.PHONY: help build test test-unit test-integration test-e2e lint lint-go lint-fix lint-workflows clean install-tools
 
 # Default target
 help:
@@ -10,6 +10,7 @@ help:
 	@echo "  make test-e2e           - Run E2E tests (requires AWS + Pulumi + Anthropic setup)"
 	@echo "  make lint               - Run all linters (Go + workflows)"
 	@echo "  make lint-go            - Run golangci-lint"
+	@echo "  make lint-fix           - Run golangci-lint with auto-fix"
 	@echo "  make lint-workflows     - Lint GitHub Actions workflows"
 	@echo "  make install-tools      - Install development tools (golangci-lint, actionlint)"
 	@echo "  make clean              - Clean build artifacts"
@@ -51,6 +52,13 @@ lint-go:
 	@echo "Running golangci-lint..."
 	@which golangci-lint > /dev/null || (echo "❌ golangci-lint not found. Run 'make install-tools' to install it." && exit 1)
 	golangci-lint run --timeout=5m
+
+# Run golangci-lint with auto-fix
+lint-fix:
+	@echo "Running golangci-lint with auto-fix..."
+	@which golangci-lint > /dev/null || (echo "❌ golangci-lint not found. Run 'make install-tools' to install it." && exit 1)
+	golangci-lint run --fix --timeout=5m
+	@echo "✅ Auto-fixable issues have been corrected"
 
 # Lint GitHub Actions workflows
 lint-workflows:

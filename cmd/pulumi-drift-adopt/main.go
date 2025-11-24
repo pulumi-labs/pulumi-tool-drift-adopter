@@ -1,3 +1,4 @@
+// Package main implements the pulumi-drift-adopt CLI tool for detecting and adopting infrastructure drift.
 package main
 
 import (

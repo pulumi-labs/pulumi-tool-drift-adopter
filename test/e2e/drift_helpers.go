@@ -23,22 +23,22 @@ import (
 
 // DriftTestMetrics tracks the work done by the LLM during drift adoption
 type DriftTestMetrics struct {
-	ToolCallsCount       int   `json:"tool_calls_count"`        // Total tool calls
-	BashCallsCount       int   `json:"bash_calls_count"`        // Bash tool calls
-	ReadFileCallsCount   int   `json:"read_file_calls_count"`   // Read file tool calls
-	WriteFileCallsCount  int   `json:"write_file_calls_count"`  // Write file tool calls
-	DriftAdoptCallsCount int   `json:"drift_adopt_calls_count"` // pulumi-drift-adopt calls
-	InputTokens          int64 `json:"input_tokens"`
-	OutputTokens         int64 `json:"output_tokens"`
-	TotalTokens          int64 `json:"total_tokens"`
-	IterationsCount      int   `json:"iterations_count"`
-	ResourcesWithDrift   int   `json:"resources_with_drift"`    // Total resources that had drift
-	DriftAdoptResults    []DriftAdoptResult `json:"drift_adopt_results"` // Results from each drift-adopt call
+	ToolCallsCount       int                `json:"tool_calls_count"`        // Total tool calls
+	BashCallsCount       int                `json:"bash_calls_count"`        // Bash tool calls
+	ReadFileCallsCount   int                `json:"read_file_calls_count"`   // Read file tool calls
+	WriteFileCallsCount  int                `json:"write_file_calls_count"`  // Write file tool calls
+	DriftAdoptCallsCount int                `json:"drift_adopt_calls_count"` // pulumi-drift-adopt calls
+	InputTokens          int64              `json:"input_tokens"`
+	OutputTokens         int64              `json:"output_tokens"`
+	TotalTokens          int64              `json:"total_tokens"`
+	IterationsCount      int                `json:"iterations_count"`
+	ResourcesWithDrift   int                `json:"resources_with_drift"` // Total resources that had drift
+	DriftAdoptResults    []DriftAdoptResult `json:"drift_adopt_results"`  // Results from each drift-adopt call
 }
 
 // DriftAdoptResult captures the output from a single drift-adopt tool invocation
 type DriftAdoptResult struct {
-	Status    string `json:"status"` // "changes_needed", "clean", "error"
+	Status    string `json:"status"`          // "changes_needed", "clean", "error"
 	Resources int    `json:"resources_count"` // Number of resources with drift
 }
 
@@ -209,8 +209,8 @@ func (ard *AWSResourceDrift) UpdateResourceProperties(typeName, identifier strin
 	// Parse response to get request token
 	var response struct {
 		ProgressEvent struct {
-			RequestToken     string `json:"RequestToken"`
-			OperationStatus  string `json:"OperationStatus"`
+			RequestToken    string `json:"RequestToken"`
+			OperationStatus string `json:"OperationStatus"`
 		} `json:"ProgressEvent"`
 	}
 	if err := json.Unmarshal(output, &response); err != nil {
@@ -331,9 +331,8 @@ func (ard *AWSResourceDrift) WaitForResourceProperty(
 		if time.Since(startTime) > timeout {
 			if expectedExists {
 				return fmt.Errorf("timeout: property %s did not appear after %v", propertyPath, timeout)
-			} else {
-				return fmt.Errorf("timeout: property %s still exists after %v", propertyPath, timeout)
 			}
+			return fmt.Errorf("timeout: property %s still exists after %v", propertyPath, timeout)
 		}
 
 		// Get current state
@@ -561,7 +560,7 @@ func RunDriftAdoptionWithClaude(
 		})
 
 		if err != nil {
-			return metrics, fmt.Errorf("Claude API error: %w", err)
+			return metrics, fmt.Errorf("claude API error: %w", err)
 		}
 
 		// Track token usage
@@ -680,9 +679,10 @@ func RunDriftAdoptionWithClaude(
 			// Convert response.Content to ContentBlockParamUnion for assistant message
 			var assistantContent []anthropic.ContentBlockParamUnion
 			for _, block := range response.Content {
-				if block.Type == "text" {
+				switch block.Type {
+				case "text":
 					assistantContent = append(assistantContent, anthropic.NewTextBlock(block.Text))
-				} else if block.Type == "tool_use" {
+				case "tool_use":
 					assistantContent = append(assistantContent, anthropic.NewToolUseBlock(
 						block.ID,
 						block.Input,
@@ -710,7 +710,7 @@ func RunDriftAdoptionWithClaude(
 // parseDriftAdoptOutput parses the JSON output from pulumi-drift-adopt next
 func parseDriftAdoptOutput(output string) DriftAdoptResult {
 	var nextOutput struct {
-		Status    string `json:"status"`
+		Status    string     `json:"status"`
 		Resources []struct{} `json:"resources"`
 	}
 

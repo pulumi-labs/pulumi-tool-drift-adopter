@@ -53,7 +53,7 @@ type PropertyChange struct {
 	Kind         string      `json:"kind"`         // add, delete, update
 }
 
-func runNext(cmd *cobra.Command, args []string) error {
+func runNext(cmd *cobra.Command, _ []string) error {
 	projectDir, _ := cmd.Flags().GetString("project")
 	stack, _ := cmd.Flags().GetString("stack")
 
