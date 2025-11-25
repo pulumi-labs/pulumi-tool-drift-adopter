@@ -64,11 +64,22 @@ type DriftTestConfig struct {
 }
 
 // CreateTestStack creates and deploys a Pulumi stack from an example directory
+// The example directory should have project files (Pulumi.yaml, package.json) and
+// an original/ subdirectory with the program files
 func CreateTestStack(t *testing.T, exampleDir string) *TestStack {
-	t.Logf("📁 Creating test stack from %s...", exampleDir)
-	test := pulumitest.NewPulumiTest(t, exampleDir).CopyToTempDir(t)
+	// Convert to absolute path to avoid issues after CopyToTempDir changes working directory
+	absExampleDir, err := filepath.Abs(exampleDir)
+	require.NoError(t, err, "Failed to get absolute path for example directory")
+
+	t.Logf("📁 Creating test stack from %s...", absExampleDir)
+	test := pulumitest.NewPulumiTest(t, absExampleDir).CopyToTempDir(t)
 	testDir := test.WorkingDir()
 	t.Logf("   Working directory: %s", testDir)
+
+	// Copy original program files into the working directory
+	t.Log("   📝 Copying original program files...")
+	originalDir := filepath.Join(absExampleDir, "original")
+	test.UpdateSource(t, originalDir)
 
 	t.Log("🚀 Deploying initial stack (this may take a few minutes)...")
 	upResult := test.Up(t)
@@ -777,4 +788,76 @@ func truncateString(s string, maxLen int) string {
 		return s
 	}
 	return s[:maxLen] + "..."
+}
+
+// CreateDriftWithProgram creates drift using a provider-agnostic approach with UpdateSource:
+// 1. Export state from original deployment
+// 2. UpdateSource to drifted program and deploy (modifies infrastructure)
+// 3. Import original state back (resets state, creating drift)
+// 4. UpdateSource back to original program (for Claude to see and fix)
+// This simulates external changes without provider-specific CLI tools
+func (ts *TestStack) CreateDriftWithProgram(t *testing.T, exampleDir string) error {
+	// Convert to absolute path to avoid issues with relative paths
+	absExampleDir, err := filepath.Abs(exampleDir)
+	if err != nil {
+		return fmt.Errorf("failed to get absolute path for example directory: %w", err)
+	}
+
+	t.Log("🔧 Creating drift using drifted program...")
+
+	// Step 1: Export current state to temp file
+	stateFile := filepath.Join(os.TempDir(), fmt.Sprintf("drift-test-state-%d.json", time.Now().Unix()))
+	t.Logf("   📤 Exporting state to: %s", stateFile)
+
+	exportCmd := exec.Command("pulumi", "stack", "export", "--file", stateFile)
+	exportCmd.Dir = ts.WorkingDir
+	exportCmd.Env = append(os.Environ(),
+		fmt.Sprintf("PULUMI_BACKEND_URL=%s", ts.BackendURL),
+		fmt.Sprintf("PULUMI_CONFIG_PASSPHRASE=%s", ts.ConfigPassphrase),
+	)
+
+	exportOutput, err := exportCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to export state: %w\n%s", err, exportOutput)
+	}
+	defer os.Remove(stateFile) // Clean up state file when done
+
+	t.Log("   ✅ State exported")
+
+	// Step 2: UpdateSource to drifted program
+	t.Log("   🔄 Updating source to drifted program...")
+	driftedDir := filepath.Join(absExampleDir, "drifted")
+	ts.Test.UpdateSource(t, driftedDir)
+	t.Log("   ✅ Drifted program files in place")
+
+	// Step 3: Deploy the drifted program (this modifies infrastructure)
+	t.Log("   🏗️  Deploying drifted program to modify infrastructure...")
+	ts.Test.Up(t)
+	t.Log("   ✅ Drifted program deployed (infrastructure modified)")
+
+	// Step 4: Import original state back (resets state, creates drift)
+	t.Log("   📥 Importing original state (resetting to pre-drift state)...")
+
+	importCmd := exec.Command("pulumi", "stack", "import", "--file", stateFile)
+	importCmd.Dir = ts.WorkingDir
+	importCmd.Env = append(os.Environ(),
+		fmt.Sprintf("PULUMI_BACKEND_URL=%s", ts.BackendURL),
+		fmt.Sprintf("PULUMI_CONFIG_PASSPHRASE=%s", ts.ConfigPassphrase),
+	)
+
+	importOutput, err := importCmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to import state: %w\n%s", err, importOutput)
+	}
+
+	t.Log("   ✅ Original state imported (state reset, drift created)")
+
+	// Step 5: UpdateSource back to original program (for Claude to see and fix)
+	t.Log("   🔙 Restoring original program files...")
+	originalDir := filepath.Join(absExampleDir, "original")
+	ts.Test.UpdateSource(t, originalDir)
+	t.Log("   ✅ Original program files restored")
+	t.Log("   💡 State thinks infrastructure is at original values, but it's actually at drifted values")
+
+	return nil
 }
