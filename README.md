@@ -48,6 +48,12 @@ For property changes:
 
 The tool inverts this logic and tells you exactly what to change in your code.
 
+### Limitations
+
+**Important:** This tool relies on `pulumi refresh` to detect drift, which only tracks resources that are already in the Pulumi state file. If a resource was created outside of Pulumi (e.g., manually in the cloud console), it will not be tracked by refresh and therefore cannot be adopted by this tool.
+
+To adopt resources created outside of Pulumi, you need to first import them into your Pulumi state using [`pulumi import`](https://www.pulumi.com/docs/cli/commands/pulumi_import/).
+
 ## Installation
 
 ### Prerequisites
@@ -231,23 +237,27 @@ const bucket = new aws.s3.Bucket("my-bucket", {
 });
 ```
 
-### Example 2: Resource in Code but Not State
+### Example 2: Resource Deleted from Infrastructure
 
-Code has a bucket that doesn't exist in infrastructure.
+Code has a bucket, but it was deleted directly in the cloud console.
+
+After refresh, the state no longer includes this bucket, but code still references it.
 
 Tool output:
 ```json
 {
   "action": "delete_from_code",
-  "name": "unused-bucket"
+  "name": "deleted-bucket"
 }
 ```
 
-Remove the bucket from your code.
+Remove the bucket from your code to match the actual infrastructure state.
 
-### Example 3: Resource in State but Not Code
+### Example 3: Resource Removed from Code
 
-Infrastructure has a bucket that's not in code.
+Your state has a bucket (deployed infrastructure), but your current code doesn't define it.
+
+This happens when the code has changed since the last stack update - for example, if the resource was removed from the code but the stack hasn't been updated yet. After refresh, the infrastructure still exists and is tracked in state, but it's missing from code.
 
 Tool output:
 ```json
@@ -258,7 +268,7 @@ Tool output:
 }
 ```
 
-Add the bucket to your code.
+Add the bucket back to your code so it matches the deployed state.
 
 ## Development
 
