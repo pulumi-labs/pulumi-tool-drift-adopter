@@ -806,7 +806,8 @@ func (ts *TestStack) CreateDriftWithProgram(t *testing.T, exampleDir string) err
 	t.Log("🔧 Creating drift using drifted program...")
 
 	// Step 1: Export current state to temp file
-	stateFile := filepath.Join(os.TempDir(), fmt.Sprintf("drift-test-state-%d.json", time.Now().Unix()))
+	// Use the test's working directory to avoid collisions when tests run in parallel
+	stateFile := filepath.Join(ts.WorkingDir, "drift-test-state.json")
 	t.Logf("   📤 Exporting state to: %s", stateFile)
 
 	exportCmd := exec.Command("pulumi", "stack", "export", "--file", stateFile)

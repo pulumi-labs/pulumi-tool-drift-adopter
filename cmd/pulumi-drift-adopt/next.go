@@ -27,6 +27,7 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 
 func init() {
 	nextCmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
+	nextCmd.Flags().Int("max-resources", 10, "Maximum number of resources to return per batch (0 = unlimited, default = 10)")
 }
 
 // NextOutput is the JSON structure returned by the next command
@@ -56,6 +57,7 @@ type PropertyChange struct {
 func runNext(cmd *cobra.Command, _ []string) error {
 	projectDir, _ := cmd.Flags().GetString("project")
 	stack, _ := cmd.Flags().GetString("stack")
+	maxResources, _ := cmd.Flags().GetInt("max-resources")
 
 	// Build pulumi preview command with JSON output and refresh
 	cmdArgs := []string{"preview", "--json", "--non-interactive", "--refresh"}
@@ -146,6 +148,11 @@ func runNext(cmd *cobra.Command, _ []string) error {
 			Name:       name,
 			Properties: properties,
 		})
+	}
+
+	// Apply resource limit if specified
+	if maxResources > 0 && len(resources) > maxResources {
+		resources = resources[:maxResources]
 	}
 
 	// Determine status

@@ -19,12 +19,18 @@ pulumi-drift-adopt next
 
 # Or specify a stack if needed
 pulumi-drift-adopt next --stack dev
+
+# If you're struggling to fix resources, reduce the batch size
+pulumi-drift-adopt next --max-resources 5
 ```
 
 The tool will:
 - Automatically refresh state to match actual infrastructure
 - Run preview to compare code vs state
-- Return JSON with needed code changes
+- Return JSON with needed code changes (limited to 10 resources by default)
+
+**Handling difficult drift:**
+The tool returns up to 10 resources by default. If you're having trouble fixing resources (same resources keep getting returned because you can't fix them correctly), use `--max-resources 5` or `--max-resources 3` to work with fewer resources at a time. This makes the problem more manageable.
 
 ### 2. Parse the JSON Output
 
@@ -113,6 +119,7 @@ Repeat steps 2-4 until the status is "clean".
 - **Read the entire JSON output** before making changes. Sometimes there are dependencies between resources.
 - **The tool is stateless** - it just runs preview and interprets the output. You can run it as many times as needed.
 - **If you make a mistake**, the tool will show it on the next run. Just fix it and continue.
+- **If struggling with the same resources** (they keep appearing because you're not fixing them correctly), use `--max-resources 5` or smaller to focus on fewer resources at once.
 
 ## Example Session
 
@@ -163,6 +170,11 @@ $ pulumi-drift-adopt next
 **Resource has many property changes:**
 - Update them all at once
 - The tool will verify all changes on the next run
+
+**Same resources keep appearing (you're not fixing them correctly):**
+- Use `--max-resources 5` or `--max-resources 3` to focus on fewer resources
+- The default is already 10, so reduce it further if needed
+- Work through each resource carefully before moving on
 
 **Confused about what to change:**
 - Remember: `desiredValue` is what you want (from state)
