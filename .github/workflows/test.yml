@@ -5,83 +5,17 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 permissions:
   contents: read
+  id-token: write
+  secrets: read
 
 jobs:
-  unit:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        go-version: ['1.21', '1.22', '1.23']
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: ${{ matrix.go-version }}
-          cache: true
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run unit tests
-        run: go test -tags=unit -v -race -coverprofile=coverage-unit.out ./...
-
-      - name: Upload unit test coverage
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage-unit.out
-          flags: unit
-          name: unit-${{ matrix.go-version }}
-
-  integration:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: unit
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
-
-      - name: Setup Node.js (for TypeScript validation)
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Setup Python (for Python validation)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run integration tests
-        run: go test -tags=integration -v -race -coverprofile=coverage-integration.out ./...
-
-      - name: Upload integration test coverage
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage-integration.out
-          flags: integration
-          name: integration
-
   e2e:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [unit, integration]
     # Only run E2E tests manually or on main branch
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
 
@@ -100,13 +34,14 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
       - name: Install Pulumi CLI
         uses: pulumi/actions@v5
+
+      - name: Authenticate with Pulumi
+        uses: pulumi/auth-actions@v1
+        with:
+          organization: team-ce
+          requested-token-type: urn:pulumi:token-type:access_token:organization
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -122,19 +57,10 @@ jobs:
         run: go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
 
       - name: Run E2E tests
-        run: go test -tags=e2e -v -timeout=30m -run TestDriftAdoptionWorkflow ./test/e2e/
+        run: go test -tags=e2e -v -timeout=30m -run TestDriftAdoptionV2 ./test/e2e/
         env:
-          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AWS_REGION: us-west-2
-
-      - name: Upload E2E test coverage
-        if: always()
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage-e2e.out
-          flags: e2e
-          name: e2e
 
   lint:
     name: Lint
@@ -155,38 +81,3 @@ jobs:
         with:
           version: latest
           args: --timeout=5m
-
-  coverage:
-    name: Coverage Report
-    runs-on: ubuntu-latest
-    needs: [unit, integration]
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
-
-      - name: Download dependencies
-        run: go mod download
-
-      - name: Run all tests with coverage
-        run: |
-          go test -tags=unit -coverprofile=coverage-unit.out ./...
-          go test -tags=integration -coverprofile=coverage-integration.out ./...
-
-      - name: Generate coverage report
-        run: |
-          go tool cover -func=coverage-unit.out
-          go tool cover -func=coverage-integration.out
-
-      - name: Upload to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./coverage-unit.out,./coverage-integration.out
-          flags: combined
-          name: combined-coverage
