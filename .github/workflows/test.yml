@@ -42,13 +42,6 @@ jobs:
           organization: team-ce
           requested-token-type: urn:pulumi:token-type:access_token:organization
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-west-2
-
       - name: Download dependencies
         run: go mod download
 
@@ -56,7 +49,7 @@ jobs:
         run: go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
 
       - name: Run E2E tests
-        run: go test -tags=e2e -v -timeout=30m -run TestDriftAdoptionV2 ./test/e2e/
+        run: pulumi env run aws/pulumi-ce -- go test -tags=e2e -v -timeout=30m -run TestDriftAdoptionV2 ./test/e2e/
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           AWS_REGION: us-west-2
