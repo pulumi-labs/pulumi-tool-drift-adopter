@@ -1,14 +1,17 @@
-# Drift Adoption Skill
+---
+name: drift-adopt
+description: Helps adopt infrastructure drift back into Pulumi code using the pulumi-drift-adopt tool. Use when (1) Infrastructure has drifted from Pulumi code and needs to be synchronized, (2) Running pulumi preview shows differences between actual infrastructure and code, (3) Need to systematically update Pulumi code to match real infrastructure state, (4) Working with the pulumi-drift-adopt CLI tool to fix drift issues, (5) User asks to "adopt drift" or "fix drift" in their Pulumi project.
+---
 
-You are helping the user adopt infrastructure drift back into their Pulumi code using the `pulumi-drift-adopt` tool.
+# Drift Adopt
 
 ## Overview
 
-The tool automatically runs `pulumi preview --refresh` to detect drift between actual infrastructure and code. It then provides structured guidance on what code changes are needed.
+The pulumi-drift-adopt tool automatically detects drift between actual infrastructure and Pulumi code by running `pulumi preview --refresh`. It provides structured guidance on what code changes are needed to align code with the actual infrastructure state.
 
 ## Workflow
 
-Follow this iterative process:
+Follow this iterative process to adopt drift:
 
 ### 1. Run the Drift Adoption Tool
 
