@@ -477,7 +477,7 @@ func RunDriftAdoptionWithClaude(
 	// Read the drift-adopt skill
 	_, testFile, _, _ := runtime.Caller(0)
 	testDir := filepath.Dir(testFile)
-	skillPath := filepath.Join(testDir, "..", "..", "skills", "drift-adopt.md")
+	skillPath := filepath.Join(testDir, "..", "..", "skills", "drift-adopt", "SKILL.md")
 	t.Logf("   📖 Reading skill from: %s", skillPath)
 	skillContent, err := os.ReadFile(skillPath)
 	if err != nil {
