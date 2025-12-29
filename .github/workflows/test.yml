@@ -11,6 +11,11 @@ permissions:
   contents: read
   id-token: write
 
+# Conserve runners and abandon work in case of a fast-follow commit.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   e2e:
     name: E2E Tests
@@ -69,7 +74,7 @@ jobs:
           cache: true
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
+        uses: golangci/golangci-lint-action@v9
         with:
           version: latest
           args: --timeout=5m
