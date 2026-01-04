@@ -63,6 +63,147 @@ type DriftTestConfig struct {
 	AWSRegion     string
 }
 
+// DriftTestCase defines a test case for drift adoption
+type DriftTestCase struct {
+	Name          string
+	ExampleDir    string
+	VerifyOutputs func(t *testing.T, resources map[string]interface{})
+	VerifyCode    func(t *testing.T, codeContent string)
+}
+
+// GetStandardTestCases returns the standard set of drift adoption test cases
+func GetStandardTestCases() []DriftTestCase {
+	return []DriftTestCase{
+		{
+			Name:       "simple-s3",
+			ExampleDir: filepath.Join("..", "..", "examples", "simple-s3"),
+			VerifyOutputs: func(t *testing.T, resources map[string]interface{}) {
+				bucketName, ok := resources["bucketName"].(string)
+				require.True(t, ok, "bucketName should be a string in outputs")
+				require.NotEmpty(t, bucketName, "Bucket name should not be empty")
+				t.Logf("   ✅ Deployed bucket: %s", bucketName)
+			},
+			VerifyCode: func(t *testing.T, codeContent string) {
+				require.Contains(t, codeContent, "Environment",
+					"Code should now contain Environment tag")
+				require.Contains(t, codeContent, "production",
+					"Code should now contain production value")
+			},
+		},
+		{
+			Name:       "multi-resource",
+			ExampleDir: filepath.Join("..", "..", "examples", "multi-resource"),
+			VerifyOutputs: func(t *testing.T, resources map[string]interface{}) {
+				bucketNameA, ok := resources["bucketNameA"].(string)
+				require.True(t, ok, "bucketNameA should be a string in outputs")
+				bucketNameB, ok := resources["bucketNameB"].(string)
+				require.True(t, ok, "bucketNameB should be a string in outputs")
+				bucketNameC, ok := resources["bucketNameC"].(string)
+				require.True(t, ok, "bucketNameC should be a string in outputs")
+				t.Logf("   ✅ Deployed buckets: %s, %s, %s", bucketNameA, bucketNameB, bucketNameC)
+			},
+			VerifyCode: func(t *testing.T, codeContent string) {
+				require.NotContains(t, codeContent, "bucket-b",
+					"Code should no longer contain bucket-b resource")
+				require.NotContains(t, codeContent, "bucketNameB",
+					"Code should no longer contain bucketNameB export")
+				require.Contains(t, codeContent, "bucket-a",
+					"Code should still contain bucket-a")
+				require.Contains(t, codeContent, "bucket-c",
+					"Code should still contain bucket-c")
+			},
+		},
+		{
+			Name:       "loop-resources",
+			ExampleDir: filepath.Join("..", "..", "examples", "loop-resources"),
+			VerifyOutputs: func(t *testing.T, resources map[string]interface{}) {
+				logsBucketID, ok := resources["logsBucketId"].(string)
+				require.True(t, ok, "logsBucketId should be a string in outputs")
+				dataBucketID, ok := resources["dataBucketId"].(string)
+				require.True(t, ok, "dataBucketId should be a string in outputs")
+				backupBucketID, ok := resources["backupBucketId"].(string)
+				require.True(t, ok, "backupBucketId should be a string in outputs")
+				t.Logf("   ✅ Deployed 3 buckets from loop")
+				t.Logf("   logs-bucket ID: %s", logsBucketID)
+				t.Logf("   data-bucket ID: %s", dataBucketID)
+				t.Logf("   backup-bucket ID: %s", backupBucketID)
+			},
+			VerifyCode: func(t *testing.T, codeContent string) {
+				require.Contains(t, codeContent, `bucketNames = ["logs-bucket", "backup-bucket"]`,
+					"Code should have updated bucketNames array without data-bucket")
+				require.NotContains(t, codeContent, "dataBucketId",
+					"Code should no longer contain dataBucketId export")
+				require.Contains(t, codeContent, "logsBucketId",
+					"Code should still contain logsBucketId export")
+				require.Contains(t, codeContent, "backupBucketId",
+					"Code should still contain backupBucketId export")
+				require.Contains(t, codeContent, "bucketNames",
+					"Code should still have bucketNames array")
+				require.Contains(t, codeContent, "for (const name of bucketNames)",
+					"Code should still have the loop structure")
+			},
+		},
+	}
+}
+
+// getClaudeTools returns the standard set of tools for Claude drift adoption
+func getClaudeTools() []anthropic.ToolUnionParam {
+	return []anthropic.ToolUnionParam{
+		{
+			OfTool: &anthropic.ToolParam{
+				Name:        "bash",
+				Description: anthropic.String("Execute bash commands in the project directory"),
+				InputSchema: anthropic.ToolInputSchemaParam{
+					Type: "object",
+					Properties: map[string]interface{}{
+						"command": map[string]interface{}{
+							"type":        "string",
+							"description": "The bash command to execute",
+						},
+					},
+					Required: []string{"command"},
+				},
+			},
+		},
+		{
+			OfTool: &anthropic.ToolParam{
+				Name:        "read_file",
+				Description: anthropic.String("Read the contents of a file"),
+				InputSchema: anthropic.ToolInputSchemaParam{
+					Type: "object",
+					Properties: map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "The file path to read",
+						},
+					},
+					Required: []string{"path"},
+				},
+			},
+		},
+		{
+			OfTool: &anthropic.ToolParam{
+				Name:        "write_file",
+				Description: anthropic.String("Write contents to a file"),
+				InputSchema: anthropic.ToolInputSchemaParam{
+					Type: "object",
+					Properties: map[string]interface{}{
+						"path": map[string]interface{}{
+							"type":        "string",
+							"description": "The file path to write",
+						},
+						"content": map[string]interface{}{
+							"type":        "string",
+							"description": "The content to write",
+						},
+					},
+					Required: []string{"path", "content"},
+				},
+			},
+		},
+	}
+}
+
 // CreateTestStack creates and deploys a Pulumi stack from an example directory
 // The example directory should have project files (Pulumi.yaml, package.json) and
 // an original/ subdirectory with the program files
@@ -514,60 +655,7 @@ func RunDriftAdoptionWithClaude(
 				{Text: systemMsg},
 			},
 			Messages: messages,
-			Tools: []anthropic.ToolUnionParam{
-				{
-					OfTool: &anthropic.ToolParam{
-						Name:        "bash",
-						Description: anthropic.String("Execute bash commands in the project directory"),
-						InputSchema: anthropic.ToolInputSchemaParam{
-							Type: "object",
-							Properties: map[string]interface{}{
-								"command": map[string]interface{}{
-									"type":        "string",
-									"description": "The bash command to execute",
-								},
-							},
-							Required: []string{"command"},
-						},
-					},
-				},
-				{
-					OfTool: &anthropic.ToolParam{
-						Name:        "read_file",
-						Description: anthropic.String("Read the contents of a file"),
-						InputSchema: anthropic.ToolInputSchemaParam{
-							Type: "object",
-							Properties: map[string]interface{}{
-								"path": map[string]interface{}{
-									"type":        "string",
-									"description": "The file path to read",
-								},
-							},
-							Required: []string{"path"},
-						},
-					},
-				},
-				{
-					OfTool: &anthropic.ToolParam{
-						Name:        "write_file",
-						Description: anthropic.String("Write contents to a file"),
-						InputSchema: anthropic.ToolInputSchemaParam{
-							Type: "object",
-							Properties: map[string]interface{}{
-								"path": map[string]interface{}{
-									"type":        "string",
-									"description": "The file path to write",
-								},
-								"content": map[string]interface{}{
-									"type":        "string",
-									"description": "The content to write",
-								},
-							},
-							Required: []string{"path", "content"},
-						},
-					},
-				},
-			},
+			Tools:    getClaudeTools(),
 		})
 
 		if err != nil {
@@ -821,9 +909,13 @@ func (ts *TestStack) CreateDriftWithProgram(t *testing.T, exampleDir string) err
 	if err != nil {
 		return fmt.Errorf("failed to export state: %w\n%s", err, exportOutput)
 	}
-	defer os.Remove(stateFile) // Clean up state file when done
 
 	t.Log("   ✅ State exported")
+	defer func() {
+		if err := os.Remove(stateFile); err != nil {
+			t.Logf("   ⚠️  Failed to clean up state file: %v", err)
+		}
+	}()
 
 	// Step 2: UpdateSource to drifted program
 	t.Log("   🔄 Updating source to drifted program...")

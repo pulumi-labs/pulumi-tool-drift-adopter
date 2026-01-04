@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
@@ -17,91 +16,16 @@ import (
 func TestDriftAdoptionV2(t *testing.T) {
 	t.Parallel()
 
-	testCases := []struct {
-		name          string
-		exampleDir    string
-		verifyOutputs func(t *testing.T, resources map[string]interface{})
-		verifyCode    func(t *testing.T, codeContent string)
-	}{
-		{
-			name:       "simple-s3",
-			exampleDir: filepath.Join("..", "..", "examples", "simple-s3"),
-			verifyOutputs: func(t *testing.T, resources map[string]interface{}) {
-				bucketName, ok := resources["bucketName"].(string)
-				require.True(t, ok, "bucketName should be a string in outputs")
-				require.NotEmpty(t, bucketName, "Bucket name should not be empty")
-				t.Logf("   ✅ Deployed bucket: %s", bucketName)
-			},
-			verifyCode: func(t *testing.T, codeContent string) {
-				assert.Contains(t, codeContent, "Environment",
-					"Code should now contain Environment tag")
-				assert.Contains(t, codeContent, "production",
-					"Code should now contain production value")
-			},
-		},
-		{
-			name:       "multi-resource",
-			exampleDir: filepath.Join("..", "..", "examples", "multi-resource"),
-			verifyOutputs: func(t *testing.T, resources map[string]interface{}) {
-				bucketNameA, ok := resources["bucketNameA"].(string)
-				require.True(t, ok, "bucketNameA should be a string in outputs")
-				bucketNameB, ok := resources["bucketNameB"].(string)
-				require.True(t, ok, "bucketNameB should be a string in outputs")
-				bucketNameC, ok := resources["bucketNameC"].(string)
-				require.True(t, ok, "bucketNameC should be a string in outputs")
-				t.Logf("   ✅ Deployed buckets: %s, %s, %s", bucketNameA, bucketNameB, bucketNameC)
-			},
-			verifyCode: func(t *testing.T, codeContent string) {
-				assert.NotContains(t, codeContent, "bucket-b",
-					"Code should no longer contain bucket-b resource")
-				assert.NotContains(t, codeContent, "bucketNameB",
-					"Code should no longer contain bucketNameB export")
-				assert.Contains(t, codeContent, "bucket-a",
-					"Code should still contain bucket-a")
-				assert.Contains(t, codeContent, "bucket-c",
-					"Code should still contain bucket-c")
-			},
-		},
-		{
-			name:       "loop-resources",
-			exampleDir: filepath.Join("..", "..", "examples", "loop-resources"),
-			verifyOutputs: func(t *testing.T, resources map[string]interface{}) {
-				logsBucketId, ok := resources["logsBucketId"].(string)
-				require.True(t, ok, "logsBucketId should be a string in outputs")
-				dataBucketId, ok := resources["dataBucketId"].(string)
-				require.True(t, ok, "dataBucketId should be a string in outputs")
-				backupBucketId, ok := resources["backupBucketId"].(string)
-				require.True(t, ok, "backupBucketId should be a string in outputs")
-				t.Logf("   ✅ Deployed 3 buckets from loop")
-				t.Logf("   logs-bucket ID: %s", logsBucketId)
-				t.Logf("   data-bucket ID: %s", dataBucketId)
-				t.Logf("   backup-bucket ID: %s", backupBucketId)
-			},
-			verifyCode: func(t *testing.T, codeContent string) {
-				assert.Contains(t, codeContent, `bucketNames = ["logs-bucket", "backup-bucket"]`,
-					"Code should have updated bucketNames array without data-bucket")
-				assert.NotContains(t, codeContent, "dataBucketId",
-					"Code should no longer contain dataBucketId export")
-				assert.Contains(t, codeContent, "logsBucketId",
-					"Code should still contain logsBucketId export")
-				assert.Contains(t, codeContent, "backupBucketId",
-					"Code should still contain backupBucketId export")
-				assert.Contains(t, codeContent, "bucketNames",
-					"Code should still have bucketNames array")
-				assert.Contains(t, codeContent, "for (const name of bucketNames)",
-					"Code should still have the loop structure")
-			},
-		},
-	}
+	testCases := GetStandardTestCases()
 
 	for _, tc := range testCases {
 		tc := tc // capture range variable
-		t.Run(tc.name, func(t *testing.T) {
+		t.Run(tc.Name, func(t *testing.T) {
 			t.Parallel()
 
 			ctx := context.Background()
 			config := DriftTestConfig{
-				ExampleDir:    tc.exampleDir,
+				ExampleDir:    tc.ExampleDir,
 				MaxIterations: 10,
 			}
 
@@ -110,7 +34,7 @@ func TestDriftAdoptionV2(t *testing.T) {
 			defer testStack.Destroy(t)
 
 			// Verify initial outputs
-			tc.verifyOutputs(t, testStack.Resources)
+			tc.VerifyOutputs(t, testStack.Resources)
 
 			// Step 2: Create drift using drifted program (provider-agnostic)
 			t.Log("🔧 Step 2: Creating drift using drifted program...")
@@ -144,7 +68,7 @@ func TestDriftAdoptionV2(t *testing.T) {
 			codeContent, err := readFile(testStack.WorkingDir, "index.ts")
 			require.NoError(t, err)
 
-			tc.verifyCode(t, codeContent)
+			tc.VerifyCode(t, codeContent)
 			t.Log("   ✅ Code correctly updated")
 
 			// Step 6: Verify no drift remains
@@ -153,7 +77,7 @@ func TestDriftAdoptionV2(t *testing.T) {
 			assert.Equal(t, 0, creates, "Should have no creates")
 			assert.Equal(t, 0, deletes, "Should have no deletes")
 
-			t.Logf("✅✅✅ Drift adoption complete for %s! ✅✅✅", tc.name)
+			t.Logf("✅✅✅ Drift adoption complete for %s! ✅✅✅", tc.Name)
 		})
 	}
 }

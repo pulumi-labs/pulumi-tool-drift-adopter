@@ -102,6 +102,67 @@ The resource is in state but not in code (it exists in infrastructure but isn't 
 - You may need to look at the `urn` to understand the resource's configuration
 - Add appropriate properties based on the resource type
 
+### 3.5. Consider Stack Config Instead of Hardcoding
+
+**Before updating code with hardcoded values, evaluate whether the property should come from stack config instead.**
+
+Stack config is preferable when properties:
+- Vary by environment (dev vs prod vs staging)
+- Are feature flags (enabled/disabled boolean values)
+- Are thresholds or limits (maxSize, timeout, retryCount)
+- Are deployment-specific (region, accountId, domainName)
+
+**Decision logic:**
+```
+Property drift detected →
+├─ Is value already from stack config? → Update the config value, NOT the code
+├─ Is it environment-specific? (different in dev/prod) → Use config
+├─ Is it a feature flag? (boolean enabled/disabled) → Use config
+├─ Is it a threshold/limit? (max/min/timeout) → Use config
+└─ Is it structural? (resource name/type/relationships) → Update code
+```
+
+**Examples:**
+
+*Already using config (update config, not code):*
+```typescript
+// Code currently has:
+const config = new pulumi.Config();
+versioning: { enabled: config.requireBoolean("bucketVersioning") }
+
+// Drift shows enabled should be true
+// DON'T change code to: versioning: { enabled: true }
+// DO update stack config: pulumi config set bucketVersioning true
+```
+
+*Boolean flag drift (prefer config):*
+```typescript
+// Instead of hardcoding:
+versioning: { enabled: true }
+
+// Use stack config:
+const config = new pulumi.Config();
+versioning: { enabled: config.requireBoolean("bucketVersioning") }
+```
+
+*Threshold drift (prefer config):*
+```typescript
+// Instead of hardcoding:
+maxSize: 1000
+
+// Use stack config:
+const config = new pulumi.Config();
+maxSize: config.requireNumber("maxBucketSize")
+```
+
+*Structural change (use hardcoded value):*
+```typescript
+// Hardcode is fine for resource names, types, relationships:
+bucket: "my-app-bucket"  // This is structural, hardcode it
+```
+
+**When in doubt:** If the property might reasonably differ between stacks or environments, prefer config over hardcoding.
+
 ### 4. Run the Tool Again
 
 After making code changes, run the tool again:
