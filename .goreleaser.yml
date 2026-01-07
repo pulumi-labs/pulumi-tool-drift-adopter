@@ -1,0 +1,24 @@
+dist: goreleaser
+project_name: pulumi-tool-drift-adopter
+version: 2
+snapshot:
+  version_template: "{{ .Version }}-SNAPSHOT"
+checksum:
+  name_template: "{{ .ProjectName }}-{{ .Version }}-checksums.txt"
+archives:
+- id: archive
+  name_template: '{{ .Binary }}-{{ .Tag }}-{{ .Os }}-{{ .Arch }}'
+builds:
+- id: pulumi-tool-drift-adopter
+  binary: pulumi-tool-drift-adopter
+  goarch:
+  - amd64
+  - arm64
+  goos:
+  - darwin
+  - windows
+  - linux
+  ldflags:
+  - -s
+  - -w
+  main: ./cmd/pulumi-drift-adopt
