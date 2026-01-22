@@ -88,17 +88,59 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Parse the JSON output structure
+	// The output can be either:
+	// 1. Single JSON object with steps array: {"steps": [...]} (from pulumi preview --json)
+	// 2. NDJSON with resourcePreEvent objects: {"resourcePreEvent": {...}}\n... (from pulumi_preview MCP tool)
+
+	var steps []auto.PreviewStep
+
+	// Try parsing as single JSON object first
 	var previewResult struct {
 		Steps []auto.PreviewStep `json:"steps"`
 	}
 
-	if err := json.Unmarshal(output, &previewResult); err != nil {
-		return outputError(fmt.Sprintf("failed to parse preview output: %v", err))
+	if err := json.Unmarshal(output, &previewResult); err == nil {
+		// Successfully parsed as single JSON object (even if steps is empty)
+		steps = previewResult.Steps
+	} else {
+		// Try parsing as NDJSON (newline-delimited JSON)
+		lines := strings.Split(string(output), "\n")
+		validLinesFound := 0
+
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+
+			// Each line should be a JSON object with a resourcePreEvent field
+			var event struct {
+				ResourcePreEvent *struct {
+					Metadata auto.PreviewStep `json:"metadata"`
+				} `json:"resourcePreEvent"`
+			}
+
+			if err := json.Unmarshal([]byte(line), &event); err != nil {
+				// Not valid JSON, continue checking other lines
+				continue
+			}
+
+			validLinesFound++
+
+			if event.ResourcePreEvent != nil {
+				steps = append(steps, event.ResourcePreEvent.Metadata)
+			}
+		}
+
+		// If we found no valid JSON lines at all, the input is malformed
+		if validLinesFound == 0 && len(strings.TrimSpace(string(output))) > 0 {
+			return outputError(fmt.Sprintf("failed to parse preview output: no valid JSON found"))
+		}
 	}
 
 	// Parse steps for resources that need changes
 	var resources []ResourceChange
-	for _, step := range previewResult.Steps {
+	for _, step := range steps {
 		// Extract resource type from old or new state
 		var resourceType string
 		if step.OldState != nil {
