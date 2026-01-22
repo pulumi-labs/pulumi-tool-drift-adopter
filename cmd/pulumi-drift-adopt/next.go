@@ -28,6 +28,7 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 func init() {
 	nextCmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
 	nextCmd.Flags().Int("max-resources", 10, "Maximum number of resources to return per batch (0 = unlimited, default = 10)")
+	nextCmd.Flags().String("events-file", "", "Path to engine events file (skips calling preview)")
 }
 
 // NextOutput is the JSON structure returned by the next command
@@ -58,20 +59,32 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	projectDir, _ := cmd.Flags().GetString("project")
 	stack, _ := cmd.Flags().GetString("stack")
 	maxResources, _ := cmd.Flags().GetInt("max-resources")
+	eventsFile, _ := cmd.Flags().GetString("events-file")
 
-	// Build pulumi preview command with JSON output and refresh
-	cmdArgs := []string{"preview", "--json", "--non-interactive", "--refresh"}
-	if stack != "" {
-		cmdArgs = append(cmdArgs, "--stack", stack)
-	}
+	var output []byte
+	var err error
 
-	previewCmd := exec.Command("pulumi", cmdArgs...)
-	previewCmd.Dir = projectDir
-	previewCmd.Stderr = os.Stderr
+	if eventsFile != "" {
+		// Read events file instead of calling preview
+		output, err = os.ReadFile(eventsFile)
+		if err != nil {
+			return outputError(fmt.Sprintf("failed to read events file: %v", err))
+		}
+	} else {
+		// Build pulumi preview command with JSON output and refresh
+		cmdArgs := []string{"preview", "--json", "--non-interactive", "--refresh"}
+		if stack != "" {
+			cmdArgs = append(cmdArgs, "--stack", stack)
+		}
 
-	output, err := previewCmd.Output()
-	if err != nil {
-		return outputError(fmt.Sprintf("pulumi preview failed: %v", err))
+		previewCmd := exec.Command("pulumi", cmdArgs...)
+		previewCmd.Dir = projectDir
+		previewCmd.Stderr = os.Stderr
+
+		output, err = previewCmd.Output()
+		if err != nil {
+			return outputError(fmt.Sprintf("pulumi preview failed: %v", err))
+		}
 	}
 
 	// Parse the JSON output structure
