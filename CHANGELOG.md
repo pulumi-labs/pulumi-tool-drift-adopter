@@ -7,20 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-01-22
+
 ### Added
+- **`--events-file` flag** to accept pre-generated engine events from deployment systems
+- Comprehensive unit tests for events file functionality
 - Claude skill (`skills/drift-adopt.md`) that encapsulates the complete drift adoption workflow
 - E2E test using pulumitest and Claude SDK to validate the full workflow
 - Test demonstrates: deploy stack → create drift → invoke Claude → verify fixes
 - `--stack` flag to `next` command to specify Pulumi stack name
-
-### Changed
-- `next` command now automatically runs `pulumi preview --refresh`
-- No need to manually run `pulumi refresh` before using the tool
-- Updated all documentation to reflect automatic refresh behavior
-
-## [1.0.0] - 2025-11-21
-
-### Added
 - Simple stateless CLI tool for drift adoption
 - `next` command runs `pulumi preview --json` and returns structured output
 - Inverted logic: interprets state (old values) as desired, code (new values) as current
@@ -35,5 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Built with Go 1.21+ and Cobra CLI framework
 - Simple enough to verify manually with real Pulumi projects
 
-[1.0.0]: https://github.com/pulumi/pulumi-drift-adoption-tool/releases/tag/v1.0.0
-[Unreleased]: https://github.com/pulumi/pulumi-drift-adoption-tool/compare/v1.0.0...HEAD
+### Changed
+- Skip preview call when `--events-file` is provided (enables deployment system integration)
+- `next` command now automatically runs `pulumi preview --refresh`
+- No need to manually run `pulumi refresh` before using the tool
+- Updated all documentation to reflect automatic refresh behavior
+- Maintains backward compatibility (existing usage unchanged)
+
+### Fixed
+- golangci-lint configuration updated for newer linter versions
+
+[1.0.0]: https://github.com/pulumi/pulumi-tool-drift-adopter/releases/tag/v1.0.0
+[Unreleased]: https://github.com/pulumi/pulumi-tool-drift-adopter/compare/v1.0.0...HEAD
