@@ -781,3 +781,68 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 	assert.Equal(t, false, prop.DesiredValue)
 	assert.Equal(t, "update", prop.Kind)
 }
+
+// TestNextCommandRealPulumiServiceNDJSON tests parsing of real NDJSON from pulumi-service integration test
+// This reproduces the parsing bug found during integration testing where the tool reported:
+// "failed to parse preview output: invalid character '{' after top-level value"
+func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run command with real NDJSON file from pulumi-service integration test
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/simple-s3-drift.ndjson"})
+	_ = rootCmd.Execute()
+
+	// Restore stdout and read output
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	// Parse output
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	// Debug output
+	t.Logf("Output: %s", string(output))
+	t.Logf("Status: %s", result.Status)
+	t.Logf("Error: %s", result.Error)
+	t.Logf("Resource count: %d", len(result.Resources))
+
+	// Should detect drift in S3 bucket tags
+	assert.Equal(t, "changes_needed", result.Status, "Expected drift to be detected")
+	require.NotEmpty(t, result.Resources, "Expected at least one resource with drift")
+
+	// Find the S3 bucket resource
+	// Note: Type field may be empty in NDJSON parsing (known issue)
+	var bucketResource *ResourceChange
+	for i := range result.Resources {
+		if result.Resources[i].Name == "test-bucket" {
+			bucketResource = &result.Resources[i]
+			break
+		}
+	}
+
+	require.NotNil(t, bucketResource, "Expected to find S3 bucket resource")
+	assert.Equal(t, "update_code", bucketResource.Action)
+	assert.Equal(t, "test-bucket", bucketResource.Name)
+	assert.Contains(t, bucketResource.URN, "aws:s3/bucket:Bucket", "URN should contain resource type")
+
+	// Verify tag changes are detected
+	var tagChanges []*PropertyChange
+	for i := range bucketResource.Properties {
+		if len(bucketResource.Properties[i].Path) >= 4 && bucketResource.Properties[i].Path[:4] == "tags" {
+			tagChanges = append(tagChanges, &bucketResource.Properties[i])
+		}
+	}
+
+	require.NotEmpty(t, tagChanges, "Expected tag changes to be detected")
+	t.Logf("Found %d tag changes", len(tagChanges))
+	for _, change := range tagChanges {
+		t.Logf("  - %s: current=%v, desired=%v, kind=%s",
+			change.Path, change.CurrentValue, change.DesiredValue, change.Kind)
+	}
+}
