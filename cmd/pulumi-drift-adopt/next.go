@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/spf13/cobra"
 )
 
@@ -139,9 +141,11 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 		}
 
 		// Each line should be a JSON object with a resourcePreEvent field
+		// Note: pulumi-service NDJSON uses "old"/"new" fields instead of "oldState"/"newState"
+		// We need to handle both formats
 		var event struct {
 			ResourcePreEvent *struct {
-				Metadata auto.PreviewStep `json:"metadata"`
+				Metadata json.RawMessage `json:"metadata"`
 			} `json:"resourcePreEvent"`
 		}
 
@@ -153,7 +157,66 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 		validLinesFound++
 
 		if event.ResourcePreEvent != nil {
-			steps = append(steps, event.ResourcePreEvent.Metadata)
+			// Try parsing with standard SDK format first (oldState/newState)
+			var step auto.PreviewStep
+			if err := json.Unmarshal(event.ResourcePreEvent.Metadata, &step); err == nil {
+				// If OldState and NewState are populated, use as-is
+				if step.OldState != nil || step.NewState != nil {
+					steps = append(steps, step)
+					continue
+				}
+			}
+
+			// Fall back to custom format with "old"/"new" fields (pulumi-service format)
+			var customStep struct {
+				Op       string              `json:"op"`
+				URN      string              `json:"urn"`
+				Provider string              `json:"provider,omitempty"`
+				Old      *apitype.ResourceV3 `json:"old,omitempty"`
+				New      *apitype.ResourceV3 `json:"new,omitempty"`
+				Diffs    []string            `json:"diffs,omitempty"`
+				// DetailedDiff can have either "kind" or "diffKind" field
+				DetailedDiff map[string]json.RawMessage `json:"detailedDiff"`
+			}
+
+			if err := json.Unmarshal(event.ResourcePreEvent.Metadata, &customStep); err != nil {
+				continue
+			}
+
+			// Convert DetailedDiff to standard format, handling both "kind" and "diffKind"
+			standardDetailedDiff := make(map[string]auto.PropertyDiff)
+			for path, rawDiff := range customStep.DetailedDiff {
+				// Try parsing with "diffKind" first (pulumi-service format)
+				var customDiff struct {
+					DiffKind  string `json:"diffKind"`
+					InputDiff bool   `json:"inputDiff"`
+				}
+				if err := json.Unmarshal(rawDiff, &customDiff); err == nil && customDiff.DiffKind != "" {
+					standardDetailedDiff[path] = auto.PropertyDiff{
+						Kind:      customDiff.DiffKind,
+						InputDiff: customDiff.InputDiff,
+					}
+					continue
+				}
+
+				// Fall back to standard "kind" format
+				var standardDiff auto.PropertyDiff
+				if err := json.Unmarshal(rawDiff, &standardDiff); err == nil {
+					standardDetailedDiff[path] = standardDiff
+				}
+			}
+
+			// Convert custom format to standard PreviewStep
+			standardStep := auto.PreviewStep{
+				Op:           customStep.Op,
+				URN:          resource.URN(customStep.URN),
+				Provider:     customStep.Provider,
+				OldState:     customStep.Old,
+				NewState:     customStep.New,
+				DetailedDiff: standardDetailedDiff,
+			}
+
+			steps = append(steps, standardStep)
 		}
 	}
 
