@@ -1,0 +1,4 @@
+{"sequence":1,"timestamp":1737551234,"preludeEvent":{"config":{"aws:region":"us-west-2"}}}
+{"sequence":2,"timestamp":1737551235,"diagnosticEvent":{"severity":"info","message":"Starting resource preview"}}
+{"sequence":3,"timestamp":1737551236,"summaryEvent":{"maybeCorrupt":false,"durationSeconds":1,"resourceChanges":{},"isPreview":true}}
+{"sequence":4,"timestamp":1737551237,"cancelEvent":{}}

@@ -1,0 +1,7 @@
+{"sequence":1,"timestamp":1737551234,"preludeEvent":{"config":{"aws:region":"us-west-2"}}}
+{"sequence":2,"timestamp":1737551235,"diagnosticEvent":{"severity":"info","message":"Starting resource preview"}}
+{"sequence":3,"timestamp":1737551236,"resourcePreEvent":{"metadata":{"op":"update","urn":"urn:pulumi:dev::test::aws:s3/bucket:Bucket::test-bucket","oldState":{"type":"aws:s3/bucket:Bucket","urn":"urn:pulumi:dev::test::aws:s3/bucket:Bucket::test-bucket","custom":true,"id":"test-bucket-111","inputs":{"bucket":"test-bucket-111","versioning":{"enabled":true}},"outputs":{"bucket":"test-bucket-111","versioning":{"enabled":true}}},"newState":{"type":"aws:s3/bucket:Bucket","urn":"urn:pulumi:dev::test::aws:s3/bucket:Bucket::test-bucket","custom":true,"id":"test-bucket-111","inputs":{"bucket":"test-bucket-111","versioning":{"enabled":false}},"outputs":{"bucket":"test-bucket-111","versioning":{"enabled":false}}},"detailedDiff":{"versioning.enabled":{"kind":"update","inputDiff":true}}},"planning":true}}
+{"sequence":4,"timestamp":1737551237,"diagnosticEvent":{"severity":"warning","message":"Resource has drift"}}
+{"sequence":5,"timestamp":1737551238,"policyEvent":{"policyName":"test-policy","enforcementLevel":"advisory"}}
+{"sequence":6,"timestamp":1737551239,"summaryEvent":{"maybeCorrupt":false,"durationSeconds":2,"resourceChanges":{"update":1},"isPreview":true}}
+{"sequence":7,"timestamp":1737551240,"cancelEvent":{}}

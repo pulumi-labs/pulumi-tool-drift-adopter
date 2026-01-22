@@ -463,3 +463,321 @@ func TestNextCommandFileNotFound(t *testing.T) {
 	assert.Equal(t, "error", result.Status)
 	assert.Contains(t, result.Error, "failed to read events file")
 }
+
+// TestNextCommandNDJSONRealFormat tests parsing actual NDJSON with full engine event structure
+func TestNextCommandNDJSONRealFormat(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run command with realistic NDJSON fixture
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_update.ndjson"})
+	_ = rootCmd.Execute()
+
+	// Restore stdout and read output
+	w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	// Parse output
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	// Verify status and resource
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 1)
+
+	resource := result.Resources[0]
+	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, "my-bucket", resource.Name)
+	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
+	assert.Contains(t, resource.URN, "my-bucket")
+
+	// Verify properties - should have 2 changes (update + delete)
+	require.Len(t, resource.Properties, 2)
+
+	// Find properties by path
+	var envProp, managedByProp *PropertyChange
+	for i := range resource.Properties {
+		if resource.Properties[i].Path == "tags.Environment" {
+			envProp = &resource.Properties[i]
+		}
+		if resource.Properties[i].Path == "tags.ManagedBy" {
+			managedByProp = &resource.Properties[i]
+		}
+	}
+
+	// Verify tags.Environment update
+	require.NotNil(t, envProp, "tags.Environment property not found")
+	assert.Equal(t, "dev", envProp.CurrentValue)
+	assert.Equal(t, "production", envProp.DesiredValue)
+	assert.Equal(t, "update", envProp.Kind)
+
+	// Verify tags.ManagedBy deletion
+	require.NotNil(t, managedByProp, "tags.ManagedBy property not found")
+	assert.Equal(t, nil, managedByProp.CurrentValue)
+	assert.Equal(t, "pulumi", managedByProp.DesiredValue)
+	assert.Equal(t, "delete", managedByProp.Kind)
+}
+
+// TestNextCommandNDJSONMixedEvents tests that non-resourcePreEvent lines are properly skipped
+func TestNextCommandNDJSONMixedEvents(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run command with NDJSON containing diagnostics and policy events
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_with_diagnostics.ndjson"})
+	_ = rootCmd.Execute()
+
+	// Restore stdout and read output
+	w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	// Parse output
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	// Should only have one resource (the resourcePreEvent), others skipped
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 1)
+
+	resource := result.Resources[0]
+	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, "test-bucket", resource.Name)
+	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
+
+	// Verify property change
+	require.Len(t, resource.Properties, 1)
+	prop := resource.Properties[0]
+	assert.Equal(t, "versioning.enabled", prop.Path)
+	assert.Equal(t, false, prop.CurrentValue)
+	assert.Equal(t, true, prop.DesiredValue)
+	assert.Equal(t, "update", prop.Kind)
+}
+
+// TestNextCommandNDJSONEmptyFile tests NDJSON with no resource events returns clean
+func TestNextCommandNDJSONEmptyFile(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run command with NDJSON containing only metadata events
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_empty.ndjson"})
+	_ = rootCmd.Execute()
+
+	// Restore stdout and read output
+	w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	// Parse output
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	// Should return clean status with no resources
+	assert.Equal(t, "clean", result.Status)
+	assert.Empty(t, result.Resources)
+}
+
+// TestNextCommandNDJSONMultipleResources tests parsing multiple resources from NDJSON
+func TestNextCommandNDJSONMultipleResources(t *testing.T) {
+	tests := []struct {
+		name          string
+		maxResources  string
+		expectedCount int
+	}{
+		{
+			name:          "all resources (default limit)",
+			maxResources:  "",
+			expectedCount: 3,
+		},
+		{
+			name:          "limited to 2 resources",
+			maxResources:  "2",
+			expectedCount: 2,
+		},
+		{
+			name:          "unlimited (0)",
+			maxResources:  "0",
+			expectedCount: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Capture stdout
+			oldStdout := os.Stdout
+			r, w, _ := os.Pipe()
+			os.Stdout = w
+
+			// Build args
+			args := []string{"next", "--events-file", "testdata/ndjson_multiple_resources.ndjson"}
+			if tt.maxResources != "" {
+				args = append(args, "--max-resources", tt.maxResources)
+			}
+
+			// Run command
+			rootCmd.SetArgs(args)
+			_ = rootCmd.Execute()
+
+			// Restore stdout and read output
+			w.Close()
+			os.Stdout = oldStdout
+			output, err := io.ReadAll(r)
+			require.NoError(t, err)
+
+			// Parse output
+			var result NextOutput
+			err = json.Unmarshal(output, &result)
+			require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+			// Verify resource count
+			assert.Equal(t, "changes_needed", result.Status)
+			assert.Len(t, result.Resources, tt.expectedCount, "Resource count mismatch")
+
+			// Verify first resource details if present
+			if len(result.Resources) > 0 {
+				resource := result.Resources[0]
+				assert.Equal(t, "update_code", resource.Action)
+				assert.Equal(t, "bucket-1", resource.Name)
+				assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
+			}
+		})
+	}
+}
+
+// TestNextCommandNDJSONCreateDelete tests create and delete operations from NDJSON
+func TestNextCommandNDJSONCreateDelete(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run command with NDJSON containing create and delete operations
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_create_delete.ndjson"})
+	_ = rootCmd.Execute()
+
+	// Restore stdout and read output
+	w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	// Parse output
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	// Should have 2 resources (1 create, 1 delete)
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 2)
+
+	// Find resources by name
+	var createResource, deleteResource *ResourceChange
+	for i := range result.Resources {
+		if result.Resources[i].Name == "extra-bucket" {
+			createResource = &result.Resources[i]
+		}
+		if result.Resources[i].Name == "missing-bucket" {
+			deleteResource = &result.Resources[i]
+		}
+	}
+
+	// Verify create operation inverts to delete_from_code
+	require.NotNil(t, createResource, "extra-bucket not found")
+	assert.Equal(t, "delete_from_code", createResource.Action)
+	assert.Equal(t, "aws:s3/bucket:Bucket", createResource.Type)
+
+	// Verify delete operation inverts to add_to_code
+	require.NotNil(t, deleteResource, "missing-bucket not found")
+	assert.Equal(t, "add_to_code", deleteResource.Action)
+	assert.Equal(t, "aws:s3/bucket:Bucket", deleteResource.Type)
+}
+
+// TestNextCommandBackwardCompatibility ensures old JSON format still works
+func TestNextCommandBackwardCompatibility(t *testing.T) {
+	// Create events in old format (single JSON object with steps array)
+	eventsContent := `{
+		"steps": [
+			{
+				"op": "update",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::legacy-bucket",
+				"oldState": {
+					"type": "aws:s3/bucket:Bucket",
+					"outputs": {
+						"versioning": {
+							"enabled": false
+						}
+					}
+				},
+				"newState": {
+					"type": "aws:s3/bucket:Bucket",
+					"outputs": {
+						"versioning": {
+							"enabled": true
+						}
+					}
+				},
+				"detailedDiff": {
+					"versioning.enabled": {
+						"kind": "update"
+					}
+				}
+			}
+		]
+	}`
+
+	// Create temporary events file
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
+	require.NoError(t, err)
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run command
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = rootCmd.Execute()
+
+	// Restore stdout and read output
+	w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	// Parse output
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	// Verify old format still works
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 1)
+
+	resource := result.Resources[0]
+	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, "legacy-bucket", resource.Name)
+	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
+
+	// Verify property extraction still works
+	require.Len(t, resource.Properties, 1)
+	prop := resource.Properties[0]
+	assert.Equal(t, "versioning.enabled", prop.Path)
+	assert.Equal(t, true, prop.CurrentValue)
+	assert.Equal(t, false, prop.DesiredValue)
+	assert.Equal(t, "update", prop.Kind)
+}
