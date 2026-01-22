@@ -139,7 +139,7 @@ When all drift is resolved:
 Runs `pulumi preview --json --refresh` to automatically detect drift and analyzes the output.
 
 ```bash
-pulumi-drift-adopt next [--project .] [--stack <stack-name>]
+pulumi-drift-adopt next [--project .] [--stack <stack-name>] [--events-file <path>]
 ```
 
 **Output Status:**
@@ -150,6 +150,8 @@ pulumi-drift-adopt next [--project .] [--stack <stack-name>]
 **Flags:**
 - `--project string` - Project directory (default: ".")
 - `--stack string` - Pulumi stack name (optional, uses current stack if not specified)
+- `--events-file string` - Path to pre-generated engine events file (skips calling preview, for deployment system integration)
+- `--max-resources int` - Maximum number of resources to return per batch (default: 10, use 0 for unlimited)
 
 ## Workflow with AI Agent
 
@@ -203,6 +205,23 @@ Claude will:
 4. Repeat until status is "clean"
 
 See `test/e2e/README.md` for an automated test that demonstrates this workflow.
+
+### Note on Skill Versions
+
+**Important:** The skill and E2E tests in this repository (`skills/drift-adopt.md` and `test/e2e/`) are designed for the **non-Neo version** of the drift adoption workflow. This version:
+
+- Runs `pulumi preview --json` directly via CLI (no engine events files needed)
+- Works with AI agents that have shell access to run Pulumi commands
+- Does not require the `pulumi_preview` MCP tool or `--events-file` flag
+- Is simpler and suitable for local development and basic Claude integration
+
+For the production Neo agent version that uses:
+- The `pulumi_preview` MCP tool with engine events files
+- The `--events-file` flag for passing pre-generated events
+- Deployment system integration
+- Todo list management and git workflow
+
+Refer to the skill in the `pulumi-service` repository at `cmd/agents/src/agents_py/skills/adopt-drift/SKILL.md`.
 
 ## Examples
 
