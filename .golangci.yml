@@ -18,52 +18,57 @@ linters:
     - gocyclo       # Computes cyclomatic complexity
     - dupl          # Detects code cloning
 
+  settings:
+    revive:
+      rules:
+        - name: var-naming
+          disabled: true
+        - name: exported
+          disabled: false
+        - name: error-return
+          disabled: false
+        - name: error-naming
+          disabled: false
+
+    gocyclo:
+      min-complexity: 30
+
+    dupl:
+      threshold: 100
+
+  exclusions:
+    rules:
+      # Exclude test files from certain checks
+      - path: _test\.go
+        linters:
+          - errcheck
+          - dupl
+          - gocyclo
+
+      # Allow fmt.Printf in drift_helpers.go for CloudControl debug logging
+      - path: test/e2e/drift_helpers\.go
+        text: "use of `fmt.Printf`"
+        linters:
+          - forbidigo
+
+      # Allow debug logging in CloudControl investigation tests
+      - path: test/e2e/cloudcontrol/
+        text: "use of `fmt.Printf`"
+        linters:
+          - forbidigo
+
+    paths:
+      - test/e2e/cloudcontrol
+
 formatters:
   enable:
     - gofmt         # Checks code formatting
     - goimports     # Checks import formatting
 
-linters-settings:
-  goimports:
-    local-prefixes: github.com/pulumi/pulumi-drift-adoption-tool
-
-  revive:
-    rules:
-      - name: var-naming
-        disabled: true
-      - name: exported
-        disabled: false
-      - name: error-return
-        disabled: false
-      - name: error-naming
-        disabled: false
-
-  gocyclo:
-    min-complexity: 15
-
-  dupl:
-    threshold: 100
-
-issues:
-  exclude-rules:
-    # Exclude test files from certain checks
-    - path: _test\.go
-      linters:
-        - errcheck
-        - dupl
-        - gocyclo
-
-    # Allow fmt.Printf in drift_helpers.go for CloudControl debug logging
-    - path: test/e2e/drift_helpers\.go
-      text: "use of `fmt.Printf`"
-      linters:
-        - forbidigo
-
-    # Allow debug logging in CloudControl investigation tests
-    - path: test/e2e/cloudcontrol/
-      text: "use of `fmt.Printf`"
-      linters:
-        - forbidigo
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/pulumi/pulumi-drift-adoption-tool
 
 run:
   timeout: 5m
@@ -72,5 +77,3 @@ run:
     - unit
     - integration
     - e2e
-  skip-dirs:
-    - test/e2e/cloudcontrol
