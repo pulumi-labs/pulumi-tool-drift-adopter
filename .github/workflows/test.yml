@@ -22,6 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     # Only run E2E tests manually or on main branch
     if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
+    # TODO: Remove continue-on-error once OIDC trust is updated
+    # The repo moved from pulumi/pulumi-drift-adoption-tool to pulumi/pulumi-tool-drift-adopter
+    # The Pulumi Cloud OIDC trust relationship needs to be updated to allow auth from new repo
+    continue-on-error: true
 
     steps:
       - name: Checkout code
