@@ -134,7 +134,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 
 		// If we found no valid JSON lines at all, the input is malformed
 		if validLinesFound == 0 && len(strings.TrimSpace(string(output))) > 0 {
-			return outputError(fmt.Sprintf("failed to parse preview output: no valid JSON found"))
+			return outputError("failed to parse preview output: no valid JSON found")
 		}
 	}
 

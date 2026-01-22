@@ -14,16 +14,16 @@ import (
 // TestNextCommandWithEventsFile tests the next command using --events-file flag
 func TestNextCommandWithEventsFile(t *testing.T) {
 	tests := []struct {
-		name           string
-		eventsContent  string
-		expectedStatus string
-		expectedError  string
+		name            string
+		eventsContent   string
+		expectedStatus  string
+		expectedError   string
 		expectResources bool
 	}{
 		{
-			name: "clean state - no changes",
-			eventsContent: `{"steps": []}`,
-			expectedStatus: "clean",
+			name:            "clean state - no changes",
+			eventsContent:   `{"steps": []}`,
+			expectedStatus:  "clean",
 			expectResources: false,
 		},
 		{
@@ -55,7 +55,7 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 					}
 				}]
 			}`,
-			expectedStatus: "changes_needed",
+			expectedStatus:  "changes_needed",
 			expectResources: true,
 		},
 		{
@@ -73,7 +73,7 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 					"detailedDiff": {}
 				}]
 			}`,
-			expectedStatus: "changes_needed",
+			expectedStatus:  "changes_needed",
 			expectResources: true,
 		},
 		{
@@ -91,14 +91,14 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 					"detailedDiff": {}
 				}]
 			}`,
-			expectedStatus: "changes_needed",
+			expectedStatus:  "changes_needed",
 			expectResources: true,
 		},
 		{
-			name: "invalid JSON",
-			eventsContent: `{invalid json`,
+			name:           "invalid JSON",
+			eventsContent:  `{invalid json`,
 			expectedStatus: "error",
-			expectedError: "failed to parse preview output",
+			expectedError:  "failed to parse preview output",
 		},
 	}
 
@@ -120,7 +120,7 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 			_ = rootCmd.Execute()
 
 			// Restore stdout and read captured output
-			w.Close()
+			_ = w.Close()
 			os.Stdout = oldStdout
 			var output []byte
 			output, err = io.ReadAll(r)
@@ -212,7 +212,7 @@ func TestNextCommandActionMapping(t *testing.T) {
 			_ = rootCmd.Execute()
 
 			// Restore stdout and read output
-			w.Close()
+			_ = w.Close()
 			os.Stdout = oldStdout
 			output, err := io.ReadAll(r)
 			require.NoError(t, err)
@@ -319,7 +319,7 @@ func TestNextCommandMaxResourcesLimit(t *testing.T) {
 			_ = rootCmd.Execute()
 
 			// Restore stdout and read output
-			w.Close()
+			_ = w.Close()
 			os.Stdout = oldStdout
 			output, err := io.ReadAll(r)
 			require.NoError(t, err)
@@ -393,7 +393,7 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	output, err := io.ReadAll(r)
 	require.NoError(t, err)
@@ -449,7 +449,7 @@ func TestNextCommandFileNotFound(t *testing.T) {
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	output, err := io.ReadAll(r)
 	require.NoError(t, err)
@@ -476,7 +476,7 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	output, err := io.ReadAll(r)
 	require.NoError(t, err)
@@ -535,7 +535,7 @@ func TestNextCommandNDJSONMixedEvents(t *testing.T) {
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	output, err := io.ReadAll(r)
 	require.NoError(t, err)
@@ -575,7 +575,7 @@ func TestNextCommandNDJSONEmptyFile(t *testing.T) {
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	output, err := io.ReadAll(r)
 	require.NoError(t, err)
@@ -632,7 +632,7 @@ func TestNextCommandNDJSONMultipleResources(t *testing.T) {
 			_ = rootCmd.Execute()
 
 			// Restore stdout and read output
-			w.Close()
+			_ = w.Close()
 			os.Stdout = oldStdout
 			output, err := io.ReadAll(r)
 			require.NoError(t, err)
@@ -669,7 +669,7 @@ func TestNextCommandNDJSONCreateDelete(t *testing.T) {
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	output, err := io.ReadAll(r)
 	require.NoError(t, err)
@@ -754,7 +754,7 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
-	w.Close()
+	_ = w.Close()
 	os.Stdout = oldStdout
 	output, err := io.ReadAll(r)
 	require.NoError(t, err)
