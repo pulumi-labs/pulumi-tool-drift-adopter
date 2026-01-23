@@ -265,6 +265,26 @@ func getActionForOperation(op string) string {
 	}
 }
 
+// invertPropertyKind inverts the property change kind from preview perspective to code change perspective
+func invertPropertyKind(previewKind string) string {
+	switch previewKind {
+	case "add":
+		// Preview wants to ADD to infrastructure = property in code but not in state
+		// Action: DELETE from code
+		return "delete"
+	case "delete":
+		// Preview wants to DELETE from infrastructure = property in state but not in code
+		// Action: ADD to code
+		return "add"
+	case "update", "update-replace":
+		// Update is symmetric - need to update code to match state
+		return "update"
+	default:
+		// Pass through other kinds unchanged
+		return previewKind
+	}
+}
+
 // extractResourceType extracts the resource type from old or new state
 func extractResourceType(step auto.PreviewStep) string {
 	if step.OldState != nil {
@@ -298,7 +318,7 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 			Path:         path,
 			CurrentValue: currentValue,
 			DesiredValue: desiredValue,
-			Kind:         diff.Kind,
+			Kind:         invertPropertyKind(diff.Kind),
 		})
 	}
 

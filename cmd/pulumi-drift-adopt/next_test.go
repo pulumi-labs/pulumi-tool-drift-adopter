@@ -516,11 +516,11 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 	assert.Equal(t, "production", envProp.DesiredValue)
 	assert.Equal(t, "update", envProp.Kind)
 
-	// Verify tags.ManagedBy deletion
+	// Verify tags.ManagedBy addition (preview says "delete" but we invert to "add" for code changes)
 	require.NotNil(t, managedByProp, "tags.ManagedBy property not found")
 	assert.Equal(t, nil, managedByProp.CurrentValue)
 	assert.Equal(t, "pulumi", managedByProp.DesiredValue)
-	assert.Equal(t, "delete", managedByProp.Kind)
+	assert.Equal(t, "add", managedByProp.Kind)
 }
 
 // TestNextCommandNDJSONMixedEvents tests that non-resourcePreEvent lines are properly skipped
