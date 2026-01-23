@@ -2,10 +2,12 @@
 
 ## Overview
 
-The drift adoption tool accepts input in **two formats**:
+The drift adoption tool accepts input in **exactly two formats**:
 
 1. **Single JSON** - Standard Pulumi CLI output (`pulumi preview --json`)
-2. **NDJSON** - Newline-Delimited JSON from MCP tools or engine events
+   - Uses standard SDK field names: `oldState`, `newState`, `kind`
+2. **NDJSON** - Real pulumi-service MCP tool output (engine events)
+   - Uses pulumi-service field names: `old`, `new`, `diffKind`, `type`
 
 ## Parsing Flow
 
@@ -15,23 +17,25 @@ Input Bytes
 parsePreviewOutput()
     ↓
     ├─→ Try Single JSON Format
-    │   Success? → Return steps
+    │   {"steps": [...]}
+    │   Success? → Return steps (standard SDK format)
     │   Fail? ↓
     │
     └─→ parseNDJSON()
         ↓
         For each line:
-        ├─→ Is it resourcePreEvent?
-        │   No → Skip (policy events, etc.)
-        │   Yes ↓
+        ├─→ Parse as JSON
+        │   Invalid? → Skip
+        │   Valid? ↓
         │
-        ├─→ Try Standard SDK Format
-        │   Has oldState/newState? → Use it
-        │   Nil? ↓
+        ├─→ Check type field
+        │   type == "resourcePreEvent"? → Process
+        │   Other type? → Skip (policy, summary, etc.)
         │
-        └─→ Try Pulumi-Service Format
-            Parse old/new + diffKind
-            Convert to standard format
+        └─→ Parse metadata (pulumi-service format)
+            - Extract old/new fields
+            - Extract diffKind fields
+            - Convert to standard PreviewStep
             → Return steps
 ```
 
@@ -184,19 +188,19 @@ Each line has this structure:
 | Diff kind | `kind` | `diffKind` |
 | Top-level type | No | Yes (`"type": "resourcePreEvent"`) |
 
-### Variation B: Unit Test Fixtures (Synthetic)
+### Variation B: Unit Test Fixtures (Now Matches Real Format!)
 
-**Source:** Hand-crafted for unit tests
+**Source:** Hand-crafted for unit tests, **updated to match real pulumi-service format**
 **Example Files:** `ndjson_update.ndjson`, `ndjson_create_delete.ndjson`, etc.
 
 #### Line Structure
-Each line has multiple event types as keys:
+**Now uses same structure as real pulumi-service output:**
 ```json
 {
-  "sequence": 1,
   "timestamp": 1234567890,
+  "type": "resourcePreEvent",
   "resourcePreEvent": {
-    "metadata": { /* standard SDK format */ }
+    "metadata": { /* pulumi-service format */ }
   }
 }
 ```
@@ -204,21 +208,22 @@ Each line has multiple event types as keys:
 Or:
 ```json
 {
-  "sequence": 2,
   "timestamp": 1234567890,
+  "type": "preludeEvent",
   "preludeEvent": {
     "config": { ... }
   }
 }
 ```
 
-#### resourcePreEvent.metadata Structure (Unit Test Format)
+#### resourcePreEvent.metadata Structure (Now Consistent!)
 
 ```json
 {
   "op": "update",
   "urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket",
-  "oldState": {                      // ← Standard "oldState"
+  "type": "aws:s3/bucket:Bucket",    // ← Has type field
+  "old": {                           // ← Uses "old" not "oldState"
     "type": "aws:s3/bucket:Bucket",
     "outputs": {
       "tags": {
@@ -227,7 +232,7 @@ Or:
       }
     }
   },
-  "newState": {                      // ← Standard "newState"
+  "new": {                           // ← Uses "new" not "newState"
     "type": "aws:s3/bucket:Bucket",
     "outputs": {
       "tags": {
@@ -238,17 +243,17 @@ Or:
   },
   "detailedDiff": {
     "tags.Environment": {
-      "kind": "update",              // ← Standard "kind"
+      "diffKind": "update",          // ← Uses "diffKind" not "kind"
       "inputDiff": false
     }
   }
 }
 ```
 
-#### Uses Standard SDK Field Names
-- `oldState` / `newState` ✅
-- `kind` ✅
-- No top-level `type` field
+#### Now Uses Pulumi-Service Field Names
+- `old` / `new` ✅ (not oldState/newState)
+- `diffKind` ✅ (not kind)
+- Top-level `type` field ✅
 
 ---
 
@@ -389,34 +394,38 @@ Then we look up actual values:
 
 | File | Format | Field Names | Lines | Resource Events | Use Case |
 |------|--------|-------------|-------|-----------------|----------|
-| `simple-s3-drift.ndjson` | Pulumi-Service | old/new, diffKind | 16 | 2 (1 useful) | Real-world MCP tool output |
-| `ndjson_update.ndjson` | Unit Test | oldState/newState, kind | 4 | 1 | Standard update operation |
-| `ndjson_create_delete.ndjson` | Unit Test | oldState/newState, kind | 5 | 2 | Create + delete operations |
-| `ndjson_multiple_resources.ndjson` | Unit Test | oldState/newState, kind | 6 | 3 | Batch processing |
-| `ndjson_with_diagnostics.ndjson` | Unit Test | oldState/newState, kind | 7 | 1 + diagnostics | Mixed event types |
-| `ndjson_empty.ndjson` | Unit Test | N/A | 4 | 0 | Clean state (no drift) |
+| `simple-s3-drift.ndjson` | Real NDJSON | old/new, diffKind | 16 | 2 (1 useful) | Real-world MCP tool output |
+| `ndjson_update.ndjson` | Real NDJSON | old/new, diffKind | 4 | 1 | Standard update operation |
+| `ndjson_create_delete.ndjson` | Real NDJSON | old/new, diffKind | 5 | 2 | Create + delete operations |
+| `ndjson_multiple_resources.ndjson` | Real NDJSON | old/new, diffKind | 6 | 3 | Batch processing |
+| `ndjson_with_diagnostics.ndjson` | Real NDJSON | old/new, diffKind | 7 | 1 + diagnostics | Mixed event types |
+| `ndjson_empty.ndjson` | Real NDJSON | N/A | 4 | 0 | Clean state (no drift) |
 
 ### Consistency Analysis
 
-**Inconsistent:**
-- ❌ Top-level structure differs (type field vs event keys)
-- ❌ Field names differ (old/new vs oldState/newState)
-- ❌ DetailedDiff field names differ (diffKind vs kind)
+**✅ ALL FILES NOW CONSISTENT!**
 
-**Consistent:**
-- ✅ All have `resourcePreEvent` wrapper
+All NDJSON test files now use the **real pulumi-service format**:
+- ✅ Top-level `type` field
+- ✅ Event data under key matching type (e.g., `resourcePreEvent`)
+- ✅ Uses `old`/`new` not `oldState`/`newState`
+- ✅ Uses `diffKind` not `kind`
+- ✅ Includes `type` field in metadata
+- ✅ Has `timestamp` field
+
+**All Consistent:**
+- ✅ All have `type` field at top level
+- ✅ All have `resourcePreEvent` wrapper for resource events
 - ✅ All have `metadata` containing preview step
+- ✅ All use `old`/`new` field names
+- ✅ All use `diffKind` in detailedDiff
 - ✅ All have `op`, `urn`, state objects
-- ✅ All have `detailedDiff` with property changes
 
-**Why Two Formats?**
-1. **simple-s3-drift.ndjson** - Real output from pulumi-service MCP tool
-2. **Other files** - Synthetic fixtures created for unit tests before real format was documented
-
-Our parsing logic **handles both formats** transparently by:
-1. Trying standard format first
-2. Falling back to pulumi-service format if needed
-3. Converting to standard format internally
+**Why This Is Better:**
+1. **No ambiguity** - Only one NDJSON format to support
+2. **Matches reality** - All fixtures match real pulumi-service output
+3. **Simpler parsing** - No fallback logic needed
+4. **Easy testing** - Unit tests validate real format
 
 ---
 

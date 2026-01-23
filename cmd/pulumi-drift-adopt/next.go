@@ -300,6 +300,14 @@ func extractResourceType(step auto.PreviewStep) string {
 func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 	var properties []PropertyChange
 
+	// For delete operations (add_to_code), DetailedDiff is empty but we need all properties from state
+	if step.Op == "delete" && len(step.DetailedDiff) == 0 && step.OldState != nil && step.OldState.Outputs != nil {
+		// Extract all properties from OldState.Outputs
+		extractAllProperties(step.OldState.Outputs, "", &properties)
+		return properties
+	}
+
+	// For other operations, use DetailedDiff
 	for path, diff := range step.DetailedDiff {
 		// Get actual values from old/new states
 		var currentValue, desiredValue interface{}
@@ -323,6 +331,29 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 	}
 
 	return properties
+}
+
+// extractAllProperties recursively extracts all properties from a map for add_to_code operations
+func extractAllProperties(props map[string]interface{}, prefix string, properties *[]PropertyChange) {
+	for key, value := range props {
+		path := key
+		if prefix != "" {
+			path = prefix + "." + key
+		}
+
+		// If value is a nested map, recurse
+		if nestedMap, ok := value.(map[string]interface{}); ok {
+			extractAllProperties(nestedMap, path, properties)
+		} else {
+			// Leaf property - add it
+			*properties = append(*properties, PropertyChange{
+				Path:         path,
+				CurrentValue: nil,    // Not in code
+				DesiredValue: value,  // From state
+				Kind:         "add",  // Need to add to code
+			})
+		}
+	}
 }
 
 // outputResult outputs the final JSON result with optional resource limiting
