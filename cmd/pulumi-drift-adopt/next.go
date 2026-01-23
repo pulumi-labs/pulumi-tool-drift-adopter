@@ -128,7 +128,7 @@ func parsePreviewOutput(output []byte) ([]auto.PreviewStep, error) {
 	return parseNDJSON(output)
 }
 
-// parseNDJSON parses NDJSON format with resourcePreEvent objects
+// parseNDJSON parses NDJSON format with resourcePreEvent objects from pulumi-service MCP tool
 func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 	var steps []auto.PreviewStep
 	lines := strings.Split(string(output), "\n")
@@ -140,10 +140,10 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 			continue
 		}
 
-		// Each line should be a JSON object with a resourcePreEvent field
-		// Note: pulumi-service NDJSON uses "old"/"new" fields instead of "oldState"/"newState"
-		// We need to handle both formats
+		// Each line is a complete JSON object with a "type" field and corresponding event data
+		// Example: {"timestamp": 123, "type": "resourcePreEvent", "resourcePreEvent": {...}}
 		var event struct {
+			Type             string `json:"type"`
 			ResourcePreEvent *struct {
 				Metadata json.RawMessage `json:"metadata"`
 			} `json:"resourcePreEvent"`
@@ -156,26 +156,20 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 
 		validLinesFound++
 
-		if event.ResourcePreEvent != nil {
-			// Try parsing with standard SDK format first (oldState/newState)
-			var step auto.PreviewStep
-			if err := json.Unmarshal(event.ResourcePreEvent.Metadata, &step); err == nil {
-				// If OldState and NewState are populated, use as-is
-				if step.OldState != nil || step.NewState != nil {
-					steps = append(steps, step)
-					continue
-				}
-			}
-
-			// Fall back to custom format with "old"/"new" fields (pulumi-service format)
+		// Only process resourcePreEvent lines; skip policy events, diagnostics, summaries, etc.
+		if event.Type == "resourcePreEvent" && event.ResourcePreEvent != nil {
+			// Parse metadata using pulumi-service format:
+			// - Uses "old"/"new" instead of "oldState"/"newState"
+			// - Uses "diffKind" instead of "kind"
+			// - Includes "type" field for resource type
 			var customStep struct {
-				Op       string              `json:"op"`
-				URN      string              `json:"urn"`
-				Provider string              `json:"provider,omitempty"`
-				Old      *apitype.ResourceV3 `json:"old,omitempty"`
-				New      *apitype.ResourceV3 `json:"new,omitempty"`
-				Diffs    []string            `json:"diffs,omitempty"`
-				// DetailedDiff can have either "kind" or "diffKind" field
+				Op           string              `json:"op"`
+				URN          string              `json:"urn"`
+				Type         string              `json:"type"`
+				Provider     string              `json:"provider,omitempty"`
+				Old          *apitype.ResourceV3 `json:"old,omitempty"`
+				New          *apitype.ResourceV3 `json:"new,omitempty"`
+				Diffs        []string            `json:"diffs,omitempty"`
 				DetailedDiff map[string]json.RawMessage `json:"detailedDiff"`
 			}
 
@@ -183,36 +177,28 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 				continue
 			}
 
-			// Convert DetailedDiff to standard format, handling both "kind" and "diffKind"
+			// Convert DetailedDiff from "diffKind" to standard "kind" format
 			standardDetailedDiff := make(map[string]auto.PropertyDiff)
 			for path, rawDiff := range customStep.DetailedDiff {
-				// Try parsing with "diffKind" first (pulumi-service format)
 				var customDiff struct {
 					DiffKind  string `json:"diffKind"`
 					InputDiff bool   `json:"inputDiff"`
 				}
-				if err := json.Unmarshal(rawDiff, &customDiff); err == nil && customDiff.DiffKind != "" {
+				if err := json.Unmarshal(rawDiff, &customDiff); err == nil {
 					standardDetailedDiff[path] = auto.PropertyDiff{
 						Kind:      customDiff.DiffKind,
 						InputDiff: customDiff.InputDiff,
 					}
-					continue
-				}
-
-				// Fall back to standard "kind" format
-				var standardDiff auto.PropertyDiff
-				if err := json.Unmarshal(rawDiff, &standardDiff); err == nil {
-					standardDetailedDiff[path] = standardDiff
 				}
 			}
 
-			// Convert custom format to standard PreviewStep
+			// Convert to standard PreviewStep format
 			standardStep := auto.PreviewStep{
 				Op:           customStep.Op,
 				URN:          resource.URN(customStep.URN),
 				Provider:     customStep.Provider,
-				OldState:     customStep.Old,
-				NewState:     customStep.New,
+				OldState:     customStep.Old,   // Map "old" -> "OldState"
+				NewState:     customStep.New,   // Map "new" -> "NewState"
 				DetailedDiff: standardDetailedDiff,
 			}
 
