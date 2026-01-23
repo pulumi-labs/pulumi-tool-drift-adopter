@@ -106,7 +106,21 @@ pulumi plugin run drift-adopter -- next --events-file testdata/ndjson_create_del
       "action": "add_to_code",
       "urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::missing-bucket",
       "type": "aws:s3/bucket:Bucket",
-      "name": "missing-bucket"
+      "name": "missing-bucket",
+      "properties": [
+        {
+          "path": "bucket",
+          "currentValue": null,
+          "desiredValue": "missing-bucket-789",
+          "kind": "add"
+        },
+        {
+          "path": "tags.Purpose",
+          "currentValue": null,
+          "desiredValue": "testing",
+          "kind": "add"
+        }
+      ]
     }
   ]
 }
@@ -128,13 +142,17 @@ pulumi plugin run drift-adopter -- next --events-file testdata/ndjson_create_del
 **Resource 2: `missing-bucket`**
 - **Action:** `add_to_code`
 - **Reason:** Preview wants to DELETE = resource in state but NOT in code
-- **Skill action:** Add the resource back to code
+- **Properties provided:** Full resource configuration from state
+  - `bucket`: "missing-bucket-789"
+  - `tags.Purpose`: "testing"
+- **Skill action:** Add the resource back to code with all properties
   ```typescript
   // After
   const missingBucket = new aws.s3.Bucket("missing-bucket", {
-    // Need to query state for current configuration
-    bucket: "missing-bucket-123",
-    tags: { ... }
+    bucket: "missing-bucket-789",
+    tags: {
+      Purpose: "testing"
+    }
   });
   ```
 
@@ -144,9 +162,12 @@ pulumi plugin run drift-adopter -- next --events-file testdata/ndjson_create_del
 - Preview operation "create" → Tool action "delete_from_code" ✓
 - Preview operation "delete" → Tool action "add_to_code" ✓
 
-✅ **No properties listed:**
-- For `delete_from_code`: Makes sense, deleting entire resource
-- For `add_to_code`: Makes sense, resource doesn't exist yet in code
+✅ **Properties handling:**
+- For `delete_from_code`: No properties listed (makes sense, deleting entire resource)
+- For `add_to_code`: **All properties extracted from state** (complete resource configuration provided)
+  - Eliminates need for skill to query state separately
+  - All properties have `kind: "add"` and `currentValue: null`
+  - More efficient and consistent with `update_code` actions
 
 ---
 
@@ -359,8 +380,9 @@ For each property:
 
 ```
 → Create new resource definition
-→ May need to query state for full configuration
-→ No properties listed (resource doesn't exist in code yet)
+→ All properties provided from state (no need to query separately)
+→ Each property has kind: "add", currentValue: null, desiredValue: <value from state>
+→ Use desiredValue for all properties when creating resource
 ```
 
 ---
