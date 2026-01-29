@@ -5,11 +5,6 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  id-token: write
 
 # Conserve runners and abandon work in case of a fast-follow commit.
 concurrency:
@@ -17,11 +12,9 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  e2e:
-    name: E2E Tests
+  test:
+    name: Unit Tests
     runs-on: ubuntu-latest
-    # Only run E2E tests manually or on main branch
-    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
 
     steps:
       - name: Checkout code
@@ -30,34 +23,14 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: true
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Pulumi CLI
-        uses: pulumi/actions@v5
-
-      - name: Authenticate with Pulumi
-        uses: pulumi/auth-actions@v1
-        with:
-          organization: team-ce
-          requested-token-type: urn:pulumi:token-type:access_token:organization
 
       - name: Download dependencies
         run: go mod download
 
-      - name: Build pulumi-drift-adopt tool
-        run: go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
-
-      - name: Run E2E tests
-        run: pulumi env run aws/pulumi-ce -- go test -tags=e2e -v -timeout=30m -run TestDriftAdoptionV2 ./test/e2e/
-        env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AWS_REGION: us-west-2
+      - name: Run unit tests
+        run: go test -tags=unit -v -race -coverprofile=coverage.out ./...
 
   lint:
     name: Lint
@@ -70,7 +43,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
+          go-version: '1.24'
           cache: true
 
       - name: Run golangci-lint
