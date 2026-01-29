@@ -1,4 +1,4 @@
-.PHONY: help build test test-unit test-integration test-e2e lint lint-go lint-fix lint-workflows clean install-tools
+.PHONY: help build test test-unit test-integration test-e2e lint lint-go lint-fix lint-workflows clean install-tools install-hooks
 
 # Default target
 help:
@@ -13,6 +13,7 @@ help:
 	@echo "  make lint-fix           - Run golangci-lint with auto-fix"
 	@echo "  make lint-workflows     - Lint GitHub Actions workflows"
 	@echo "  make install-tools      - Install development tools (golangci-lint, actionlint)"
+	@echo "  make install-hooks      - Install git hooks (pre-push)"
 	@echo "  make clean              - Clean build artifacts"
 
 # Build the binary
@@ -78,6 +79,13 @@ install-tools:
 	@echo "Installed tools:"
 	@which golangci-lint && golangci-lint --version
 	@which actionlint && actionlint -version
+
+# Install git hooks
+install-hooks:
+	@echo "Installing git hooks..."
+	cp scripts/hooks/pre-push .git/hooks/pre-push
+	chmod +x .git/hooks/pre-push
+	@echo "✅ Git hooks installed"
 
 # Clean build artifacts
 clean:

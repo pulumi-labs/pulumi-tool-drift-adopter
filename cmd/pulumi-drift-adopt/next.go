@@ -177,13 +177,13 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 			// - Uses "diffKind" instead of "kind"
 			// - Includes "type" field for resource type
 			var customStep struct {
-				Op           string              `json:"op"`
-				URN          string              `json:"urn"`
-				Type         string              `json:"type"`
-				Provider     string              `json:"provider,omitempty"`
-				Old          *apitype.ResourceV3 `json:"old,omitempty"`
-				New          *apitype.ResourceV3 `json:"new,omitempty"`
-				Diffs        []string            `json:"diffs,omitempty"`
+				Op           string                     `json:"op"`
+				URN          string                     `json:"urn"`
+				Type         string                     `json:"type"`
+				Provider     string                     `json:"provider,omitempty"`
+				Old          *apitype.ResourceV3        `json:"old,omitempty"`
+				New          *apitype.ResourceV3        `json:"new,omitempty"`
+				Diffs        []string                   `json:"diffs,omitempty"`
 				DetailedDiff map[string]json.RawMessage `json:"detailedDiff"`
 			}
 
@@ -211,8 +211,8 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 				Op:           customStep.Op,
 				URN:          resource.URN(customStep.URN),
 				Provider:     customStep.Provider,
-				OldState:     customStep.Old,   // Map "old" -> "OldState"
-				NewState:     customStep.New,   // Map "new" -> "NewState"
+				OldState:     customStep.Old, // Map "old" -> "OldState"
+				NewState:     customStep.New, // Map "new" -> "NewState"
 				DetailedDiff: standardDetailedDiff,
 			}
 
@@ -362,9 +362,9 @@ func extractAllProperties(props map[string]interface{}, prefix string, propertie
 			// Leaf property - add it
 			*properties = append(*properties, PropertyChange{
 				Path:         path,
-				CurrentValue: nil,    // Not in code
-				DesiredValue: value,  // From state
-				Kind:         "add",  // Need to add to code
+				CurrentValue: nil,   // Not in code
+				DesiredValue: value, // From state
+				Kind:         "add", // Need to add to code
 			})
 		}
 	}

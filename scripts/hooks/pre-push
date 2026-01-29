@@ -1,0 +1,33 @@
+#!/bin/bash
+# Pre-push hook: runs unit tests and linting before pushing
+# Install with: make install-hooks
+
+set -e
+
+echo "🔍 Running pre-push checks..."
+
+# Get the repo root
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+# Run linting
+echo ""
+echo "📋 Running linter..."
+if ! make lint-go; then
+    echo ""
+    echo "❌ Linting failed. Push aborted."
+    echo "   Run 'make lint-fix' to auto-fix issues."
+    exit 1
+fi
+
+# Run unit tests
+echo ""
+echo "🧪 Running unit tests..."
+if ! make test-unit; then
+    echo ""
+    echo "❌ Unit tests failed. Push aborted."
+    exit 1
+fi
+
+echo ""
+echo "✅ All pre-push checks passed!"

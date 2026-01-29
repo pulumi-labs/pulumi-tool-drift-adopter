@@ -41,5 +41,6 @@ testdata/*/actual/
 *.tmp.json
 drift-plan.json
 
-# Personal scripts
-scripts/
+# Personal scripts (but allow hooks)
+scripts/*
+!scripts/hooks/
