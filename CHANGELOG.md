@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-01-29
+
+### Changed
+- Moved skill to [pulumi/agent-skills](https://github.com/pulumi/agent-skills) repository
+- Simplified CI to run unit tests only
+- Switched task runner from Make to Just
+- Updated Go version to 1.24
+
+### Added
+- Apache 2.0 LICENSE file
+- Copyright headers to all Go source files
+- Pre-push git hook for linting and testing
+
+### Removed
+- E2E tests (moved to agent-skills repo)
+- Examples directory
+- CONTRIBUTING.md
+- GitHub issue and PR templates
+
+### Security
+- Updated golang.org/x/crypto to v0.47.0
+
 ## [1.0.0] - 2026-01-22
 
 ### Added
@@ -41,4 +63,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - golangci-lint configuration updated for newer linter versions
 
 [1.0.0]: https://github.com/pulumi/pulumi-tool-drift-adopter/releases/tag/v1.0.0
-[Unreleased]: https://github.com/pulumi/pulumi-tool-drift-adopter/compare/v1.0.0...HEAD
+[1.0.1]: https://github.com/pulumi/pulumi-tool-drift-adopter/releases/tag/v1.0.1
+[Unreleased]: https://github.com/pulumi/pulumi-tool-drift-adopter/compare/v1.0.1...HEAD
