@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [1.0.1] - 2026-01-29
-
 ### Changed
 - Moved skill to [pulumi/agent-skills](https://github.com/pulumi/agent-skills) repository
 - Simplified CI to run unit tests only
@@ -28,6 +26,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 - Updated golang.org/x/crypto to v0.47.0
+
+## [1.0.1] - 2026-01-22
+
+### Fixed
+- NDJSON parsing now handles pulumi-service field name differences (`resource` vs `metadata`)
+- Property kind inversion corrected (was showing opposite of intended)
+- Property extraction for `add_to_code` actions now works correctly
+
+### Changed
+- Simplified parsing logic to handle only the two real formats (JSON and NDJSON)
 
 ## [1.0.0] - 2026-01-22
 
