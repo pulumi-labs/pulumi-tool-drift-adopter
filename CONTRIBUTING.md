@@ -1,4 +1,4 @@
-# Contributing to pulumi-drift-adoption-tool
+# Contributing to pulumi-tool-drift-adopter
 
 Thank you for your interest in contributing! This document provides guidelines and instructions for contributing to the project.
 
@@ -10,8 +10,9 @@ This project adheres to the Pulumi Community Code of Conduct. By participating, 
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.24 or later
 - Git
+- [just](https://github.com/casey/just) (task runner)
 - [Pulumi CLI](https://www.pulumi.com/docs/install/)
 
 ### Development Setup
@@ -19,20 +20,22 @@ This project adheres to the Pulumi Community Code of Conduct. By participating, 
 1. **Fork and clone the repository**
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/pulumi-drift-adoption-tool.git
-cd pulumi-drift-adoption-tool
+git clone https://github.com/YOUR_USERNAME/pulumi-tool-drift-adopter.git
+cd pulumi-tool-drift-adopter
 ```
 
-2. **Install dependencies**
+2. **Install dependencies and tools**
 
 ```bash
 go mod download
+just install-tools
+just install-hooks
 ```
 
 3. **Build the tool**
 
 ```bash
-go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
+just build
 ```
 
 ## Project Structure
@@ -82,18 +85,20 @@ Fixes #42"
 
 ### 4. Run Quality Checks
 
-Before pushing:
+Before pushing (the pre-push hook runs these automatically):
 
 ```bash
-# Format code
-gofmt -w .
-goimports -w .
+# Run linter
+just lint-go
 
-# Run linter (if installed)
-golangci-lint run
+# Run linter with auto-fix
+just lint-fix
+
+# Run unit tests
+just test-unit
 
 # Build
-go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
+just build
 ```
 
 ## Pull Request Process
@@ -113,9 +118,9 @@ go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
 
 ### 3. PR Checklist
 
-- [ ] Code formatted (`gofmt`, `goimports`)
-- [ ] Linter passing (if using `golangci-lint`)
-- [ ] Binary builds successfully
+- [ ] Linter passing (`just lint-go`)
+- [ ] Unit tests passing (`just test-unit`)
+- [ ] Binary builds successfully (`just build`)
 - [ ] Documentation updated
 - [ ] Commits are atomic and well-described
 - [ ] PR description is clear
@@ -144,11 +149,11 @@ Since all logic is in one file (`cmd/pulumi-drift-adopt/next.go`):
 
 ```bash
 # Build
-go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
+just build
 
 # Run in a Pulumi project
 cd /path/to/pulumi/project
-/path/to/bin/pulumi-drift-adopt next
+/path/to/pulumi-tool-drift-adopter/bin/pulumi-drift-adopt next
 ```
 
 ### Debug Output
@@ -173,14 +178,14 @@ goimports -w .
 
 **Linter errors:**
 ```bash
-golangci-lint run --fix
+just lint-fix
 ```
 
 ## Getting Help
 
 - 📖 Read [DRIFT_ADOPTION_DESIGN.md](DRIFT_ADOPTION_DESIGN.md) for design details
 - 📖 Read [README.md](README.md) for usage examples
-- 🐛 Search [existing issues](https://github.com/pulumi/pulumi-drift-adoption-tool/issues)
+- 🐛 Search [existing issues](https://github.com/pulumi/pulumi-tool-drift-adopter/issues)
 - 💬 Join [Pulumi Community Slack](https://slack.pulumi.com/)
 - ❓ Ask questions in issue comments
 

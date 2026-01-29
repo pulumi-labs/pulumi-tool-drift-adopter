@@ -1,9 +1,9 @@
-# pulumi-drift-adoption-tool
+# pulumi-tool-drift-adopter
 
-A simple tool for adopting infrastructure drift back into Pulumi IaC, designed to work with AI agents like Claude.
+A CLI tool for adopting infrastructure drift back into Pulumi IaC, designed to work with AI agents like Claude.
 
-[![Test](https://github.com/pulumi/pulumi-drift-adoption-tool/actions/workflows/test.yml/badge.svg)](https://github.com/pulumi/pulumi-drift-adoption-tool/actions/workflows/test.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/pulumi/pulumi-drift-adoption-tool)](https://goreportcard.com/report/github.com/pulumi/pulumi-drift-adoption-tool)
+[![Test](https://github.com/pulumi/pulumi-tool-drift-adopter/actions/workflows/test.yml/badge.svg)](https://github.com/pulumi/pulumi-tool-drift-adopter/actions/workflows/test.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/pulumi/pulumi-tool-drift-adopter)](https://goreportcard.com/report/github.com/pulumi/pulumi-tool-drift-adopter)
 
 ## Overview
 
@@ -58,22 +58,21 @@ To adopt resources created outside of Pulumi, you need to first import them into
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.24 or later
 - [Pulumi CLI](https://www.pulumi.com/docs/install/)
+
+### Install with Go
+
+```bash
+go install github.com/pulumi/pulumi-tool-drift-adopter/cmd/pulumi-drift-adopt@latest
+```
 
 ### Install from Source
 
 ```bash
-git clone https://github.com/pulumi/pulumi-drift-adoption-tool.git
-cd pulumi-drift-adoption-tool
-go install ./cmd/pulumi-drift-adopt
-```
-
-Or build locally:
-
-```bash
-cd pulumi-drift-adoption-tool
-go build -o ./bin/pulumi-drift-adopt ./cmd/pulumi-drift-adopt
+git clone https://github.com/pulumi/pulumi-tool-drift-adopter.git
+cd pulumi-tool-drift-adopter
+just build
 ```
 
 ## Quick Start
@@ -181,7 +180,7 @@ pulumi-drift-adopt next
 
 ## Claude Skill
 
-A Claude skill is provided in `skills/drift-adopt.md` that encapsulates the complete workflow for using this tool. The skill provides Claude with:
+A Claude skill is provided in `skills/drift-adopt/SKILL.md` that encapsulates the complete workflow for using this tool. The skill provides Claude with:
 
 - Step-by-step instructions for running the tool
 - How to interpret each JSON output status
@@ -195,7 +194,7 @@ If you're using Claude (via API or CLI), you can reference the skill:
 
 ```
 I need you to adopt infrastructure drift using the drift-adopt skill.
-Please read skills/drift-adopt.md and follow the workflow to fix all drift.
+Please read skills/drift-adopt/SKILL.md and follow the workflow to fix all drift.
 ```
 
 Claude will:
@@ -326,5 +325,5 @@ Apache 2.0 - See [LICENSE](LICENSE) for details.
 
 ## Support
 
-- 🐛 [Issue Tracker](https://github.com/pulumi/pulumi-drift-adoption-tool/issues)
+- 🐛 [Issue Tracker](https://github.com/pulumi/pulumi-tool-drift-adopter/issues)
 - 💬 [Pulumi Community Slack](https://slack.pulumi.com/)
