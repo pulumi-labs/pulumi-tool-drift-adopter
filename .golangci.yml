@@ -45,26 +45,6 @@ linters:
           - dupl
           - gocyclo
 
-      # Exclude test helpers from complexity checks
-      - path: test/e2e/
-        linters:
-          - gocyclo
-
-      # Allow fmt.Printf in drift_helpers.go for CloudControl debug logging
-      - path: test/e2e/drift_helpers\.go
-        text: "use of `fmt.Printf`"
-        linters:
-          - forbidigo
-
-      # Allow debug logging in CloudControl investigation tests
-      - path: test/e2e/cloudcontrol/
-        text: "use of `fmt.Printf`"
-        linters:
-          - forbidigo
-
-    paths:
-      - test/e2e/cloudcontrol
-
 formatters:
   enable:
     - gofmt         # Checks code formatting
@@ -80,5 +60,3 @@ run:
   tests: true
   build-tags:
     - unit
-    - integration
-    - e2e

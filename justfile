@@ -21,16 +21,6 @@ test-integration:
     @echo "Running integration tests..."
     go test -tags=integration -v -race -coverprofile=coverage-integration.out ./...
 
-# Run E2E tests (requires AWS + Pulumi + Anthropic setup)
-test-e2e: build
-    @echo "Running E2E tests..."
-    @echo "⚠️  This requires:"
-    @echo "   - ANTHROPIC_API_KEY environment variable"
-    @echo "   - AWS credentials configured"
-    @echo "   - Pulumi access (via PULUMI_ACCESS_TOKEN or logged in)"
-    @echo ""
-    go test -tags=e2e -v -timeout=30m -run TestDriftAdoptionWorkflow ./test/e2e/
-
 # Run all linters (Go + workflows)
 lint: lint-go lint-workflows
 
