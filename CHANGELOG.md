@@ -17,11 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Apache 2.0 LICENSE file
 - Copyright headers to all Go source files
 - Pre-push git hook for linting and testing
+- CONTRIBUTING.md tailored to this repo (replaces copy from pulumi/pulumi)
+- CODE-OF-CONDUCT.md
 
 ### Removed
 - E2E tests (moved to agent-skills repo)
 - Examples directory
-- CONTRIBUTING.md
 - GitHub issue and PR templates
 
 ### Security
