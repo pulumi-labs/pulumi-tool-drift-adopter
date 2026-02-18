@@ -1,4 +1,4 @@
-module github.com/pulumi/pulumi-drift-adoption-tool
+module github.com/pulumi-labs/pulumi-tool-drift-adopter
 
 go 1.24.1
 

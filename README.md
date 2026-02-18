@@ -2,7 +2,7 @@
 
 CLI tool for AI agents to adopt infrastructure drift back into Pulumi IaC.
 
-[![Test](https://github.com/pulumi/pulumi-tool-drift-adopter/actions/workflows/test.yml/badge.svg)](https://github.com/pulumi/pulumi-tool-drift-adopter/actions/workflows/test.yml)
+[![Test](https://github.com/pulumi-labs/pulumi-tool-drift-adopter/actions/workflows/test.yml/badge.svg)](https://github.com/pulumi-labs/pulumi-tool-drift-adopter/actions/workflows/test.yml)
 
 ## Overview
 
@@ -13,7 +13,13 @@ Designed for AI agents to call iteratively: run `next` → get changes → updat
 ## Installation
 
 ```bash
-go install github.com/pulumi/pulumi-tool-drift-adopter/cmd/pulumi-drift-adopt@latest
+pulumi plugin install tool drift-adopter --server github://api.github.com/pulumi-labs/pulumi-tool-drift-adopter
+```
+
+Alternatively, install with `go install`:
+
+```bash
+go install github.com/pulumi-labs/pulumi-tool-drift-adopter/cmd/pulumi-drift-adopt@latest
 ```
 
 ## Usage
@@ -90,7 +96,7 @@ This tool relies on `pulumi refresh` which only tracks resources already in stat
 ## Development
 
 ```bash
-git clone https://github.com/pulumi/pulumi-tool-drift-adopter.git
+git clone https://github.com/pulumi-labs/pulumi-tool-drift-adopter.git
 cd pulumi-tool-drift-adopter
 just install-tools
 just install-hooks
