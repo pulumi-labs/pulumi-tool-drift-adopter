@@ -53,7 +53,7 @@ formatters:
   settings:
     goimports:
       local-prefixes:
-        - github.com/pulumi/pulumi-drift-adoption-tool
+        - github.com/pulumi-labs/pulumi-tool-drift-adopter
 
 run:
   timeout: 5m

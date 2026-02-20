@@ -2,7 +2,7 @@
 
 CLI tool for AI agents to adopt infrastructure drift back into Pulumi IaC.
 
-[![Test](https://github.com/pulumi/pulumi-tool-drift-adopter/actions/workflows/test.yml/badge.svg)](https://github.com/pulumi/pulumi-tool-drift-adopter/actions/workflows/test.yml)
+[![Test](https://github.com/pulumi-labs/pulumi-tool-drift-adopter/actions/workflows/test.yml/badge.svg)](https://github.com/pulumi-labs/pulumi-tool-drift-adopter/actions/workflows/test.yml)
 
 ## Overview
 
@@ -13,7 +13,7 @@ Designed for AI agents to call iteratively: run `next` → get changes → updat
 ## Installation
 
 ```bash
-go install github.com/pulumi/pulumi-tool-drift-adopter/cmd/pulumi-drift-adopt@latest
+pulumi plugin install tool drift-adopter --server github://api.github.com/pulumi-labs
 ```
 
 ## Usage
@@ -22,7 +22,7 @@ go install github.com/pulumi/pulumi-tool-drift-adopter/cmd/pulumi-drift-adopt@la
 
 ```bash
 cd your-pulumi-project
-pulumi-drift-adopt next [--stack <name>]
+pulumi plugin run drift-adopter -- next [--stack <name>]
 ```
 
 Runs `pulumi preview --json --refresh` internally and parses the output.
@@ -35,7 +35,7 @@ pulumi refresh
 pulumi preview --json > events.json
 
 # Then pass the events file
-pulumi-drift-adopt next --events-file events.json
+pulumi plugin run drift-adopter -- next --events-file events.json
 ```
 
 Use this mode when integrating with deployment systems that run preview separately.
@@ -90,7 +90,7 @@ This tool relies on `pulumi refresh` which only tracks resources already in stat
 ## Development
 
 ```bash
-git clone https://github.com/pulumi/pulumi-tool-drift-adopter.git
+git clone https://github.com/pulumi-labs/pulumi-tool-drift-adopter.git
 cd pulumi-tool-drift-adopter
 just install-tools
 just install-hooks

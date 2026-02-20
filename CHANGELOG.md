@@ -71,6 +71,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - golangci-lint configuration updated for newer linter versions
 
-[1.0.0]: https://github.com/pulumi/pulumi-tool-drift-adopter/releases/tag/v1.0.0
-[1.0.1]: https://github.com/pulumi/pulumi-tool-drift-adopter/releases/tag/v1.0.1
-[Unreleased]: https://github.com/pulumi/pulumi-tool-drift-adopter/compare/v1.0.1...HEAD
+[1.0.0]: https://github.com/pulumi-labs/pulumi-tool-drift-adopter/releases/tag/v1.0.0
+[1.0.1]: https://github.com/pulumi-labs/pulumi-tool-drift-adopter/releases/tag/v1.0.1
+[Unreleased]: https://github.com/pulumi-labs/pulumi-tool-drift-adopter/compare/v1.0.1...HEAD
