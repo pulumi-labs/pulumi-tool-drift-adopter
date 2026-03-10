@@ -45,13 +45,15 @@ func init() {
 	nextCmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
 	nextCmd.Flags().Int("max-resources", 10, "Maximum number of resources to return per batch (0 = unlimited, default = 10)")
 	nextCmd.Flags().String("events-file", "", "Path to engine events file (skips calling preview)")
+	nextCmd.Flags().StringSlice("exclude-urns", nil, "List of resource URNs to exclude from results")
 }
 
 // NextOutput is the JSON structure returned by the next command
 type NextOutput struct {
-	Status    string           `json:"status"` // "changes_needed", "clean", "error"
+	Status    string           `json:"status"` // "changes_needed", "clean", "stop_with_skipped", "error"
 	Error     string           `json:"error,omitempty"`
 	Resources []ResourceChange `json:"resources,omitempty"`
+	Skipped   []ResourceChange `json:"skipped,omitempty"`
 }
 
 // ResourceChange describes a resource that needs code changes
@@ -61,6 +63,7 @@ type ResourceChange struct {
 	Type       string           `json:"type"`
 	Name       string           `json:"name"`
 	Properties []PropertyChange `json:"properties,omitempty"`
+	Reason     string           `json:"reason,omitempty"` // Why skipped: "excluded", "missing_properties"
 }
 
 // PropertyChange describes a property that needs to be changed
@@ -76,6 +79,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	stack, _ := cmd.Flags().GetString("stack")
 	maxResources, _ := cmd.Flags().GetInt("max-resources")
 	eventsFile, _ := cmd.Flags().GetString("events-file")
+	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
 
 	// Get preview output from file or command
 	output, err := getPreviewOutput(eventsFile, projectDir, stack)
@@ -92,8 +96,8 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	// Convert steps to resource changes
 	resources := convertStepsToResources(steps)
 
-	// Output result with resource limit
-	return outputResult(resources, maxResources)
+	// Output result with resource limit and exclusions
+	return outputResult(resources, maxResources, excludeURNs)
 }
 
 // getPreviewOutput retrieves preview output from either a file or by running pulumi preview
@@ -126,20 +130,116 @@ func getPreviewOutput(eventsFile, projectDir, stack string) ([]byte, error) {
 
 // parsePreviewOutput parses preview output in either single JSON or NDJSON format
 func parsePreviewOutput(output []byte) ([]auto.PreviewStep, error) {
-	// Try parsing as single JSON object first
-	// Format: {"steps": [...]} (from pulumi preview --json)
-	var previewResult struct {
-		Steps []auto.PreviewStep `json:"steps"`
+	// Probe the top-level JSON keys to determine format
+	var probe map[string]json.RawMessage
+	if err := json.Unmarshal(output, &probe); err == nil {
+		// Format 1: {"steps": [...]} (from pulumi preview --json)
+		if _, hasSteps := probe["steps"]; hasSteps {
+			var previewResult struct {
+				Steps []auto.PreviewStep `json:"steps"`
+			}
+			if err := json.Unmarshal(output, &previewResult); err == nil {
+				return previewResult.Steps, nil
+			}
+		}
+
+		// Format 2: {"events": [...]} (from Pulumi Cloud GetEngineEvents API)
+		if rawEvents, hasEvents := probe["events"]; hasEvents {
+			var events []json.RawMessage
+			if err := json.Unmarshal(rawEvents, &events); err == nil && len(events) > 0 {
+				return parseEngineEvents(events)
+			}
+		}
 	}
 
-	if err := json.Unmarshal(output, &previewResult); err == nil {
-		// Successfully parsed as single JSON object (even if steps is empty)
-		return previewResult.Steps, nil
-	}
-
-	// Try parsing as NDJSON (newline-delimited JSON)
+	// Format 3: NDJSON (newline-delimited JSON)
 	// Format: {"resourcePreEvent": {...}}\n... (from pulumi_preview MCP tool)
 	return parseNDJSON(output)
+}
+
+// parseEngineEvents parses engine events from the Pulumi Cloud API response format.
+// Each event is a JSON object with {timestamp, type, resourcePreEvent: {metadata: {...}}}.
+func parseEngineEvents(rawEvents []json.RawMessage) ([]auto.PreviewStep, error) {
+	var steps []auto.PreviewStep
+	for _, raw := range rawEvents {
+		if step, ok := parseEngineEvent(raw); ok {
+			steps = append(steps, step)
+		}
+	}
+	return steps, nil
+}
+
+// parseEngineEvent parses a single engine event JSON object. Returns a PreviewStep and true
+// for resourcePreEvent events; returns false for all other event types (prelude, summary, etc.).
+func parseEngineEvent(data []byte) (auto.PreviewStep, bool) {
+	var event struct {
+		Type             string `json:"type"`
+		ResourcePreEvent *struct {
+			Metadata json.RawMessage `json:"metadata"`
+		} `json:"resourcePreEvent"`
+	}
+	if err := json.Unmarshal(data, &event); err != nil {
+		return auto.PreviewStep{}, false
+	}
+	if event.Type != "resourcePreEvent" || event.ResourcePreEvent == nil {
+		return auto.PreviewStep{}, false
+	}
+
+	// Parse metadata using pulumi-service format:
+	// - Uses "old"/"new" instead of "oldState"/"newState"
+	// - Uses "diffKind" instead of "kind"
+	// - Includes "type" field for resource type
+	var customStep struct {
+		Op           string                     `json:"op"`
+		URN          string                     `json:"urn"`
+		Type         string                     `json:"type"`
+		Provider     string                     `json:"provider,omitempty"`
+		Old          *apitype.ResourceV3        `json:"old,omitempty"`
+		New          *apitype.ResourceV3        `json:"new,omitempty"`
+		Diffs        []string                   `json:"diffs,omitempty"`
+		DetailedDiff map[string]json.RawMessage `json:"detailedDiff"`
+	}
+
+	if err := json.Unmarshal(event.ResourcePreEvent.Metadata, &customStep); err != nil {
+		return auto.PreviewStep{}, false
+	}
+
+	// Convert DetailedDiff from "diffKind" to standard "kind" format
+	standardDetailedDiff := make(map[string]auto.PropertyDiff)
+	for path, rawDiff := range customStep.DetailedDiff {
+		var customDiff struct {
+			DiffKind  string `json:"diffKind"`
+			InputDiff bool   `json:"inputDiff"`
+		}
+		if err := json.Unmarshal(rawDiff, &customDiff); err == nil {
+			standardDetailedDiff[path] = auto.PropertyDiff{
+				Kind:      customDiff.DiffKind,
+				InputDiff: customDiff.InputDiff,
+			}
+		}
+	}
+
+	// For replace operations, DetailedDiff is often empty but Diffs contains
+	// the changed property keys. Synthesize DetailedDiff entries from Diffs
+	// so that extractPropertyChanges can find them.
+	if len(standardDetailedDiff) == 0 && len(customStep.Diffs) > 0 {
+		for _, key := range customStep.Diffs {
+			standardDetailedDiff[key] = auto.PropertyDiff{
+				Kind:      "update",
+				InputDiff: true,
+			}
+		}
+	}
+
+	// Convert to standard PreviewStep format
+	return auto.PreviewStep{
+		Op:           customStep.Op,
+		URN:          resource.URN(customStep.URN),
+		Provider:     customStep.Provider,
+		OldState:     customStep.Old, // Map "old" -> "OldState"
+		NewState:     customStep.New, // Map "new" -> "NewState"
+		DetailedDiff: standardDetailedDiff,
+	}, true
 }
 
 // parseNDJSON parses NDJSON format with resourcePreEvent objects from pulumi-service MCP tool
@@ -154,69 +254,15 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 			continue
 		}
 
-		// Each line is a complete JSON object with a "type" field and corresponding event data
-		// Example: {"timestamp": 123, "type": "resourcePreEvent", "resourcePreEvent": {...}}
-		var event struct {
-			Type             string `json:"type"`
-			ResourcePreEvent *struct {
-				Metadata json.RawMessage `json:"metadata"`
-			} `json:"resourcePreEvent"`
-		}
-
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			// Not valid JSON, continue checking other lines
+		// Check if it's valid JSON
+		var raw json.RawMessage
+		if err := json.Unmarshal([]byte(line), &raw); err != nil {
 			continue
 		}
-
 		validLinesFound++
 
-		// Only process resourcePreEvent lines; skip policy events, diagnostics, summaries, etc.
-		if event.Type == "resourcePreEvent" && event.ResourcePreEvent != nil {
-			// Parse metadata using pulumi-service format:
-			// - Uses "old"/"new" instead of "oldState"/"newState"
-			// - Uses "diffKind" instead of "kind"
-			// - Includes "type" field for resource type
-			var customStep struct {
-				Op           string                     `json:"op"`
-				URN          string                     `json:"urn"`
-				Type         string                     `json:"type"`
-				Provider     string                     `json:"provider,omitempty"`
-				Old          *apitype.ResourceV3        `json:"old,omitempty"`
-				New          *apitype.ResourceV3        `json:"new,omitempty"`
-				Diffs        []string                   `json:"diffs,omitempty"`
-				DetailedDiff map[string]json.RawMessage `json:"detailedDiff"`
-			}
-
-			if err := json.Unmarshal(event.ResourcePreEvent.Metadata, &customStep); err != nil {
-				continue
-			}
-
-			// Convert DetailedDiff from "diffKind" to standard "kind" format
-			standardDetailedDiff := make(map[string]auto.PropertyDiff)
-			for path, rawDiff := range customStep.DetailedDiff {
-				var customDiff struct {
-					DiffKind  string `json:"diffKind"`
-					InputDiff bool   `json:"inputDiff"`
-				}
-				if err := json.Unmarshal(rawDiff, &customDiff); err == nil {
-					standardDetailedDiff[path] = auto.PropertyDiff{
-						Kind:      customDiff.DiffKind,
-						InputDiff: customDiff.InputDiff,
-					}
-				}
-			}
-
-			// Convert to standard PreviewStep format
-			standardStep := auto.PreviewStep{
-				Op:           customStep.Op,
-				URN:          resource.URN(customStep.URN),
-				Provider:     customStep.Provider,
-				OldState:     customStep.Old, // Map "old" -> "OldState"
-				NewState:     customStep.New, // Map "new" -> "NewState"
-				DetailedDiff: standardDetailedDiff,
-			}
-
-			steps = append(steps, standardStep)
+		if step, ok := parseEngineEvent([]byte(line)); ok {
+			steps = append(steps, step)
 		}
 	}
 
@@ -232,19 +278,24 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 func convertStepsToResources(steps []auto.PreviewStep) []ResourceChange {
 	var resources []ResourceChange
 
-	for _, step := range steps {
+	for i := range steps {
+		step := &steps[i]
+
 		// Skip operations that don't require code changes
 		action := getActionForOperation(step.Op)
 		if action == "" {
 			continue
 		}
 
+		// Normalize DetailedDiff so extractPropertyChanges has a single code path
+		normalizeDetailedDiff(step)
+
 		// Extract resource metadata
-		resourceType := extractResourceType(step)
+		resourceType := extractResourceType(*step)
 		name := extractResourceName(string(step.URN))
 
 		// Parse property changes
-		properties := extractPropertyChanges(step)
+		properties := extractPropertyChanges(*step)
 
 		resources = append(resources, ResourceChange{
 			Action:     action,
@@ -299,6 +350,43 @@ func invertPropertyKind(previewKind string) string {
 	}
 }
 
+// normalizeDetailedDiff synthesizes DetailedDiff entries from ReplaceReasons/DiffReasons
+// for replace/update steps that have an empty DetailedDiff. This lets extractPropertyChanges
+// use a single code path for all update/replace operations.
+func normalizeDetailedDiff(step *auto.PreviewStep) {
+	if len(step.DetailedDiff) > 0 || (step.Op != "replace" && step.Op != "update") {
+		return
+	}
+	diffKeys := step.ReplaceReasons
+	if len(diffKeys) == 0 {
+		diffKeys = step.DiffReasons
+	}
+	if len(diffKeys) == 0 {
+		return
+	}
+	step.DetailedDiff = make(map[string]auto.PropertyDiff, len(diffKeys))
+	for _, key := range diffKeys {
+		step.DetailedDiff[string(key)] = auto.PropertyDiff{Kind: "update", InputDiff: true}
+	}
+}
+
+// resolvePropertyValue looks up a property value from a resource state,
+// trying Outputs first (unless inputsOnly) then falling back to Inputs.
+func resolvePropertyValue(state *apitype.ResourceV3, path string, inputsOnly bool) interface{} {
+	if state == nil {
+		return nil
+	}
+	if !inputsOnly && state.Outputs != nil {
+		if v := getNestedProperty(state.Outputs, path); v != nil {
+			return v
+		}
+	}
+	if state.Inputs != nil {
+		return getNestedProperty(state.Inputs, path)
+	}
+	return nil
+}
+
 // extractResourceType extracts the resource type from old or new state
 func extractResourceType(step auto.PreviewStep) string {
 	if step.OldState != nil {
@@ -310,37 +398,40 @@ func extractResourceType(step auto.PreviewStep) string {
 	return ""
 }
 
-// extractPropertyChanges extracts property changes from a preview step
+// extractPropertyChanges extracts property changes from a preview step.
+// For update/replace ops, normalizeDetailedDiff must be called first so that
+// DetailedDiff is always populated when diff information is available.
 func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 	var properties []PropertyChange
 
 	// For delete operations (add_to_code), DetailedDiff is empty but we need all properties from state
 	if step.Op == "delete" && len(step.DetailedDiff) == 0 && step.OldState != nil && step.OldState.Outputs != nil {
-		// Extract all properties from OldState.Outputs
 		extractAllProperties(step.OldState.Outputs, "", &properties)
 		return properties
 	}
 
-	// For other operations, use DetailedDiff
 	for path, diff := range step.DetailedDiff {
-		// Get actual values from old/new states
-		var currentValue, desiredValue interface{}
+		inputsOnly := diff.InputDiff
+		currentValue := resolvePropertyValue(step.NewState, path, inputsOnly)
+		desiredValue := resolvePropertyValue(step.OldState, path, inputsOnly)
 
-		// OldState contains what's in state (what we want)
-		if step.OldState != nil && step.OldState.Outputs != nil {
-			desiredValue = getNestedProperty(step.OldState.Outputs, path)
-		}
-
-		// NewState contains what the code will produce (what currently exists or will be created)
-		if step.NewState != nil && step.NewState.Outputs != nil {
-			currentValue = getNestedProperty(step.NewState.Outputs, path)
+		kind := invertPropertyKind(diff.Kind)
+		// For entries synthesized by normalizeDetailedDiff (Kind="update", InputDiff=true),
+		// refine kind based on nil values (preserving original behavior where
+		// ReplaceReasons-derived entries get "delete"/"add" based on nil values).
+		if inputsOnly && diff.Kind == "update" {
+			if currentValue == nil {
+				kind = "delete"
+			} else if desiredValue == nil {
+				kind = "add"
+			}
 		}
 
 		properties = append(properties, PropertyChange{
 			Path:         path,
 			CurrentValue: currentValue,
 			DesiredValue: desiredValue,
-			Kind:         invertPropertyKind(diff.Kind),
+			Kind:         kind,
 		})
 	}
 
@@ -370,20 +461,48 @@ func extractAllProperties(props map[string]interface{}, prefix string, propertie
 	}
 }
 
-// outputResult outputs the final JSON result with optional resource limiting
-func outputResult(resources []ResourceChange, maxResources int) error {
-	// Apply resource limit if specified
-	if maxResources > 0 && len(resources) > maxResources {
-		resources = resources[:maxResources]
+// outputResult outputs the final JSON result with filtering, exclusions, and resource limiting
+func outputResult(resources []ResourceChange, maxResources int, excludeURNs []string) error {
+	// Build exclude set for O(1) lookup
+	excludeSet := make(map[string]bool, len(excludeURNs))
+	for _, urn := range excludeURNs {
+		excludeSet[urn] = true
+	}
+
+	// Partition resources into actionable and skipped
+	var actionable, skipped []ResourceChange
+	for _, res := range resources {
+		if excludeSet[res.URN] {
+			res.Reason = "excluded"
+			skipped = append(skipped, res)
+		} else if res.Action != "delete_from_code" && len(res.Properties) == 0 {
+			// update_code and add_to_code require properties; without them the agent
+			// has no information to act on. delete_from_code only needs URN/Type/Name.
+			res.Reason = "missing_properties"
+			skipped = append(skipped, res)
+		} else {
+			actionable = append(actionable, res)
+		}
+	}
+
+	// Apply resource limit to actionable bucket only
+	if maxResources > 0 && len(actionable) > maxResources {
+		actionable = actionable[:maxResources]
 	}
 
 	// Determine status
 	result := NextOutput{}
-	if len(resources) == 0 {
-		result.Status = "clean"
-	} else {
+	switch {
+	case len(actionable) > 0:
 		result.Status = "changes_needed"
-		result.Resources = resources
+		result.Resources = actionable
+	case len(skipped) > 0:
+		result.Status = "stop_with_skipped"
+	default:
+		result.Status = "clean"
+	}
+	if len(skipped) > 0 {
+		result.Skipped = skipped
 	}
 
 	// Output JSON
