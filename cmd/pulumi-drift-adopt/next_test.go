@@ -299,12 +299,12 @@ func TestNextCommandMaxResourcesLimit(t *testing.T) {
 			expectedCount: 2,
 		},
 		{
-			name:          "no limit (0)",
-			maxResources:  "0",
+			name:          "no limit (-1)",
+			maxResources:  "-1",
 			expectedCount: 5,
 		},
 		{
-			name:          "default limit (10) - all resources returned",
+			name:          "default limit (unlimited) - all resources returned",
 			maxResources:  "",
 			expectedCount: 5,
 		},
@@ -623,8 +623,8 @@ func TestNextCommandNDJSONMultipleResources(t *testing.T) {
 			expectedCount: 2,
 		},
 		{
-			name:          "unlimited (0)",
-			maxResources:  "0",
+			name:          "unlimited (-1)",
+			maxResources:  "-1",
 			expectedCount: 3,
 		},
 	}
@@ -948,7 +948,7 @@ func TestNextCommandReplaceWithNullDetailedDiff(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with standard JSON fixture containing a replace with null detailedDiff
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/standard_json_replace.json", "--max-resources", "0"})
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/standard_json_replace.json"})
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
@@ -1171,7 +1171,7 @@ func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with real preview JSON fixture (unlimited resources)
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_replace.json", "--max-resources", "0"})
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_replace.json"})
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output
@@ -1309,7 +1309,7 @@ func TestNextCommandSkipsIncompleteResources(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "0"})
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = rootCmd.Execute()
 
 	_ = w.Close()
@@ -1530,7 +1530,7 @@ func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with Deployments engine events fixture (unlimited resources)
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_deployments.json", "--max-resources", "0"})
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_deployments.json"})
 	_ = rootCmd.Execute()
 
 	// Restore stdout and read output

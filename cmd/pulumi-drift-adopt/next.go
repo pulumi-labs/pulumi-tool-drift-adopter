@@ -43,7 +43,7 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 
 func init() {
 	nextCmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
-	nextCmd.Flags().Int("max-resources", 10, "Maximum number of resources to return per batch (0 = unlimited, default = 10)")
+	nextCmd.Flags().Int("max-resources", -1, "Maximum number of resources to return per batch (-1 = unlimited)")
 	nextCmd.Flags().String("events-file", "", "Path to engine events file (skips calling preview)")
 	nextCmd.Flags().StringSlice("exclude-urns", nil, "List of resource URNs to exclude from results")
 }
