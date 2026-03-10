@@ -158,11 +158,43 @@ Newline-delimited JSON where each line is an engine event. Only `resourcePreEven
 {"type":"summaryEvent","summaryEvent":{"resourceChanges":{"update":1}}}
 ```
 
+#### Engine Events JSON (Pulumi Cloud API)
+
+A JSON object with an `events` array, returned by the Pulumi Cloud API endpoint `GET /api/stacks/{org}/{project}/{stack}/preview/{updateID}/events`. This is the format produced by Pulumi Deployments previews. Each event has a `type` field; only `resourcePreEvent` and `resOutputsEvent` entries contain resource metadata. Uses the same field names as NDJSON (`old`/`new`, `diffKind`, `diffs`) but wrapped in an `{"events": [...]}` array instead of newline-delimited.
+
+```json
+{
+  "events": [
+    {"type": "preludeEvent", "preludeEvent": {"config": {}}},
+    {"type": "resourcePreEvent", "resourcePreEvent": {"metadata": {
+      "op": "update",
+      "urn": "urn:pulumi:dev::proj::command:local:Command::cmd-0",
+      "type": "command:local:Command",
+      "old": {
+        "type": "command:local:Command",
+        "inputs": { "create": "echo modified" },
+        "outputs": { "create": "echo modified" }
+      },
+      "new": {
+        "type": "command:local:Command",
+        "inputs": { "create": "echo original" }
+      },
+      "diffs": ["create", "environment"],
+      "detailedDiff": {
+        "create": { "diffKind": "update", "inputDiff": true },
+        "environment": { "diffKind": "delete", "inputDiff": true }
+      }
+    }, "planning": true}},
+    {"type": "summaryEvent", "summaryEvent": {"resourceChanges": {"update": 1}}}
+  ]
+}
+```
+
 ### Field Mapping
 
-| Concept | Standard JSON | NDJSON |
+| Concept | Standard JSON | NDJSON / Engine Events JSON |
 |---------|--------------|--------|
-| Wrapper | `{"steps": [...]}` | One JSON object per line |
+| Wrapper | `{"steps": [...]}` | One JSON object per line / `{"events": [...]}` |
 | Old state | `oldState` | `old` |
 | New state | `newState` | `new` |
 | Diff kind | `detailedDiff[key].kind` | `detailedDiff[key].diffKind` |
