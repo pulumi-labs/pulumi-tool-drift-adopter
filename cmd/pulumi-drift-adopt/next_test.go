@@ -1517,3 +1517,75 @@ func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
 			change.Path, change.CurrentValue, change.DesiredValue, change.Kind)
 	}
 }
+
+// TestNextCommandSmallScaleDeploymentsPreview tests parsing of real Deployments API engine events
+// from the small-scale-10 fixture. This is the same drift scenario as TestNextCommandSmallScaleRealPreview
+// but uses engine events downloaded from a Pulumi Deployments preview (via /preview/{updateID}/events)
+// rather than local `pulumi preview --json` output. The event format differs: engine events use
+// resourcePreEvent/resOutputsEvent wrappers with metadata.op, whereas preview JSON uses steps[].op.
+func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Run command with Deployments engine events fixture (unlimited resources)
+	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_deployments.json", "--max-resources", "0"})
+	_ = rootCmd.Execute()
+
+	// Restore stdout and read output
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	// Parse output
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	t.Logf("Output: %s", string(output))
+
+	// Should detect drift: same 5 resources as the local preview test
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 5, "Expected 5 drifted resources")
+
+	// Build resource map by name
+	resourceMap := make(map[string]*ResourceChange)
+	for i := range result.Resources {
+		resourceMap[result.Resources[i].Name] = &result.Resources[i]
+	}
+
+	// Verify correct actions
+	assert.Equal(t, "delete_from_code", resourceMap["cmd-3"].Action, "create -> delete_from_code")
+	assert.Equal(t, "add_to_code", resourceMap["random-str-extra-0"].Action, "delete -> add_to_code")
+	assert.Equal(t, "update_code", resourceMap["cmd-0"].Action, "update -> update_code")
+	assert.Equal(t, "update_code", resourceMap["random-str-0"].Action, "replace -> update_code")
+	assert.Equal(t, "update_code", resourceMap["tls-key-0"].Action, "replace -> update_code")
+
+	// Every update_code resource must have non-empty Properties
+	for _, res := range result.Resources {
+		if res.Action == "update_code" {
+			require.NotEmpty(t, res.Properties,
+				"Resource %s (%s) with action update_code must have non-empty Properties", res.Name, res.Type)
+		}
+	}
+
+	// Spot-check random-str-0 replace properties: length (32→16), special (true→false)
+	randomStr := resourceMap["random-str-0"]
+	require.NotNil(t, randomStr)
+	propMap := make(map[string]*PropertyChange)
+	for i := range randomStr.Properties {
+		propMap[randomStr.Properties[i].Path] = &randomStr.Properties[i]
+	}
+
+	lengthProp := propMap["length"]
+	require.NotNil(t, lengthProp, "length property not found on random-str-0")
+	assert.Equal(t, float64(16), lengthProp.CurrentValue, "random-str-0 length currentValue")
+	assert.Equal(t, float64(32), lengthProp.DesiredValue, "random-str-0 length desiredValue")
+
+	specialProp := propMap["special"]
+	require.NotNil(t, specialProp, "special property not found on random-str-0")
+	assert.Equal(t, false, specialProp.CurrentValue, "random-str-0 special currentValue")
+	assert.Equal(t, true, specialProp.DesiredValue, "random-str-0 special desiredValue")
+}
