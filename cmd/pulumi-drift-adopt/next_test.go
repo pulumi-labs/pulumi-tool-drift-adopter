@@ -91,15 +91,38 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 			expectResources: true,
 		},
 		{
-			name: "delete operation - resource should be added to code",
+			name: "delete operation - resource should be added to code (prefers inputs over outputs)",
 			eventsContent: `{
 				"steps": [{
 					"op": "delete",
 					"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::missing-bucket",
 					"oldState": {
 						"type": "aws:s3/bucket:Bucket",
-						"outputs": {
+						"inputs": {
 							"bucket": "missing-bucket"
+						},
+						"outputs": {
+							"bucket": "missing-bucket",
+							"arn": "arn:aws:s3:::missing-bucket",
+							"id": "missing-bucket"
+						}
+					},
+					"detailedDiff": {}
+				}]
+			}`,
+			expectedStatus:  "changes_needed",
+			expectResources: true,
+		},
+		{
+			name: "delete operation - falls back to outputs when inputs empty",
+			eventsContent: `{
+				"steps": [{
+					"op": "delete",
+					"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::legacy-bucket",
+					"oldState": {
+						"type": "aws:s3/bucket:Bucket",
+						"outputs": {
+							"bucket": "legacy-bucket"
 						}
 					},
 					"detailedDiff": {}
@@ -1588,4 +1611,363 @@ func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
 	require.NotNil(t, specialProp, "special property not found on random-str-0")
 	assert.Equal(t, false, specialProp.CurrentValue, "random-str-0 special currentValue")
 	assert.Equal(t, true, specialProp.DesiredValue, "random-str-0 special desiredValue")
+}
+
+// TestNextCommandDeletePrefersInputs verifies that add_to_code actions use Inputs (not Outputs)
+func TestNextCommandDeletePrefersInputs(t *testing.T) {
+	eventsContent := `{
+		"steps": [{
+			"op": "delete",
+			"urn": "urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::my-key",
+			"oldState": {
+				"type": "tls:index/privateKey:PrivateKey",
+				"inputs": {
+					"algorithm": "RSA",
+					"rsaBits": 4096
+				},
+				"outputs": {
+					"algorithm": "RSA",
+					"rsaBits": 4096,
+					"privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nMIIE...",
+					"publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIB...",
+					"publicKeyOpenssh": "ssh-rsa AAAA...",
+					"id": "abc123"
+				}
+			},
+			"detailedDiff": {}
+		}]
+	}`
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
+	require.NoError(t, err)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = rootCmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 1)
+
+	res := result.Resources[0]
+	assert.Equal(t, "add_to_code", res.Action)
+
+	// Should only have input properties (algorithm, rsaBits), not computed outputs
+	assert.NotNil(t, res.InputProperties, "should have InputProperties map")
+	assert.Nil(t, res.Properties, "should NOT have Properties array for add_to_code")
+	assert.Equal(t, "RSA", res.InputProperties["algorithm"], "should include input property 'algorithm'")
+	assert.Equal(t, float64(4096), res.InputProperties["rsaBits"], "should include input property 'rsaBits'")
+	assert.Nil(t, res.InputProperties["privateKeyPem"], "should NOT include computed output 'privateKeyPem'")
+	assert.Nil(t, res.InputProperties["publicKeyPem"], "should NOT include computed output 'publicKeyPem'")
+	assert.Nil(t, res.InputProperties["id"], "should NOT include computed output 'id'")
+	assert.Len(t, res.InputProperties, 2, "should have exactly 2 input properties")
+}
+
+// TestNextCommandDeleteFallsBackToOutputs verifies fallback when Inputs is empty
+func TestNextCommandDeleteFallsBackToOutputs(t *testing.T) {
+	eventsContent := `{
+		"steps": [{
+			"op": "delete",
+			"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::legacy-bucket",
+			"oldState": {
+				"type": "aws:s3/bucket:Bucket",
+				"outputs": {
+					"bucket": "legacy-bucket",
+					"arn": "arn:aws:s3:::legacy-bucket"
+				}
+			},
+			"detailedDiff": {}
+		}]
+	}`
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
+	require.NoError(t, err)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = rootCmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 1)
+
+	// With no inputs, should fall back to outputs
+	res := result.Resources[0]
+	assert.Equal(t, "add_to_code", res.Action)
+	assert.NotNil(t, res.InputProperties, "should have InputProperties map from outputs fallback")
+	assert.Nil(t, res.Properties, "should NOT have Properties array for add_to_code")
+	assert.Len(t, res.InputProperties, 2, "should have 2 output properties as fallback")
+}
+
+// TestNextCommandSummary verifies the summary field with multiple types and actions
+func TestNextCommandSummary(t *testing.T) {
+	eventsContent := `{
+		"steps": [
+			{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-0",
+				"oldState": {"type": "aws:s3/bucket:Bucket", "inputs": {"bucket": "bucket-0"}},
+				"detailedDiff": {}
+			},
+			{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-1",
+				"oldState": {"type": "aws:s3/bucket:Bucket", "inputs": {"bucket": "bucket-1"}},
+				"detailedDiff": {}
+			},
+			{
+				"op": "update",
+				"urn": "urn:pulumi:dev::test::random:index/randomString:RandomString::rand-0",
+				"oldState": {"type": "random:index/randomString:RandomString", "outputs": {"length": 32}},
+				"newState": {"type": "random:index/randomString:RandomString", "outputs": {"length": 16}},
+				"detailedDiff": {"length": {"kind": "update"}}
+			},
+			{
+				"op": "create",
+				"urn": "urn:pulumi:dev::test::random:index/randomString:RandomString::rand-extra",
+				"newState": {"type": "random:index/randomString:RandomString"},
+				"detailedDiff": {}
+			}
+		]
+	}`
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
+	require.NoError(t, err)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = rootCmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	require.NotNil(t, result.Summary, "summary should be present for changes_needed")
+
+	s := result.Summary
+	assert.Equal(t, 4, s.Total)
+
+	// ByAction: 2 add_to_code (delete ops), 1 update_code (update op), 1 delete_from_code (create op)
+	assert.Equal(t, 2, s.ByAction["add_to_code"])
+	assert.Equal(t, 1, s.ByAction["update_code"])
+	assert.Equal(t, 1, s.ByAction["delete_from_code"])
+
+	// ByType: 2 s3 buckets, 2 random strings
+	assert.Equal(t, 2, s.ByType["aws:s3/bucket:Bucket"])
+	assert.Equal(t, 2, s.ByType["random:index/randomString:RandomString"])
+
+	// ByTypeAction
+	assert.Equal(t, 2, s.ByTypeAction["aws:s3/bucket:Bucket"]["add_to_code"])
+	assert.Equal(t, 1, s.ByTypeAction["random:index/randomString:RandomString"]["update_code"])
+	assert.Equal(t, 1, s.ByTypeAction["random:index/randomString:RandomString"]["delete_from_code"])
+}
+
+// TestNextCommandSummaryBeforeTruncation verifies summary counts full set even when max-resources truncates
+func TestNextCommandSummaryBeforeTruncation(t *testing.T) {
+	eventsContent := `{
+		"steps": [
+			{
+				"op": "update",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::b1",
+				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
+				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
+				"detailedDiff": {"tags.Env": {"kind": "update"}}
+			},
+			{
+				"op": "update",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::b2",
+				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
+				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
+				"detailedDiff": {"tags.Env": {"kind": "update"}}
+			},
+			{
+				"op": "update",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::b3",
+				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
+				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
+				"detailedDiff": {"tags.Env": {"kind": "update"}}
+			}
+		]
+	}`
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
+	require.NoError(t, err)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Limit to 1 resource but summary should reflect all 3
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "1"})
+	_ = rootCmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	assert.Len(t, result.Resources, 1, "should only return 1 resource due to max-resources")
+
+	require.NotNil(t, result.Summary)
+	assert.Equal(t, 3, result.Summary.Total, "summary should count all 3 resources before truncation")
+	assert.Equal(t, 3, result.Summary.ByAction["update_code"])
+	assert.Equal(t, 3, result.Summary.ByType["aws:s3/bucket:Bucket"])
+}
+
+// TestNextCommandSummaryAbsentForClean verifies no summary when status is clean
+func TestNextCommandSummaryAbsentForClean(t *testing.T) {
+	eventsContent := `{"steps": []}`
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
+	require.NoError(t, err)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = rootCmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	assert.Equal(t, "clean", result.Status)
+	assert.Nil(t, result.Summary, "summary should be nil for clean status")
+}
+
+// TestNextCommandInputPropertiesFormat verifies add_to_code uses InputProperties (flat map)
+// while update_code uses Properties (array)
+func TestNextCommandInputPropertiesFormat(t *testing.T) {
+	eventsContent := `{
+		"steps": [
+			{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::missing-bucket",
+				"oldState": {
+					"type": "aws:s3/bucket:Bucket",
+					"inputs": {
+						"bucket": "missing-bucket",
+						"tags": {"Environment": "production"}
+					}
+				},
+				"detailedDiff": {}
+			},
+			{
+				"op": "update",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::existing-bucket",
+				"oldState": {
+					"type": "aws:s3/bucket:Bucket",
+					"outputs": {"tags": {"Environment": "production"}}
+				},
+				"newState": {
+					"type": "aws:s3/bucket:Bucket",
+					"outputs": {"tags": {"Environment": "dev"}}
+				},
+				"detailedDiff": {"tags.Environment": {"kind": "update"}}
+			}
+		]
+	}`
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
+	require.NoError(t, err)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "-1"})
+	_ = rootCmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 2)
+
+	// Find resources by action
+	var addResource, updateResource *ResourceChange
+	for i := range result.Resources {
+		switch result.Resources[i].Action {
+		case "add_to_code":
+			addResource = &result.Resources[i]
+		case "update_code":
+			updateResource = &result.Resources[i]
+		}
+	}
+
+	// add_to_code should use InputProperties (flat map), not Properties
+	require.NotNil(t, addResource)
+	assert.NotNil(t, addResource.InputProperties, "add_to_code should have InputProperties")
+	assert.Nil(t, addResource.Properties, "add_to_code should NOT have Properties")
+	assert.Equal(t, "missing-bucket", addResource.InputProperties["bucket"])
+	tags, ok := addResource.InputProperties["tags"].(map[string]interface{})
+	require.True(t, ok, "tags should be a nested map")
+	assert.Equal(t, "production", tags["Environment"])
+
+	// update_code should use Properties (array), not InputProperties
+	require.NotNil(t, updateResource)
+	assert.NotNil(t, updateResource.Properties, "update_code should have Properties")
+	assert.Nil(t, updateResource.InputProperties, "update_code should NOT have InputProperties")
+	assert.Len(t, updateResource.Properties, 1)
+	assert.Equal(t, "tags.Environment", updateResource.Properties[0].Path)
 }

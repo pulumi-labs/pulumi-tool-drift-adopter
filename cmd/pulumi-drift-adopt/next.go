@@ -52,18 +52,28 @@ func init() {
 type NextOutput struct {
 	Status    string           `json:"status"` // "changes_needed", "clean", "stop_with_skipped", "error"
 	Error     string           `json:"error,omitempty"`
+	Summary   *NextSummary     `json:"summary,omitempty"`
 	Resources []ResourceChange `json:"resources,omitempty"`
 	Skipped   []ResourceChange `json:"skipped,omitempty"`
 }
 
+// NextSummary provides aggregate counts of drift for quick orientation
+type NextSummary struct {
+	Total        int                       `json:"total"`
+	ByAction     map[string]int            `json:"byAction"`
+	ByType       map[string]int            `json:"byType"`
+	ByTypeAction map[string]map[string]int `json:"byTypeAction"`
+}
+
 // ResourceChange describes a resource that needs code changes
 type ResourceChange struct {
-	Action     string           `json:"action"` // "update_code", "delete_from_code", "add_to_code"
-	URN        string           `json:"urn"`
-	Type       string           `json:"type"`
-	Name       string           `json:"name"`
-	Properties []PropertyChange `json:"properties,omitempty"`
-	Reason     string           `json:"reason,omitempty"` // Why skipped: "excluded", "missing_properties"
+	Action          string                 `json:"action"` // "update_code", "delete_from_code", "add_to_code"
+	URN             string                 `json:"urn"`
+	Type            string                 `json:"type"`
+	Name            string                 `json:"name"`
+	Properties      []PropertyChange       `json:"properties,omitempty"`
+	InputProperties map[string]interface{} `json:"inputProperties,omitempty"`
+	Reason          string                 `json:"reason,omitempty"` // Why skipped: "excluded", "missing_properties"
 }
 
 // PropertyChange describes a property that needs to be changed
@@ -294,16 +304,27 @@ func convertStepsToResources(steps []auto.PreviewStep) []ResourceChange {
 		resourceType := extractResourceType(*step)
 		name := extractResourceName(string(step.URN))
 
-		// Parse property changes
-		properties := extractPropertyChanges(*step)
-
-		resources = append(resources, ResourceChange{
-			Action:     action,
-			URN:        string(step.URN),
-			Type:       resourceType,
-			Name:       name,
-			Properties: properties,
-		})
+		if action == "add_to_code" {
+			// For add_to_code, use flat key-value map (more compact than PropertyChange array)
+			inputProps := extractInputProperties(*step)
+			resources = append(resources, ResourceChange{
+				Action:          action,
+				URN:             string(step.URN),
+				Type:            resourceType,
+				Name:            name,
+				InputProperties: inputProps,
+			})
+		} else {
+			// For update_code and delete_from_code, use property change array
+			properties := extractPropertyChanges(*step)
+			resources = append(resources, ResourceChange{
+				Action:     action,
+				URN:        string(step.URN),
+				Type:       resourceType,
+				Name:       name,
+				Properties: properties,
+			})
+		}
 	}
 
 	return resources
@@ -387,6 +408,19 @@ func resolvePropertyValue(state *apitype.ResourceV3, path string, inputsOnly boo
 	return nil
 }
 
+// extractInputProperties returns a flat key-value map of input properties for add_to_code resources.
+// Prefers Inputs (what the user originally wrote) over Outputs (which include computed values).
+func extractInputProperties(step auto.PreviewStep) map[string]interface{} {
+	if step.OldState == nil {
+		return nil
+	}
+	source := step.OldState.Inputs
+	if len(source) == 0 {
+		source = step.OldState.Outputs
+	}
+	return source
+}
+
 // extractResourceType extracts the resource type from old or new state
 func extractResourceType(step auto.PreviewStep) string {
 	if step.OldState != nil {
@@ -404,9 +438,16 @@ func extractResourceType(step auto.PreviewStep) string {
 func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 	var properties []PropertyChange
 
-	// For delete operations (add_to_code), DetailedDiff is empty but we need all properties from state
-	if step.Op == "delete" && len(step.DetailedDiff) == 0 && step.OldState != nil && step.OldState.Outputs != nil {
-		extractAllProperties(step.OldState.Outputs, "", &properties)
+	// For delete operations (add_to_code), DetailedDiff is empty but we need all properties from state.
+	// Prefer Inputs (what the user originally wrote) over Outputs (which include computed values).
+	if step.Op == "delete" && len(step.DetailedDiff) == 0 && step.OldState != nil {
+		source := step.OldState.Inputs
+		if len(source) == 0 {
+			source = step.OldState.Outputs
+		}
+		if source != nil {
+			extractAllProperties(source, "", &properties)
+		}
 		return properties
 	}
 
@@ -475,13 +516,33 @@ func outputResult(resources []ResourceChange, maxResources int, excludeURNs []st
 		if excludeSet[res.URN] {
 			res.Reason = "excluded"
 			skipped = append(skipped, res)
-		} else if res.Action != "delete_from_code" && len(res.Properties) == 0 {
-			// update_code and add_to_code require properties; without them the agent
-			// has no information to act on. delete_from_code only needs URN/Type/Name.
+		} else if res.Action == "add_to_code" && len(res.InputProperties) == 0 {
+			res.Reason = "missing_properties"
+			skipped = append(skipped, res)
+		} else if res.Action == "update_code" && len(res.Properties) == 0 {
 			res.Reason = "missing_properties"
 			skipped = append(skipped, res)
 		} else {
 			actionable = append(actionable, res)
+		}
+	}
+
+	// Compute summary from full actionable set (before truncation)
+	var summary *NextSummary
+	if len(actionable) > 0 {
+		summary = &NextSummary{
+			Total:        len(actionable),
+			ByAction:     make(map[string]int),
+			ByType:       make(map[string]int),
+			ByTypeAction: make(map[string]map[string]int),
+		}
+		for _, res := range actionable {
+			summary.ByAction[res.Action]++
+			summary.ByType[res.Type]++
+			if summary.ByTypeAction[res.Type] == nil {
+				summary.ByTypeAction[res.Type] = make(map[string]int)
+			}
+			summary.ByTypeAction[res.Type][res.Action]++
 		}
 	}
 
@@ -495,6 +556,7 @@ func outputResult(resources []ResourceChange, maxResources int, excludeURNs []st
 	switch {
 	case len(actionable) > 0:
 		result.Status = "changes_needed"
+		result.Summary = summary
 		result.Resources = actionable
 	case len(skipped) > 0:
 		result.Status = "stop_with_skipped"
