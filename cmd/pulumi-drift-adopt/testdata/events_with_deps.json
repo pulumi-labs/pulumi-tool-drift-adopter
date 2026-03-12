@@ -1,0 +1,47 @@
+{
+  "steps": [
+    {
+      "op": "delete",
+      "urn": "urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert",
+      "oldState": {
+        "urn": "urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert",
+        "type": "tls:index/selfSignedCert:SelfSignedCert",
+        "inputs": {
+          "privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n",
+          "validityPeriodHours": 87600,
+          "allowedUses": ["cert_signing", "crl_signing"],
+          "isCaCertificate": true
+        },
+        "outputs": {
+          "certPem": "-----BEGIN CERTIFICATE-----\nfake-ca-cert\n-----END CERTIFICATE-----\n",
+          "privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n"
+        },
+        "propertyDependencies": {
+          "privateKeyPem": ["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ca-key"]
+        }
+      }
+    },
+    {
+      "op": "delete",
+      "urn": "urn:pulumi:dev::test::tls:index/locallySignedCert:LocallySignedCert::server-cert",
+      "oldState": {
+        "urn": "urn:pulumi:dev::test::tls:index/locallySignedCert:LocallySignedCert::server-cert",
+        "type": "tls:index/locallySignedCert:LocallySignedCert",
+        "inputs": {
+          "caPrivateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n",
+          "caCertPem": "-----BEGIN CERTIFICATE-----\nfake-ca-cert\n-----END CERTIFICATE-----\n",
+          "certRequestPem": "-----BEGIN CERTIFICATE REQUEST-----\nfake-csr\n-----END CERTIFICATE REQUEST-----\n",
+          "validityPeriodHours": 8760
+        },
+        "outputs": {
+          "certPem": "-----BEGIN CERTIFICATE-----\nfake-server-cert\n-----END CERTIFICATE-----\n"
+        },
+        "propertyDependencies": {
+          "caPrivateKeyPem": ["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ca-key"],
+          "caCertPem": ["urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert"],
+          "certRequestPem": []
+        }
+      }
+    }
+  ]
+}

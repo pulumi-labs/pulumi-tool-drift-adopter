@@ -1971,3 +1971,333 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	assert.Len(t, updateResource.Properties, 1)
 	assert.Equal(t, "tags.Environment", updateResource.Properties[0].Path)
 }
+
+func TestStateFileParsing(t *testing.T) {
+	// State export with one resource that has PropertyDependencies
+	stateContent := `{
+		"version": 3,
+		"deployment": {
+			"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+			"resources": [
+				{
+					"urn": "urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ca-key",
+					"type": "tls:index/privateKey:PrivateKey",
+					"inputs": {"algorithm": "RSA", "rsaBits": 4096},
+					"outputs": {
+						"algorithm": "RSA",
+						"rsaBits": 4096,
+						"privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-key\n-----END RSA PRIVATE KEY-----\n"
+					}
+				}
+			]
+		}
+	}`
+
+	stateFile := filepath.Join(t.TempDir(), "state.json")
+	require.NoError(t, os.WriteFile(stateFile, []byte(stateContent), 0644))
+
+	result, err := parseStateFile(stateFile)
+	require.NoError(t, err)
+	require.Len(t, result, 1)
+	assert.Equal(t, "tls:index/privateKey:PrivateKey", string(result["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ca-key"].Type))
+}
+
+func TestDependencyResolution(t *testing.T) {
+	// Load test fixtures
+	eventsData, err := os.ReadFile(filepath.Join("testdata", "events_with_deps.json"))
+	require.NoError(t, err)
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+
+	steps, err := parsePreviewOutput(eventsData)
+	require.NoError(t, err)
+
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+
+	resources := convertStepsToResources(steps, stateLookup)
+	require.Len(t, resources, 2)
+
+	// Find the ca-cert resource (SelfSignedCert)
+	var caCert *ResourceChange
+	var serverCert *ResourceChange
+	for i := range resources {
+		switch resources[i].Name {
+		case "ca-cert":
+			caCert = &resources[i]
+		case "server-cert":
+			serverCert = &resources[i]
+		}
+	}
+	require.NotNil(t, caCert, "ca-cert resource not found")
+	require.NotNil(t, serverCert, "server-cert resource not found")
+
+	// ca-cert.privateKeyPem should have dependsOn metadata
+	pkPem := caCert.InputProperties["privateKeyPem"]
+	pkMap, ok := pkPem.(map[string]interface{})
+	require.True(t, ok, "privateKeyPem should be a map with dependsOn, got %T", pkPem)
+	assert.Equal(t, "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n", pkMap["value"])
+
+	depInfo, ok := pkMap["dependsOn"].(map[string]interface{})
+	require.True(t, ok, "dependsOn should be a map")
+	assert.Equal(t, "ca-key", depInfo["resourceName"])
+	assert.Equal(t, "tls:index/privateKey:PrivateKey", depInfo["resourceType"])
+	assert.Equal(t, "privateKeyPem", depInfo["outputProperty"])
+
+	// ca-cert.validityPeriodHours should be a plain value (no deps)
+	assert.Equal(t, float64(87600), caCert.InputProperties["validityPeriodHours"])
+
+	// server-cert.caPrivateKeyPem should resolve to ca-key
+	caKeyPem := serverCert.InputProperties["caPrivateKeyPem"]
+	caKeyMap, ok := caKeyPem.(map[string]interface{})
+	require.True(t, ok, "caPrivateKeyPem should be a map with dependsOn")
+	caKeyDep, ok := caKeyMap["dependsOn"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ca-key", caKeyDep["resourceName"])
+	assert.Equal(t, "privateKeyPem", caKeyDep["outputProperty"])
+
+	// server-cert.caCertPem should resolve to ca-cert
+	caCertPem := serverCert.InputProperties["caCertPem"]
+	caCertMap, ok := caCertPem.(map[string]interface{})
+	require.True(t, ok, "caCertPem should be a map with dependsOn")
+	caCertDep, ok := caCertMap["dependsOn"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ca-cert", caCertDep["resourceName"])
+	assert.Equal(t, "tls:index/selfSignedCert:SelfSignedCert", caCertDep["resourceType"])
+	assert.Equal(t, "certPem", caCertDep["outputProperty"])
+
+	// server-cert.certRequestPem has empty deps — should be plain value
+	_, isCsrMap := serverCert.InputProperties["certRequestPem"].(map[string]interface{})
+	assert.False(t, isCsrMap, "certRequestPem has empty deps, should be plain value")
+}
+
+func TestDependencyResolutionEdgeCases(t *testing.T) {
+	t.Run("no state lookup - returns plain values", func(t *testing.T) {
+		eventsData, err := os.ReadFile(filepath.Join("testdata", "events_with_deps.json"))
+		require.NoError(t, err)
+
+		steps, err := parsePreviewOutput(eventsData)
+		require.NoError(t, err)
+
+		// nil stateLookup — should return plain values
+		resources := convertStepsToResources(steps, nil)
+		require.NotEmpty(t, resources)
+
+		for _, res := range resources {
+			if res.Action != "add_to_code" {
+				continue
+			}
+			for key, val := range res.InputProperties {
+				_, isMap := val.(map[string]interface{})
+				if isMap {
+					// Should NOT have dependsOn when no state lookup
+					m := val.(map[string]interface{})
+					_, hasDep := m["dependsOn"]
+					assert.False(t, hasDep, "property %s should not have dependsOn without state lookup", key)
+				}
+			}
+		}
+	})
+
+	t.Run("dep URN not in state - returns plain value", func(t *testing.T) {
+		eventsContent := `{
+			"steps": [{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::orphan-cert",
+				"oldState": {
+					"type": "tls:index/selfSignedCert:SelfSignedCert",
+					"inputs": {"privateKeyPem": "some-pem-value"},
+					"propertyDependencies": {
+						"privateKeyPem": ["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::missing-key"]
+					}
+				}
+			}]
+		}`
+		stateContent := `{"version": 3, "deployment": {"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"}, "resources": []}}`
+
+		steps, err := parsePreviewOutput([]byte(eventsContent))
+		require.NoError(t, err)
+		stateLookup, err := parseStateExport([]byte(stateContent))
+		require.NoError(t, err)
+
+		resources := convertStepsToResources(steps, stateLookup)
+		require.Len(t, resources, 1)
+
+		// Should be plain string since dep URN is missing from state
+		assert.Equal(t, "some-pem-value", resources[0].InputProperties["privateKeyPem"])
+	})
+
+	t.Run("engine events format with propertyDependencies", func(t *testing.T) {
+		// NDJSON engine events format: "old" (not "oldState"), "diffKind" (not "kind")
+		ndjsonContent := `{"type":"resourcePreEvent","resourcePreEvent":{"metadata":{"op":"delete","urn":"urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ndjson-cert","old":{"type":"tls:index/selfSignedCert:SelfSignedCert","inputs":{"privateKeyPem":"ndjson-pem-value","validityPeriodHours":8760},"outputs":{"certPem":"ndjson-cert-pem","privateKeyPem":"ndjson-pem-value"},"propertyDependencies":{"privateKeyPem":["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ndjson-key"]}}}}}
+{"type":"resourcePreEvent","resourcePreEvent":{"metadata":{"op":"delete","urn":"urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ndjson-key","old":{"type":"tls:index/privateKey:PrivateKey","inputs":{"algorithm":"RSA"},"outputs":{"algorithm":"RSA","privateKeyPem":"ndjson-pem-value"}}}}}`
+
+		steps, err := parsePreviewOutput([]byte(ndjsonContent))
+		require.NoError(t, err)
+		require.Len(t, steps, 2)
+
+		// Build lookup from steps (no external state)
+		stateLookup := buildStateLookupFromSteps(steps)
+		resources := convertStepsToResources(steps, stateLookup)
+
+		var cert *ResourceChange
+		for i := range resources {
+			if resources[i].Name == "ndjson-cert" {
+				cert = &resources[i]
+			}
+		}
+		require.NotNil(t, cert)
+
+		// PropertyDependencies should survive NDJSON parsing and resolve
+		pkPem, ok := cert.InputProperties["privateKeyPem"].(map[string]interface{})
+		require.True(t, ok, "privateKeyPem should have dependsOn from engine events format")
+		dep, ok := pkPem["dependsOn"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "ndjson-key", dep["resourceName"])
+		assert.Equal(t, "privateKeyPem", dep["outputProperty"])
+	})
+
+	t.Run("value not found in dep outputs - returns plain value", func(t *testing.T) {
+		eventsContent := `{
+			"steps": [{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::no-match-cert",
+				"oldState": {
+					"type": "tls:index/selfSignedCert:SelfSignedCert",
+					"inputs": {"privateKeyPem": "value-that-doesnt-match-any-output"},
+					"propertyDependencies": {
+						"privateKeyPem": ["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::some-key"]
+					}
+				}
+			}]
+		}`
+		stateContent := `{
+			"version": 3,
+			"deployment": {
+				"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+				"resources": [{
+					"urn": "urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::some-key",
+					"type": "tls:index/privateKey:PrivateKey",
+					"inputs": {"algorithm": "RSA"},
+					"outputs": {"privateKeyPem": "different-pem-value", "algorithm": "RSA"}
+				}]
+			}
+		}`
+
+		steps, err := parsePreviewOutput([]byte(eventsContent))
+		require.NoError(t, err)
+		stateLookup, err := parseStateExport([]byte(stateContent))
+		require.NoError(t, err)
+
+		resources := convertStepsToResources(steps, stateLookup)
+		require.Len(t, resources, 1)
+
+		// Value doesn't match any output, should be plain value
+		assert.Equal(t, "value-that-doesnt-match-any-output", resources[0].InputProperties["privateKeyPem"])
+	})
+}
+
+func TestRunNextStateFileFlag(t *testing.T) {
+	// Create both fixtures
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	stateFile := filepath.Join(tmpDir, "state.json")
+
+	eventsData, err := os.ReadFile(filepath.Join("testdata", "events_with_deps.json"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(eventsFile, eventsData, 0644))
+
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(stateFile, stateData, 0644))
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
+	_ = rootCmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	require.NoError(t, json.Unmarshal(output, &result))
+
+	assert.Equal(t, "changes_needed", result.Status)
+
+	// Verify dependency resolution happened
+	var caCert *ResourceChange
+	for i := range result.Resources {
+		if result.Resources[i].Name == "ca-cert" {
+			caCert = &result.Resources[i]
+		}
+	}
+	require.NotNil(t, caCert)
+
+	pkPem, ok := caCert.InputProperties["privateKeyPem"].(map[string]interface{})
+	require.True(t, ok, "privateKeyPem should have dependsOn metadata")
+	dep, ok := pkPem["dependsOn"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ca-key", dep["resourceName"])
+}
+
+func TestDependencyResolutionFromPreviewOnly(t *testing.T) {
+	// Preview events where OldState has PropertyDependencies AND
+	// another step has the dependent resource with outputs
+	eventsContent := `{
+		"steps": [
+			{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::inline-key",
+				"oldState": {
+					"type": "tls:index/privateKey:PrivateKey",
+					"inputs": {"algorithm": "RSA", "rsaBits": 4096},
+					"outputs": {
+						"algorithm": "RSA",
+						"privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\ninline-key-pem\n-----END RSA PRIVATE KEY-----\n"
+					}
+				}
+			},
+			{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::inline-cert",
+				"oldState": {
+					"type": "tls:index/selfSignedCert:SelfSignedCert",
+					"inputs": {
+						"privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\ninline-key-pem\n-----END RSA PRIVATE KEY-----\n",
+						"validityPeriodHours": 8760
+					},
+					"propertyDependencies": {
+						"privateKeyPem": ["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::inline-key"]
+					}
+				}
+			}
+		]
+	}`
+
+	steps, err := parsePreviewOutput([]byte(eventsContent))
+	require.NoError(t, err)
+
+	// Build state lookup from the preview steps themselves (no external state file)
+	stateLookup := buildStateLookupFromSteps(steps)
+
+	resources := convertStepsToResources(steps, stateLookup)
+
+	var cert *ResourceChange
+	for i := range resources {
+		if resources[i].Name == "inline-cert" {
+			cert = &resources[i]
+		}
+	}
+	require.NotNil(t, cert)
+
+	pkPem, ok := cert.InputProperties["privateKeyPem"].(map[string]interface{})
+	require.True(t, ok, "should have dependsOn")
+	dep := pkPem["dependsOn"].(map[string]interface{})
+	assert.Equal(t, "inline-key", dep["resourceName"])
+	assert.Equal(t, "privateKeyPem", dep["outputProperty"])
+}

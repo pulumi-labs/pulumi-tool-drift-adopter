@@ -46,6 +46,7 @@ func init() {
 	nextCmd.Flags().Int("max-resources", -1, "Maximum number of resources to return per batch (-1 = unlimited)")
 	nextCmd.Flags().String("events-file", "", "Path to engine events file (skips calling preview)")
 	nextCmd.Flags().StringSlice("exclude-urns", nil, "List of resource URNs to exclude from results")
+	nextCmd.Flags().String("state-file", "", "Path to pulumi stack export JSON file (skips calling stack export)")
 }
 
 // NextOutput is the JSON structure returned by the next command
@@ -90,6 +91,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	maxResources, _ := cmd.Flags().GetInt("max-resources")
 	eventsFile, _ := cmd.Flags().GetString("events-file")
 	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
+	stateFile, _ := cmd.Flags().GetString("state-file")
 
 	// Get preview output from file or command
 	output, err := getPreviewOutput(eventsFile, projectDir, stack)
@@ -103,8 +105,28 @@ func runNext(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
+	// Load state for dependency resolution
+	stateLookup, err := getStateExport(stateFile, projectDir, stack)
+	if err != nil {
+		return err
+	}
+
+	// Supplement with state from preview steps (OldState of delete operations)
+	stepLookup := buildStateLookupFromSteps(steps)
+	if stateLookup == nil {
+		stateLookup = stepLookup
+	} else {
+		// State file entries take precedence (has all resources including unchanged);
+		// supplement with preview step data for resources not in state
+		for urn, res := range stepLookup {
+			if _, exists := stateLookup[urn]; !exists {
+				stateLookup[urn] = res
+			}
+		}
+	}
+
 	// Convert steps to resource changes
-	resources := convertStepsToResources(steps)
+	resources := convertStepsToResources(steps, stateLookup)
 
 	// Output result with resource limit and exclusions
 	return outputResult(resources, maxResources, excludeURNs)
@@ -285,7 +307,7 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 }
 
 // convertStepsToResources converts preview steps to resource changes for drift adoption
-func convertStepsToResources(steps []auto.PreviewStep) []ResourceChange {
+func convertStepsToResources(steps []auto.PreviewStep, stateLookup map[string]*apitype.ResourceV3) []ResourceChange {
 	var resources []ResourceChange
 
 	for i := range steps {
@@ -306,7 +328,7 @@ func convertStepsToResources(steps []auto.PreviewStep) []ResourceChange {
 
 		if action == "add_to_code" {
 			// For add_to_code, use flat key-value map (more compact than PropertyChange array)
-			inputProps := extractInputProperties(*step)
+			inputProps := extractInputProperties(*step, stateLookup)
 			resources = append(resources, ResourceChange{
 				Action:          action,
 				URN:             string(step.URN),
@@ -408,9 +430,66 @@ func resolvePropertyValue(state *apitype.ResourceV3, path string, inputsOnly boo
 	return nil
 }
 
+// getStateExport retrieves state export from a file or by running pulumi stack export.
+func getStateExport(stateFile, projectDir, stack string) (map[string]*apitype.ResourceV3, error) {
+	if stateFile != "" {
+		return parseStateFile(stateFile)
+	}
+
+	// Run pulumi stack export to get full state
+	cmdArgs := []string{"stack", "export"}
+	if stack != "" {
+		cmdArgs = append(cmdArgs, "--stack", stack)
+	}
+
+	exportCmd := exec.Command("pulumi", cmdArgs...)
+	exportCmd.Dir = projectDir
+	exportCmd.Stderr = os.Stderr
+
+	output, err := exportCmd.Output()
+	if err != nil {
+		// State export failure is non-fatal — proceed without dependency resolution
+		return nil, nil
+	}
+	return parseStateExport(output)
+}
+
+// parseStateFile reads a pulumi stack export JSON and returns a URN-to-resource lookup map.
+func parseStateFile(path string) (map[string]*apitype.ResourceV3, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read state file: %w", err)
+	}
+	return parseStateExport(data)
+}
+
+// parseStateExport parses pulumi stack export JSON into a URN-to-resource lookup map.
+func parseStateExport(data []byte) (map[string]*apitype.ResourceV3, error) {
+	var export struct {
+		Version    int `json:"version"`
+		Deployment struct {
+			Resources []apitype.ResourceV3 `json:"resources"`
+		} `json:"deployment"`
+	}
+	if err := json.Unmarshal(data, &export); err != nil {
+		return nil, fmt.Errorf("failed to parse state export: %w", err)
+	}
+
+	lookup := make(map[string]*apitype.ResourceV3, len(export.Deployment.Resources))
+	for i := range export.Deployment.Resources {
+		res := &export.Deployment.Resources[i]
+		lookup[string(res.URN)] = res
+	}
+	return lookup, nil
+}
+
 // extractInputProperties returns a flat key-value map of input properties for add_to_code resources.
-// Prefers Inputs (what the user originally wrote) over Outputs (which include computed values).
-func extractInputProperties(step auto.PreviewStep) map[string]interface{} {
+// When stateLookup is available, properties with PropertyDependencies get enriched
+// with dependsOn metadata that identifies which resource and output property they reference.
+//
+// Properties without dependencies remain plain values (backward-compatible).
+// Properties with dependencies become: {"value": <resolved>, "dependsOn": {"resourceName": ..., "resourceType": ..., "outputProperty": ...}}
+func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
 	if step.OldState == nil {
 		return nil
 	}
@@ -418,7 +497,112 @@ func extractInputProperties(step auto.PreviewStep) map[string]interface{} {
 	if len(source) == 0 {
 		source = step.OldState.Outputs
 	}
-	return source
+	if len(source) == 0 {
+		return nil
+	}
+
+	// If no state lookup or no property dependencies, return as-is
+	propDeps := step.OldState.PropertyDependencies
+	if stateLookup == nil || len(propDeps) == 0 {
+		return source
+	}
+
+	// Enrich properties that have dependencies
+	result := make(map[string]interface{}, len(source))
+	for key, value := range source {
+		propKey := resource.PropertyKey(key)
+		depURNs := propDeps[propKey]
+		if len(depURNs) == 0 {
+			result[key] = value
+			continue
+		}
+
+		// Try to resolve the dependency
+		if dep := resolveDependency(value, depURNs, stateLookup); dep != nil {
+			result[key] = dep
+		} else {
+			result[key] = value
+		}
+	}
+	return result
+}
+
+// resolveDependency attempts to match a resolved input value against the outputs
+// of dependent resources to identify the source output property.
+func resolveDependency(value interface{}, depURNs []resource.URN, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
+	for _, depURN := range depURNs {
+		depRes, ok := stateLookup[string(depURN)]
+		if !ok {
+			continue
+		}
+
+		// Search outputs for exact value match
+		outputProp := findMatchingOutput(value, depRes.Outputs)
+		if outputProp == "" {
+			continue
+		}
+
+		return map[string]interface{}{
+			"value": value,
+			"dependsOn": map[string]interface{}{
+				"resourceName":   extractResourceName(string(depURN)),
+				"resourceType":   string(depRes.Type),
+				"outputProperty": outputProp,
+			},
+		}
+	}
+	return nil
+}
+
+// findMatchingOutput searches a resource's outputs for one whose value exactly matches
+// the given input value. Returns the output property name, or "" if no match found.
+//
+// Known limitation: Pulumi secret values are wrapped in a sentinel structure
+// ({"4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270", "ciphertext": "..."}).
+// If an output is a secret, the exact-match comparison will fail because the input has the
+// plaintext value while the output has the encrypted wrapper. In this case, the function
+// falls back to returning "" and the property is emitted as a plain value without dependsOn.
+func findMatchingOutput(inputValue interface{}, outputs map[string]interface{}) string {
+	if outputs == nil {
+		return ""
+	}
+
+	// Marshal input value for reliable comparison (handles nested structures)
+	inputJSON, err := json.Marshal(inputValue)
+	if err != nil {
+		return ""
+	}
+
+	for key, outputValue := range outputs {
+		// Skip Pulumi secret-wrapped values (sentinel: "4dabf18193072939515e22adb298388d")
+		if m, ok := outputValue.(map[string]interface{}); ok {
+			if _, isSecret := m["4dabf18193072939515e22adb298388d"]; isSecret {
+				continue
+			}
+		}
+
+		outputJSON, err := json.Marshal(outputValue)
+		if err != nil {
+			continue
+		}
+		if string(inputJSON) == string(outputJSON) {
+			return key
+		}
+	}
+	return ""
+}
+
+// buildStateLookupFromSteps builds a URN-to-resource lookup from preview steps.
+// This allows dependency resolution even without a separate state file, using
+// OldState from delete operations (which contain full resource state).
+func buildStateLookupFromSteps(steps []auto.PreviewStep) map[string]*apitype.ResourceV3 {
+	lookup := make(map[string]*apitype.ResourceV3)
+	for i := range steps {
+		if steps[i].OldState != nil {
+			lookup[string(steps[i].URN)] = steps[i].OldState
+		}
+	}
+	return lookup
 }
 
 // extractResourceType extracts the resource type from old or new state
