@@ -436,8 +436,9 @@ func getStateExport(stateFile, projectDir, stack string) (map[string]*apitype.Re
 		return parseStateFile(stateFile)
 	}
 
-	// Run pulumi stack export to get full state
-	cmdArgs := []string{"stack", "export"}
+	// Run pulumi stack export to get full state (--show-secrets so secret
+	// outputs are plaintext, enabling value matching in findMatchingOutput)
+	cmdArgs := []string{"stack", "export", "--show-secrets"}
 	if stack != "" {
 		cmdArgs = append(cmdArgs, "--stack", stack)
 	}
@@ -483,12 +484,18 @@ func parseStateExport(data []byte) (map[string]*apitype.ResourceV3, error) {
 	return lookup, nil
 }
 
+// maxStringValueLen is the maximum length of a string property value before truncation.
+// Values longer than this are replaced with a placeholder to keep output compact.
+const maxStringValueLen = 200
+
 // extractInputProperties returns a flat key-value map of input properties for add_to_code resources.
 // When stateLookup is available, properties with PropertyDependencies get enriched
 // with dependsOn metadata that identifies which resource and output property they reference.
 //
-// Properties without dependencies remain plain values (backward-compatible).
-// Properties with dependencies become: {"value": <resolved>, "dependsOn": {"resourceName": ..., "resourceType": ..., "outputProperty": ...}}
+// Properties without dependencies remain plain values (backward-compatible), with long
+// strings truncated to maxStringValueLen characters.
+// Properties with dependencies become: {"dependsOn": {"resourceName": ..., "resourceType": ..., "outputProperty": ...}}
+// (the literal value is omitted — the agent should use the resource reference).
 func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
 	if step.OldState == nil {
 		return nil
@@ -501,10 +508,10 @@ func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apity
 		return nil
 	}
 
-	// If no state lookup or no property dependencies, return as-is
+	// If no state lookup or no property dependencies, return with truncation only
 	propDeps := step.OldState.PropertyDependencies
 	if stateLookup == nil || len(propDeps) == 0 {
-		return source
+		return truncateStringValues(source)
 	}
 
 	// Enrich properties that have dependencies
@@ -513,7 +520,7 @@ func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apity
 		propKey := resource.PropertyKey(key)
 		depURNs := propDeps[propKey]
 		if len(depURNs) == 0 {
-			result[key] = value
+			result[key] = truncateValue(value)
 			continue
 		}
 
@@ -521,10 +528,38 @@ func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apity
 		if dep := resolveDependency(value, depURNs, stateLookup); dep != nil {
 			result[key] = dep
 		} else {
-			result[key] = value
+			result[key] = truncateValue(value)
 		}
 	}
 	return result
+}
+
+// truncateStringValues returns a shallow copy of props with long string values truncated.
+func truncateStringValues(props map[string]interface{}) map[string]interface{} {
+	needsTruncation := false
+	for _, v := range props {
+		if s, ok := v.(string); ok && len(s) > maxStringValueLen {
+			needsTruncation = true
+			break
+		}
+	}
+	if !needsTruncation {
+		return props
+	}
+	result := make(map[string]interface{}, len(props))
+	for k, v := range props {
+		result[k] = truncateValue(v)
+	}
+	return result
+}
+
+// truncateValue truncates a string value if it exceeds maxStringValueLen.
+// Non-string values are returned as-is.
+func truncateValue(v interface{}) interface{} {
+	if s, ok := v.(string); ok && len(s) > maxStringValueLen {
+		return fmt.Sprintf("<string: %d chars>", len(s))
+	}
+	return v
 }
 
 // resolveDependency attempts to match a resolved input value against the outputs
@@ -542,13 +577,29 @@ func resolveDependency(value interface{}, depURNs []resource.URN, stateLookup ma
 			continue
 		}
 
+		// Omit the literal value — the agent should use the resource reference
 		return map[string]interface{}{
-			"value": value,
 			"dependsOn": map[string]interface{}{
 				"resourceName":   extractResourceName(string(depURN)),
 				"resourceType":   string(depRes.Type),
 				"outputProperty": outputProp,
 			},
+		}
+	}
+
+	// Fallback: when value match fails but exactly one dep URN exists,
+	// emit bare dependsOn (without outputProperty) so the agent knows
+	// which resource to reference even when structural mismatch prevents
+	// exact value matching (e.g., input is ["value"] array, output is "value" string).
+	if len(depURNs) == 1 {
+		depRes, ok := stateLookup[string(depURNs[0])]
+		if ok {
+			return map[string]interface{}{
+				"dependsOn": map[string]interface{}{
+					"resourceName": extractResourceName(string(depURNs[0])),
+					"resourceType": string(depRes.Type),
+				},
+			}
 		}
 	}
 	return nil

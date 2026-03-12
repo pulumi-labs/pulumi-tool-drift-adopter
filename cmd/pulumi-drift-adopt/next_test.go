@@ -2032,11 +2032,11 @@ func TestDependencyResolution(t *testing.T) {
 	require.NotNil(t, caCert, "ca-cert resource not found")
 	require.NotNil(t, serverCert, "server-cert resource not found")
 
-	// ca-cert.privateKeyPem should have dependsOn metadata
+	// ca-cert.privateKeyPem should have dependsOn metadata (no literal value)
 	pkPem := caCert.InputProperties["privateKeyPem"]
 	pkMap, ok := pkPem.(map[string]interface{})
 	require.True(t, ok, "privateKeyPem should be a map with dependsOn, got %T", pkPem)
-	assert.Equal(t, "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n", pkMap["value"])
+	assert.Nil(t, pkMap["value"], "value should be omitted when dependsOn is present")
 
 	depInfo, ok := pkMap["dependsOn"].(map[string]interface{})
 	require.True(t, ok, "dependsOn should be a map")
@@ -2157,7 +2157,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		assert.Equal(t, "privateKeyPem", dep["outputProperty"])
 	})
 
-	t.Run("value not found in dep outputs - returns plain value", func(t *testing.T) {
+	t.Run("value not found in dep outputs - bare dependsOn with single depURN", func(t *testing.T) {
 		eventsContent := `{
 			"steps": [{
 				"op": "delete",
@@ -2192,8 +2192,163 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		resources := convertStepsToResources(steps, stateLookup)
 		require.Len(t, resources, 1)
 
-		// Value doesn't match any output, should be plain value
-		assert.Equal(t, "value-that-doesnt-match-any-output", resources[0].InputProperties["privateKeyPem"])
+		// Value doesn't match any output, but single depURN → bare dependsOn (no outputProperty)
+		pkPem, ok := resources[0].InputProperties["privateKeyPem"].(map[string]interface{})
+		require.True(t, ok, "privateKeyPem should have bare dependsOn, got %T", resources[0].InputProperties["privateKeyPem"])
+		dep, ok := pkPem["dependsOn"].(map[string]interface{})
+		require.True(t, ok, "dependsOn should be a map")
+		assert.Equal(t, "some-key", dep["resourceName"])
+		assert.Equal(t, "tls:index/privateKey:PrivateKey", dep["resourceType"])
+		assert.Nil(t, dep["outputProperty"], "bare dependsOn should not have outputProperty")
+	})
+
+	t.Run("plaintext secret output matches correctly (show-secrets)", func(t *testing.T) {
+		// With --show-secrets, secret outputs appear as plaintext — no sentinel wrapper.
+		// findMatchingOutput should match them normally.
+		eventsContent := `{
+			"steps": [{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::command:local:Command::deploy-cmd",
+				"oldState": {
+					"type": "command:local:Command",
+					"inputs": {"triggers": ["secret-password-value"]},
+					"propertyDependencies": {
+						"triggers": ["urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::api-pass"]
+					}
+				}
+			}]
+		}`
+		stateContent := `{
+			"version": 3,
+			"deployment": {
+				"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+				"resources": [{
+					"urn": "urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::api-pass",
+					"type": "random:index/randomPassword:RandomPassword",
+					"inputs": {"length": 16},
+					"outputs": {"result": "secret-password-value", "length": 16}
+				}]
+			}
+		}`
+
+		steps, err := parsePreviewOutput([]byte(eventsContent))
+		require.NoError(t, err)
+		stateLookup, err := parseStateExport([]byte(stateContent))
+		require.NoError(t, err)
+
+		resources := convertStepsToResources(steps, stateLookup)
+		require.Len(t, resources, 1)
+
+		// triggers is an array ["secret-password-value"] which won't match string "secret-password-value"
+		// So it falls back to bare dependsOn (structural mismatch: array vs string)
+		triggers, ok := resources[0].InputProperties["triggers"].(map[string]interface{})
+		require.True(t, ok, "triggers should have dependsOn metadata, got %T", resources[0].InputProperties["triggers"])
+		dep, ok := triggers["dependsOn"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "api-pass", dep["resourceName"])
+		assert.Equal(t, "random:index/randomPassword:RandomPassword", dep["resourceType"])
+	})
+
+	t.Run("bare dependsOn when structural mismatch - array input vs string output", func(t *testing.T) {
+		// Input is ["some-value"] (array), output is "some-value" (string).
+		// Exact JSON match fails, but bare dependsOn should be emitted for single depURN.
+		eventsContent := `{
+			"steps": [{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::command:local:Command::worker-cmd",
+				"oldState": {
+					"type": "command:local:Command",
+					"inputs": {"triggers": ["hex-output-value"]},
+					"propertyDependencies": {
+						"triggers": ["urn:pulumi:dev::test::random:index/randomId:RandomId::worker-id"]
+					}
+				}
+			}]
+		}`
+		stateContent := `{
+			"version": 3,
+			"deployment": {
+				"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+				"resources": [{
+					"urn": "urn:pulumi:dev::test::random:index/randomId:RandomId::worker-id",
+					"type": "random:index/randomId:RandomId",
+					"inputs": {"byteLength": 8},
+					"outputs": {"hex": "hex-output-value", "b64Std": "base64value"}
+				}]
+			}
+		}`
+
+		steps, err := parsePreviewOutput([]byte(eventsContent))
+		require.NoError(t, err)
+		stateLookup, err := parseStateExport([]byte(stateContent))
+		require.NoError(t, err)
+
+		resources := convertStepsToResources(steps, stateLookup)
+		require.Len(t, resources, 1)
+
+		// Array vs string mismatch → bare dependsOn
+		triggers, ok := resources[0].InputProperties["triggers"].(map[string]interface{})
+		require.True(t, ok, "triggers should have bare dependsOn")
+		dep, ok := triggers["dependsOn"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "worker-id", dep["resourceName"])
+		assert.Equal(t, "random:index/randomId:RandomId", dep["resourceType"])
+		assert.Nil(t, dep["outputProperty"], "bare dependsOn should not have outputProperty")
+	})
+
+	t.Run("multiple depURNs with no match returns plain value", func(t *testing.T) {
+		// When there are multiple depURNs and no exact match, we can't emit bare dependsOn
+		// because it would be ambiguous which resource to reference.
+		eventsContent := `{
+			"steps": [{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::command:local:Command::multi-dep-cmd",
+				"oldState": {
+					"type": "command:local:Command",
+					"inputs": {"triggers": ["ambiguous-value"]},
+					"propertyDependencies": {
+						"triggers": [
+							"urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::pass-a",
+							"urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::pass-b"
+						]
+					}
+				}
+			}]
+		}`
+		stateContent := `{
+			"version": 3,
+			"deployment": {
+				"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+				"resources": [
+					{
+						"urn": "urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::pass-a",
+						"type": "random:index/randomPassword:RandomPassword",
+						"inputs": {"length": 16},
+						"outputs": {"result": "different-a", "length": 16}
+					},
+					{
+						"urn": "urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::pass-b",
+						"type": "random:index/randomPassword:RandomPassword",
+						"inputs": {"length": 16},
+						"outputs": {"result": "different-b", "length": 16}
+					}
+				]
+			}
+		}`
+
+		steps, err := parsePreviewOutput([]byte(eventsContent))
+		require.NoError(t, err)
+		stateLookup, err := parseStateExport([]byte(stateContent))
+		require.NoError(t, err)
+
+		resources := convertStepsToResources(steps, stateLookup)
+		require.Len(t, resources, 1)
+
+		// Multiple depURNs, no exact match → plain value (no bare dependsOn due to ambiguity)
+		triggers := resources[0].InputProperties["triggers"]
+		triggerArr, ok := triggers.([]interface{})
+		require.True(t, ok, "triggers should be plain array value, got %T", triggers)
+		assert.Equal(t, "ambiguous-value", triggerArr[0])
 	})
 }
 
