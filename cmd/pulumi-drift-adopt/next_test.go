@@ -16,16 +16,54 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// runNextTest executes the next command with the given args and returns both the
+// stdout summary and the full output parsed from the output file.
+// It automatically adds --output-file pointing to a temp file in the test's temp dir.
+func runNextTest(t *testing.T, args []string) (NextSummaryOutput, NextOutput) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "output.json")
+	args = append(args, "--output-file", outputFile)
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+	cmd.SetArgs(args)
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	stdoutBytes, err := io.ReadAll(r)
+	require.NoError(t, err, "Failed to read captured stdout")
+
+	// Parse stdout as NextSummaryOutput
+	var summary NextSummaryOutput
+	err = json.Unmarshal(stdoutBytes, &summary)
+	require.NoError(t, err, "Failed to parse stdout as NextSummaryOutput: %s", string(stdoutBytes))
+
+	// Parse output file as NextOutput (may not exist for errors)
+	var full NextOutput
+	if summary.OutputFile != "" {
+		data, err := os.ReadFile(summary.OutputFile)
+		require.NoError(t, err, "Failed to read output file: %s", summary.OutputFile)
+		err = json.Unmarshal(data, &full)
+		require.NoError(t, err, "Failed to parse output file: %s", string(data))
+	}
+
+	return summary, full
+}
 
 // TestNextCommandWithEventsFile tests the next command using --events-file flag
 func TestNextCommandWithEventsFile(t *testing.T) {
@@ -149,41 +187,21 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 			err := os.WriteFile(eventsFile, []byte(tt.eventsContent), 0644)
 			require.NoError(t, err, "Failed to create test events file")
 
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			// Run the command
-			cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-			_ = cmd.Execute()
-
-			// Restore stdout and read captured output
-			_ = w.Close()
-			os.Stdout = oldStdout
-			var output []byte
-			output, err = io.ReadAll(r)
-			require.NoError(t, err, "Failed to read captured output")
-
-			// Parse JSON output
-			var result NextOutput
-			err = json.Unmarshal(output, &result)
-			require.NoError(t, err, "Failed to parse output JSON: %s", string(output))
+			summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
 			// Verify status
-			assert.Equal(t, tt.expectedStatus, result.Status, "Status mismatch")
+			assert.Equal(t, tt.expectedStatus, summary.Status, "Status mismatch")
 
 			// Verify error message if expected
 			if tt.expectedError != "" {
-				assert.Contains(t, result.Error, tt.expectedError, "Error message mismatch")
+				assert.Contains(t, summary.Error, tt.expectedError, "Error message mismatch")
 			}
 
-			// Verify resources presence
+			// Verify resources presence (from output file)
 			if tt.expectResources {
-				assert.NotEmpty(t, result.Resources, "Expected resources but got none")
-			} else {
-				assert.Empty(t, result.Resources, "Expected no resources but got some")
+				assert.NotEmpty(t, full.Resources, "Expected resources but got none")
+			} else if tt.expectedError == "" {
+				assert.Empty(t, full.Resources, "Expected no resources but got some")
 			}
 		})
 	}
@@ -236,38 +254,16 @@ func TestNextCommandActionMapping(t *testing.T) {
 				}]
 			}`
 
-			// Create temporary events file
 			tmpDir := t.TempDir()
 			eventsFile := filepath.Join(tmpDir, "events.ndjson")
 			err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 			require.NoError(t, err)
 
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
+			summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-			// Run the command
-			cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-			_ = cmd.Execute()
-
-			// Restore stdout and read output
-			_ = w.Close()
-			os.Stdout = oldStdout
-			output, err := io.ReadAll(r)
-			require.NoError(t, err)
-
-			// Parse output
-			var result NextOutput
-			err = json.Unmarshal(output, &result)
-			require.NoError(t, err)
-
-			// Verify action — for create/delete, resource is in Resources;
-			// for update/replace, detailedDiff provides properties so it's also in Resources
-			assert.Equal(t, "changes_needed", result.Status)
-			require.NotEmpty(t, result.Resources)
-			assert.Equal(t, tt.expectedAction, result.Resources[0].Action)
+			assert.Equal(t, "changes_needed", summary.Status)
+			require.NotEmpty(t, full.Resources)
+			assert.Equal(t, tt.expectedAction, full.Resources[0].Action)
 		})
 	}
 }
@@ -339,42 +335,20 @@ func TestNextCommandMaxResourcesLimit(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create temporary events file
 			tmpDir := t.TempDir()
 			eventsFile := filepath.Join(tmpDir, "events.ndjson")
 			err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 			require.NoError(t, err)
 
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			// Build args
 			args := []string{"next", "--events-file", eventsFile}
 			if tt.maxResources != "" {
 				args = append(args, "--max-resources", tt.maxResources)
 			}
 
-			// Run the command
-			cmd := newRootCmd()
-			cmd.SetArgs(args)
-			_ = cmd.Execute()
+			summary, full := runNextTest(t, args)
 
-			// Restore stdout and read output
-			_ = w.Close()
-			os.Stdout = oldStdout
-			output, err := io.ReadAll(r)
-			require.NoError(t, err)
-
-			// Parse output
-			var result NextOutput
-			err = json.Unmarshal(output, &result)
-			require.NoError(t, err)
-
-			// Verify resource count
-			assert.Equal(t, "changes_needed", result.Status)
-			assert.Len(t, result.Resources, tt.expectedCount, "Resource count mismatch")
+			assert.Equal(t, "changes_needed", summary.Status)
+			assert.Len(t, full.Resources, tt.expectedCount, "Resource count mismatch")
 		})
 	}
 }
@@ -420,38 +394,17 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 		}]
 	}`
 
-	// Create temporary events file
 	tmpDir := t.TempDir()
 	eventsFile := filepath.Join(tmpDir, "events.ndjson")
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	// Run the command
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err)
-
-	// Verify output structure
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	resource := result.Resources[0]
+	resource := full.Resources[0]
 	assert.Equal(t, "update_code", resource.Action)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	assert.Equal(t, "my-bucket", resource.Name)
@@ -459,7 +412,6 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 	// Verify properties
 	assert.Len(t, resource.Properties, 2)
 
-	// Find and verify each property
 	var envProp, versioningProp *PropertyChange
 	for i := range resource.Properties {
 		if resource.Properties[i].Path == "tags.Environment" {
@@ -483,69 +435,43 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 
 // TestNextCommandFileNotFound tests error handling when events file doesn't exist
 func TestNextCommandFileNotFound(t *testing.T) {
-	// Capture stdout
+	// For error cases, capture stdout directly since runNextTest expects an output file
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	// Run the command with non-existent file
 	cmd := newRootCmd()
 	cmd.SetArgs([]string{"next", "--events-file", "/tmp/non-existent-file.ndjson"})
 	_ = cmd.Execute()
 
-	// Restore stdout and read output
 	_ = w.Close()
 	os.Stdout = oldStdout
 	output, err := io.ReadAll(r)
 	require.NoError(t, err)
 
-	// Parse output
-	var result NextOutput
+	var result NextSummaryOutput
 	err = json.Unmarshal(output, &result)
 	require.NoError(t, err)
 
-	// Verify error status
 	assert.Equal(t, "error", result.Status)
 	assert.Contains(t, result.Error, "failed to read events file")
 }
 
 // TestNextCommandNDJSONRealFormat tests parsing actual NDJSON with full engine event structure
 func TestNextCommandNDJSONRealFormat(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/ndjson_update.ndjson"})
 
-	// Run command with realistic NDJSON fixture
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_update.ndjson"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// Verify status and resource
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	resource := result.Resources[0]
+	resource := full.Resources[0]
 	assert.Equal(t, "update_code", resource.Action)
 	assert.Equal(t, "my-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	assert.Contains(t, resource.URN, "my-bucket")
 
-	// Verify properties - should have 2 changes (update + delete)
 	require.Len(t, resource.Properties, 2)
 
-	// Find properties by path
 	var envProp, managedByProp *PropertyChange
 	for i := range resource.Properties {
 		if resource.Properties[i].Path == "tags.Environment" {
@@ -556,13 +482,11 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 		}
 	}
 
-	// Verify tags.Environment update
 	require.NotNil(t, envProp, "tags.Environment property not found")
 	assert.Equal(t, "dev", envProp.CurrentValue)
 	assert.Equal(t, "production", envProp.DesiredValue)
 	assert.Equal(t, "update", envProp.Kind)
 
-	// Verify tags.ManagedBy addition (preview says "delete" but we invert to "add" for code changes)
 	require.NotNil(t, managedByProp, "tags.ManagedBy property not found")
 	assert.Equal(t, nil, managedByProp.CurrentValue)
 	assert.Equal(t, "pulumi", managedByProp.DesiredValue)
@@ -571,37 +495,16 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 
 // TestNextCommandNDJSONMixedEvents tests that non-resourcePreEvent lines are properly skipped
 func TestNextCommandNDJSONMixedEvents(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/ndjson_with_diagnostics.ndjson"})
 
-	// Run command with NDJSON containing diagnostics and policy events
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_with_diagnostics.ndjson"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// Should only have one resource (the resourcePreEvent), others skipped
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	resource := result.Resources[0]
+	resource := full.Resources[0]
 	assert.Equal(t, "update_code", resource.Action)
 	assert.Equal(t, "test-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 
-	// Verify property change
 	require.Len(t, resource.Properties, 1)
 	prop := resource.Properties[0]
 	assert.Equal(t, "versioning.enabled", prop.Path)
@@ -612,30 +515,10 @@ func TestNextCommandNDJSONMixedEvents(t *testing.T) {
 
 // TestNextCommandNDJSONEmptyFile tests NDJSON with no resource events returns clean
 func TestNextCommandNDJSONEmptyFile(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/ndjson_empty.ndjson"})
 
-	// Run command with NDJSON containing only metadata events
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_empty.ndjson"})
-	_ = cmd.Execute()
-
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// Should return clean status with no resources
-	assert.Equal(t, "clean", result.Status)
-	assert.Empty(t, result.Resources)
+	assert.Equal(t, "clean", summary.Status)
+	assert.Empty(t, full.Resources)
 }
 
 // TestNextCommandNDJSONMultipleResources tests parsing multiple resources from NDJSON
@@ -664,40 +547,18 @@ func TestNextCommandNDJSONMultipleResources(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Capture stdout
-			oldStdout := os.Stdout
-			r, w, _ := os.Pipe()
-			os.Stdout = w
-
-			// Build args
 			args := []string{"next", "--events-file", "testdata/ndjson_multiple_resources.ndjson"}
 			if tt.maxResources != "" {
 				args = append(args, "--max-resources", tt.maxResources)
 			}
 
-			// Run command
-			cmd := newRootCmd()
-			cmd.SetArgs(args)
-			_ = cmd.Execute()
+			summary, full := runNextTest(t, args)
 
-			// Restore stdout and read output
-			_ = w.Close()
-			os.Stdout = oldStdout
-			output, err := io.ReadAll(r)
-			require.NoError(t, err)
+			assert.Equal(t, "changes_needed", summary.Status)
+			assert.Len(t, full.Resources, tt.expectedCount, "Resource count mismatch")
 
-			// Parse output
-			var result NextOutput
-			err = json.Unmarshal(output, &result)
-			require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-			// Verify resource count
-			assert.Equal(t, "changes_needed", result.Status)
-			assert.Len(t, result.Resources, tt.expectedCount, "Resource count mismatch")
-
-			// Verify first resource details if present
-			if len(result.Resources) > 0 {
-				resource := result.Resources[0]
+			if len(full.Resources) > 0 {
+				resource := full.Resources[0]
 				assert.Equal(t, "update_code", resource.Action)
 				assert.Equal(t, "bucket-1", resource.Name)
 				assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
@@ -708,48 +569,25 @@ func TestNextCommandNDJSONMultipleResources(t *testing.T) {
 
 // TestNextCommandNDJSONCreateDelete tests create and delete operations from NDJSON
 func TestNextCommandNDJSONCreateDelete(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/ndjson_create_delete.ndjson"})
 
-	// Run command with NDJSON containing create and delete operations
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_create_delete.ndjson"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 2)
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// Should have 2 resources (1 create, 1 delete)
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 2)
-
-	// Find resources by name
 	var createResource, deleteResource *ResourceChange
-	for i := range result.Resources {
-		if result.Resources[i].Name == "extra-bucket" {
-			createResource = &result.Resources[i]
+	for i := range full.Resources {
+		if full.Resources[i].Name == "extra-bucket" {
+			createResource = &full.Resources[i]
 		}
-		if result.Resources[i].Name == "missing-bucket" {
-			deleteResource = &result.Resources[i]
+		if full.Resources[i].Name == "missing-bucket" {
+			deleteResource = &full.Resources[i]
 		}
 	}
 
-	// Verify create operation inverts to delete_from_code
 	require.NotNil(t, createResource, "extra-bucket not found")
 	assert.Equal(t, "delete_from_code", createResource.Action)
 	assert.Equal(t, "aws:s3/bucket:Bucket", createResource.Type)
 
-	// Verify delete operation inverts to add_to_code
 	require.NotNil(t, deleteResource, "missing-bucket not found")
 	assert.Equal(t, "add_to_code", deleteResource.Action)
 	assert.Equal(t, "aws:s3/bucket:Bucket", deleteResource.Type)
@@ -757,39 +595,19 @@ func TestNextCommandNDJSONCreateDelete(t *testing.T) {
 
 // TestNextCommandNDJSONReplace tests that replace operations extract properties from Diffs field
 func TestNextCommandNDJSONReplace(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/ndjson_replace.ndjson"})
 
-	// Run command with NDJSON containing replace operations
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_replace.ndjson"})
-	_ = cmd.Execute()
-
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// Should have 2 replace resources
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 2)
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 2)
 
 	// Find resources by name
 	var randomString, privateKey *ResourceChange
-	for i := range result.Resources {
-		if result.Resources[i].Name == "my-random-string" {
-			randomString = &result.Resources[i]
+	for i := range full.Resources {
+		if full.Resources[i].Name == "my-random-string" {
+			randomString = &full.Resources[i]
 		}
-		if result.Resources[i].Name == "my-private-key" {
-			privateKey = &result.Resources[i]
+		if full.Resources[i].Name == "my-private-key" {
+			privateKey = &full.Resources[i]
 		}
 	}
 
@@ -861,32 +679,15 @@ func TestNextCommandReplaceWithStandardJSON(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	resource := result.Resources[0]
+	resource := full.Resources[0]
 	assert.Equal(t, "update_code", resource.Action)
 	require.NotEmpty(t, resource.Properties, "Replace resource should have properties")
 
-	// Find length property - values come from Outputs first, then fallback to Inputs
 	var lengthProp *PropertyChange
 	for i := range resource.Properties {
 		if resource.Properties[i].Path == "length" {
@@ -901,7 +702,6 @@ func TestNextCommandReplaceWithStandardJSON(t *testing.T) {
 
 // TestNextCommandBackwardCompatibility ensures old JSON format still works
 func TestNextCommandBackwardCompatibility(t *testing.T) {
-	// Create events in old format (single JSON object with steps array)
 	eventsContent := `{
 		"steps": [
 			{
@@ -932,43 +732,21 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 		]
 	}`
 
-	// Create temporary events file
 	tmpDir := t.TempDir()
 	eventsFile := filepath.Join(tmpDir, "events.json")
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	// Run command
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// Verify old format still works
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	resource := result.Resources[0]
+	resource := full.Resources[0]
 	assert.Equal(t, "update_code", resource.Action)
 	assert.Equal(t, "legacy-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 
-	// Verify property extraction still works
 	require.Len(t, resource.Properties, 1)
 	prop := resource.Properties[0]
 	assert.Equal(t, "versioning.enabled", prop.Path)
@@ -980,40 +758,20 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 // TestNextCommandReplaceWithNullDetailedDiff tests that standard JSON replace ops with null detailedDiff
 // still produce property changes by falling back to replaceReasons/diffReasons.
 func TestNextCommandReplaceWithNullDetailedDiff(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/standard_json_replace.json"})
 
-	// Run command with standard JSON fixture containing a replace with null detailedDiff
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/standard_json_replace.json"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 3)
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 3)
-
-	// Find resources by name
 	var replaceRes, updateRes, createRes *ResourceChange
-	for i := range result.Resources {
-		switch result.Resources[i].Name {
+	for i := range full.Resources {
+		switch full.Resources[i].Name {
 		case "tls-key-0":
-			replaceRes = &result.Resources[i]
+			replaceRes = &full.Resources[i]
 		case "cmd-4":
-			updateRes = &result.Resources[i]
+			updateRes = &full.Resources[i]
 		case "cmd-38":
-			createRes = &result.Resources[i]
+			createRes = &full.Resources[i]
 		}
 	}
 
@@ -1090,31 +848,14 @@ func TestNextCommandReplaceInputDiffOnly(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	resource := result.Resources[0]
+	resource := full.Resources[0]
 	assert.Equal(t, "update_code", resource.Action)
 
-	// Should only have algorithm and ecdsaCurve (from replaceReasons), NOT id or publicKeyPem
 	propertyPaths := make(map[string]bool)
 	for _, prop := range resource.Properties {
 		propertyPaths[prop.Path] = true
@@ -1125,7 +866,6 @@ func TestNextCommandReplaceInputDiffOnly(t *testing.T) {
 	assert.False(t, propertyPaths["id"], "id (output-only) should NOT be in properties")
 	assert.False(t, propertyPaths["publicKeyPem"], "publicKeyPem (output-only) should NOT be in properties")
 
-	// Verify values
 	for _, prop := range resource.Properties {
 		if prop.Path == "algorithm" {
 			assert.Equal(t, "update", prop.Kind)
@@ -1140,44 +880,21 @@ func TestNextCommandReplaceInputDiffOnly(t *testing.T) {
 	}
 }
 
-// TestNextCommandEngineEventsJSON tests parsing the Pulumi Cloud GetEngineEvents API format:
-// {"events": [...], "continuationToken": ...} where each event has the same structure as NDJSON lines.
+// TestNextCommandEngineEventsJSON tests parsing the Pulumi Cloud GetEngineEvents API format
 func TestNextCommandEngineEventsJSON(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/engine_events_update.json"})
 
-	// Run command with engine events JSON fixture
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/engine_events_update.json"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// Verify status and resource
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	resource := result.Resources[0]
+	resource := full.Resources[0]
 	assert.Equal(t, "update_code", resource.Action)
 	assert.Equal(t, "my-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	assert.Contains(t, resource.URN, "my-bucket")
 
-	// Verify properties - should have 2 changes (update + delete → add after inversion)
 	require.Len(t, resource.Properties, 2)
 
-	// Find properties by path
 	var envProp, managedByProp *PropertyChange
 	for i := range resource.Properties {
 		if resource.Properties[i].Path == "tags.Environment" {
@@ -1188,13 +905,11 @@ func TestNextCommandEngineEventsJSON(t *testing.T) {
 		}
 	}
 
-	// Verify tags.Environment update
 	require.NotNil(t, envProp, "tags.Environment property not found")
 	assert.Equal(t, "dev", envProp.CurrentValue)
 	assert.Equal(t, "production", envProp.DesiredValue)
 	assert.Equal(t, "update", envProp.Kind)
 
-	// Verify tags.ManagedBy addition (preview says "delete" but we invert to "add" for code changes)
 	require.NotNil(t, managedByProp, "tags.ManagedBy property not found")
 	assert.Equal(t, nil, managedByProp.CurrentValue)
 	assert.Equal(t, "pulumi", managedByProp.DesiredValue)
@@ -1206,55 +921,29 @@ func TestNextCommandEngineEventsJSON(t *testing.T) {
 // 1 update (cmd-0), 1 create (cmd-3), 1 delete (random-str-extra-0).
 // The key assertion is that every update_code resource has non-empty Properties.
 func TestNextCommandSmallScaleRealPreview(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/small_scale_10_replace.json"})
 
-	// Run command with real preview JSON fixture (unlimited resources)
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_replace.json"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 5, "Expected 5 drifted resources")
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	t.Logf("Output: %s", string(output))
-
-	// Should have 5 drifted resources (same, providers, etc. are filtered out)
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 5, "Expected 5 drifted resources")
-
-	// Build resource map by name
 	resourceMap := make(map[string]*ResourceChange)
-	for i := range result.Resources {
-		resourceMap[result.Resources[i].Name] = &result.Resources[i]
+	for i := range full.Resources {
+		resourceMap[full.Resources[i].Name] = &full.Resources[i]
 	}
 
-	// Verify correct actions
 	assert.Equal(t, "delete_from_code", resourceMap["cmd-3"].Action, "create -> delete_from_code")
 	assert.Equal(t, "add_to_code", resourceMap["random-str-extra-0"].Action, "delete -> add_to_code")
 	assert.Equal(t, "update_code", resourceMap["cmd-0"].Action, "update -> update_code")
 	assert.Equal(t, "update_code", resourceMap["random-str-0"].Action, "replace -> update_code")
 	assert.Equal(t, "update_code", resourceMap["tls-key-0"].Action, "replace -> update_code")
 
-	// KEY ASSERTION: every update_code resource must have non-empty Properties
-	for _, res := range result.Resources {
+	for _, res := range full.Resources {
 		if res.Action == "update_code" {
 			require.NotEmpty(t, res.Properties,
 				"Resource %s (%s) with action update_code must have non-empty Properties", res.Name, res.Type)
 		}
 	}
 
-	// Spot-check random-str-0 replace properties: length (32→16), special (true→false)
 	randomStr := resourceMap["random-str-0"]
 	require.NotNil(t, randomStr)
 	propMap := make(map[string]*PropertyChange)
@@ -1264,15 +953,14 @@ func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 
 	lengthProp := propMap["length"]
 	require.NotNil(t, lengthProp, "length property not found on random-str-0")
-	assert.Equal(t, float64(16), lengthProp.CurrentValue, "random-str-0 length currentValue (from newState.inputs)")
-	assert.Equal(t, float64(32), lengthProp.DesiredValue, "random-str-0 length desiredValue (from oldState.inputs)")
+	assert.Equal(t, float64(16), lengthProp.CurrentValue)
+	assert.Equal(t, float64(32), lengthProp.DesiredValue)
 
 	specialProp := propMap["special"]
 	require.NotNil(t, specialProp, "special property not found on random-str-0")
-	assert.Equal(t, false, specialProp.CurrentValue, "random-str-0 special currentValue")
-	assert.Equal(t, true, specialProp.DesiredValue, "random-str-0 special desiredValue")
+	assert.Equal(t, false, specialProp.CurrentValue)
+	assert.Equal(t, true, specialProp.DesiredValue)
 
-	// Spot-check tls-key-0 replace properties: algorithm (ECDSA→RSA), ecdsaCurve (P256→nil)
 	tlsKey := resourceMap["tls-key-0"]
 	require.NotNil(t, tlsKey)
 	tlsPropMap := make(map[string]*PropertyChange)
@@ -1282,14 +970,14 @@ func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 
 	algoProp := tlsPropMap["algorithm"]
 	require.NotNil(t, algoProp, "algorithm property not found on tls-key-0")
-	assert.Equal(t, "RSA", algoProp.CurrentValue, "tls-key-0 algorithm currentValue (from newState.inputs)")
-	assert.Equal(t, "ECDSA", algoProp.DesiredValue, "tls-key-0 algorithm desiredValue (from oldState.inputs)")
+	assert.Equal(t, "RSA", algoProp.CurrentValue)
+	assert.Equal(t, "ECDSA", algoProp.DesiredValue)
 
 	ecdsaProp := tlsPropMap["ecdsaCurve"]
 	require.NotNil(t, ecdsaProp, "ecdsaCurve property not found on tls-key-0")
-	assert.Equal(t, "delete", ecdsaProp.Kind, "ecdsaCurve should be a delete (in old but not in new inputs)")
-	assert.Nil(t, ecdsaProp.CurrentValue, "tls-key-0 ecdsaCurve currentValue should be nil")
-	assert.Equal(t, "P256", ecdsaProp.DesiredValue, "tls-key-0 ecdsaCurve desiredValue")
+	assert.Equal(t, "delete", ecdsaProp.Kind)
+	assert.Nil(t, ecdsaProp.CurrentValue)
+	assert.Equal(t, "P256", ecdsaProp.DesiredValue)
 }
 
 // TestNextCommandSkipsIncompleteResources tests that update_code resources with empty properties
@@ -1346,33 +1034,16 @@ func TestNextCommandSkipsIncompleteResources(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 2, "Expected 2 actionable resources")
+	assert.Equal(t, 1, summary.SkippedCount, "Expected 1 skipped resource")
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// The good-bucket (update with properties) and extra-bucket (delete_from_code) should be actionable
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 2, "Expected 2 actionable resources")
-
-	// The incomplete replace should be in Skipped
-	require.Len(t, result.Skipped, 1, "Expected 1 skipped resource")
-	assert.Equal(t, "incomplete-instance", result.Skipped[0].Name)
-	assert.Equal(t, "missing_properties", result.Skipped[0].Reason)
-	assert.Equal(t, "update_code", result.Skipped[0].Action)
+	require.Len(t, full.Skipped, 1, "Expected 1 skipped resource in output file")
+	assert.Equal(t, "incomplete-instance", full.Skipped[0].Name)
+	assert.Equal(t, "missing_properties", full.Skipped[0].Reason)
+	assert.Equal(t, "update_code", full.Skipped[0].Action)
 }
 
 // TestNextCommandExcludeURNs tests the --exclude-urns flag moves excluded resources to Skipped.
@@ -1413,39 +1084,20 @@ func TestNextCommandExcludeURNs(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{
+	summary, full := runNextTest(t, []string{
 		"next", "--events-file", eventsFile,
 		"--exclude-urns", "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-a",
 	})
-	_ = cmd.Execute()
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
+	assert.Equal(t, "bucket-b", full.Resources[0].Name)
 
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// bucket-b should be actionable
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-	assert.Equal(t, "bucket-b", result.Resources[0].Name)
-
-	// bucket-a should be skipped with reason "excluded"
-	require.Len(t, result.Skipped, 1)
-	assert.Equal(t, "bucket-a", result.Skipped[0].Name)
-	assert.Equal(t, "excluded", result.Skipped[0].Reason)
-	assert.Equal(t, "update_code", result.Skipped[0].Action)
-	// Excluded resources should retain their properties
-	assert.NotEmpty(t, result.Skipped[0].Properties)
+	require.Len(t, full.Skipped, 1)
+	assert.Equal(t, "bucket-a", full.Skipped[0].Name)
+	assert.Equal(t, "excluded", full.Skipped[0].Reason)
+	assert.Equal(t, "update_code", full.Skipped[0].Action)
+	assert.NotEmpty(t, full.Skipped[0].Properties)
 }
 
 // TestNextCommandStopWithSkippedStatus tests that when all resources are skipped, status is "stop_with_skipped".
@@ -1474,71 +1126,28 @@ func TestNextCommandStopWithSkippedStatus(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "stop_with_skipped", result.Status)
-	assert.Empty(t, result.Resources)
-	require.Len(t, result.Skipped, 1)
-	assert.Equal(t, "missing_properties", result.Skipped[0].Reason)
+	assert.Equal(t, "stop_with_skipped", summary.Status)
+	assert.Empty(t, full.Resources)
+	assert.Equal(t, 1, summary.SkippedCount)
+	require.Len(t, full.Skipped, 1)
+	assert.Equal(t, "missing_properties", full.Skipped[0].Reason)
 }
 
 // TestNextCommandRealPulumiServiceNDJSON tests parsing of real NDJSON from pulumi-service integration test
 // This reproduces the parsing bug found during integration testing where the tool reported:
 // "failed to parse preview output: invalid character '{' after top-level value"
 func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/simple-s3-drift.ndjson"})
 
-	// Run command with real NDJSON file from pulumi-service integration test
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/simple-s3-drift.ndjson"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status, "Expected drift to be detected")
+	require.NotEmpty(t, full.Resources, "Expected at least one resource with drift")
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	// Debug output
-	t.Logf("Output: %s", string(output))
-	t.Logf("Status: %s", result.Status)
-	t.Logf("Error: %s", result.Error)
-	t.Logf("Resource count: %d", len(result.Resources))
-
-	// Should detect drift in S3 bucket tags
-	assert.Equal(t, "changes_needed", result.Status, "Expected drift to be detected")
-	require.NotEmpty(t, result.Resources, "Expected at least one resource with drift")
-
-	// Find the S3 bucket resource
-	// Note: Type field may be empty in NDJSON parsing (known issue)
 	var bucketResource *ResourceChange
-	for i := range result.Resources {
-		if result.Resources[i].Name == "test-bucket" {
-			bucketResource = &result.Resources[i]
+	for i := range full.Resources {
+		if full.Resources[i].Name == "test-bucket" {
+			bucketResource = &full.Resources[i]
 			break
 		}
 	}
@@ -1546,22 +1155,15 @@ func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
 	require.NotNil(t, bucketResource, "Expected to find S3 bucket resource")
 	assert.Equal(t, "update_code", bucketResource.Action)
 	assert.Equal(t, "test-bucket", bucketResource.Name)
-	assert.Contains(t, bucketResource.URN, "aws:s3/bucket:Bucket", "URN should contain resource type")
+	assert.Contains(t, bucketResource.URN, "aws:s3/bucket:Bucket")
 
-	// Verify tag changes are detected
 	var tagChanges []*PropertyChange
 	for i := range bucketResource.Properties {
 		if len(bucketResource.Properties[i].Path) >= 4 && bucketResource.Properties[i].Path[:4] == "tags" {
 			tagChanges = append(tagChanges, &bucketResource.Properties[i])
 		}
 	}
-
 	require.NotEmpty(t, tagChanges, "Expected tag changes to be detected")
-	t.Logf("Found %d tag changes", len(tagChanges))
-	for _, change := range tagChanges {
-		t.Logf("  - %s: current=%v, desired=%v, kind=%s",
-			change.Path, change.CurrentValue, change.DesiredValue, change.Kind)
-	}
 }
 
 // TestNextCommandSmallScaleDeploymentsPreview tests parsing of real Deployments API engine events
@@ -1570,55 +1172,29 @@ func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
 // rather than local `pulumi preview --json` output. The event format differs: engine events use
 // resourcePreEvent/resOutputsEvent wrappers with metadata.op, whereas preview JSON uses steps[].op.
 func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/small_scale_10_deployments.json"})
 
-	// Run command with Deployments engine events fixture (unlimited resources)
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_deployments.json"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 5, "Expected 5 drifted resources")
 
-	// Restore stdout and read output
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	// Parse output
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	t.Logf("Output: %s", string(output))
-
-	// Should detect drift: same 5 resources as the local preview test
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 5, "Expected 5 drifted resources")
-
-	// Build resource map by name
 	resourceMap := make(map[string]*ResourceChange)
-	for i := range result.Resources {
-		resourceMap[result.Resources[i].Name] = &result.Resources[i]
+	for i := range full.Resources {
+		resourceMap[full.Resources[i].Name] = &full.Resources[i]
 	}
 
-	// Verify correct actions
 	assert.Equal(t, "delete_from_code", resourceMap["cmd-3"].Action, "create -> delete_from_code")
 	assert.Equal(t, "add_to_code", resourceMap["random-str-extra-0"].Action, "delete -> add_to_code")
 	assert.Equal(t, "update_code", resourceMap["cmd-0"].Action, "update -> update_code")
 	assert.Equal(t, "update_code", resourceMap["random-str-0"].Action, "replace -> update_code")
 	assert.Equal(t, "update_code", resourceMap["tls-key-0"].Action, "replace -> update_code")
 
-	// Every update_code resource must have non-empty Properties
-	for _, res := range result.Resources {
+	for _, res := range full.Resources {
 		if res.Action == "update_code" {
 			require.NotEmpty(t, res.Properties,
 				"Resource %s (%s) with action update_code must have non-empty Properties", res.Name, res.Type)
 		}
 	}
 
-	// Spot-check random-str-0 replace properties: length (32→16), special (true→false)
 	randomStr := resourceMap["random-str-0"]
 	require.NotNil(t, randomStr)
 	propMap := make(map[string]*PropertyChange)
@@ -1628,13 +1204,13 @@ func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
 
 	lengthProp := propMap["length"]
 	require.NotNil(t, lengthProp, "length property not found on random-str-0")
-	assert.Equal(t, float64(16), lengthProp.CurrentValue, "random-str-0 length currentValue")
-	assert.Equal(t, float64(32), lengthProp.DesiredValue, "random-str-0 length desiredValue")
+	assert.Equal(t, float64(16), lengthProp.CurrentValue)
+	assert.Equal(t, float64(32), lengthProp.DesiredValue)
 
 	specialProp := propMap["special"]
 	require.NotNil(t, specialProp, "special property not found on random-str-0")
-	assert.Equal(t, false, specialProp.CurrentValue, "random-str-0 special currentValue")
-	assert.Equal(t, true, specialProp.DesiredValue, "random-str-0 special desiredValue")
+	assert.Equal(t, false, specialProp.CurrentValue)
+	assert.Equal(t, true, specialProp.DesiredValue)
 }
 
 // TestNextCommandDeletePrefersInputs verifies that add_to_code actions use Inputs (not Outputs)
@@ -1667,38 +1243,22 @@ func TestNextCommandDeletePrefersInputs(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	res := result.Resources[0]
+	res := full.Resources[0]
 	assert.Equal(t, "add_to_code", res.Action)
 
-	// Should only have input properties (algorithm, rsaBits), not computed outputs
 	assert.NotNil(t, res.InputProperties, "should have InputProperties map")
 	assert.Nil(t, res.Properties, "should NOT have Properties array for add_to_code")
-	assert.Equal(t, "RSA", res.InputProperties["algorithm"], "should include input property 'algorithm'")
-	assert.Equal(t, float64(4096), res.InputProperties["rsaBits"], "should include input property 'rsaBits'")
-	assert.Nil(t, res.InputProperties["privateKeyPem"], "should NOT include computed output 'privateKeyPem'")
-	assert.Nil(t, res.InputProperties["publicKeyPem"], "should NOT include computed output 'publicKeyPem'")
-	assert.Nil(t, res.InputProperties["id"], "should NOT include computed output 'id'")
-	assert.Len(t, res.InputProperties, 2, "should have exactly 2 input properties")
+	assert.Equal(t, "RSA", res.InputProperties["algorithm"])
+	assert.Equal(t, float64(4096), res.InputProperties["rsaBits"])
+	assert.Nil(t, res.InputProperties["privateKeyPem"])
+	assert.Nil(t, res.InputProperties["publicKeyPem"])
+	assert.Nil(t, res.InputProperties["id"])
+	assert.Len(t, res.InputProperties, 2)
 }
 
 // TestNextCommandDeleteFallsBackToOutputs verifies fallback when Inputs is empty
@@ -1723,28 +1283,12 @@ func TestNextCommandDeleteFallsBackToOutputs(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 1)
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 1)
-
-	// With no inputs, should fall back to outputs
-	res := result.Resources[0]
+	res := full.Resources[0]
 	assert.Equal(t, "add_to_code", res.Action)
 	assert.NotNil(t, res.InputProperties, "should have InputProperties map from outputs fallback")
 	assert.Nil(t, res.Properties, "should NOT have Properties array for add_to_code")
@@ -1788,39 +1332,21 @@ func TestNextCommandSummary(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, _ := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.NotNil(t, summary.Summary, "summary should be present for changes_needed")
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	require.NotNil(t, result.Summary, "summary should be present for changes_needed")
-
-	s := result.Summary
+	s := summary.Summary
 	assert.Equal(t, 4, s.Total)
 
-	// ByAction: 2 add_to_code (delete ops), 1 update_code (update op), 1 delete_from_code (create op)
 	assert.Equal(t, 2, s.ByAction["add_to_code"])
 	assert.Equal(t, 1, s.ByAction["update_code"])
 	assert.Equal(t, 1, s.ByAction["delete_from_code"])
 
-	// ByType: 2 s3 buckets, 2 random strings
 	assert.Equal(t, 2, s.ByType["aws:s3/bucket:Bucket"])
 	assert.Equal(t, 2, s.ByType["random:index/randomString:RandomString"])
 
-	// ByTypeAction
 	assert.Equal(t, 2, s.ByTypeAction["aws:s3/bucket:Bucket"]["add_to_code"])
 	assert.Equal(t, 1, s.ByTypeAction["random:index/randomString:RandomString"]["update_code"])
 	assert.Equal(t, 1, s.ByTypeAction["random:index/randomString:RandomString"]["delete_from_code"])
@@ -1859,31 +1385,15 @@ func TestNextCommandSummaryBeforeTruncation(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--max-resources", "1"})
 
-	// Limit to 1 resource but summary should reflect all 3
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "1"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Len(t, full.Resources, 1, "should only return 1 resource due to max-resources")
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	assert.Len(t, result.Resources, 1, "should only return 1 resource due to max-resources")
-
-	require.NotNil(t, result.Summary)
-	assert.Equal(t, 3, result.Summary.Total, "summary should count all 3 resources before truncation")
-	assert.Equal(t, 3, result.Summary.ByAction["update_code"])
-	assert.Equal(t, 3, result.Summary.ByType["aws:s3/bucket:Bucket"])
+	require.NotNil(t, summary.Summary)
+	assert.Equal(t, 3, summary.Summary.Total, "summary should count all 3 resources before truncation")
+	assert.Equal(t, 3, summary.Summary.ByAction["update_code"])
+	assert.Equal(t, 3, summary.Summary.ByType["aws:s3/bucket:Bucket"])
 }
 
 // TestNextCommandSummaryAbsentForClean verifies no summary when status is clean
@@ -1895,25 +1405,10 @@ func TestNextCommandSummaryAbsentForClean(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, _ := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "clean", result.Status)
-	assert.Nil(t, result.Summary, "summary should be nil for clean status")
+	assert.Equal(t, "clean", summary.Status)
+	assert.Nil(t, summary.Summary, "summary should be nil for clean status")
 }
 
 // TestNextCommandInputPropertiesFormat verifies add_to_code uses InputProperties (flat map)
@@ -1954,38 +1449,21 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--max-resources", "-1"})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "-1"})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
+	require.Len(t, full.Resources, 2)
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	err = json.Unmarshal(output, &result)
-	require.NoError(t, err, "Failed to parse output: %s", string(output))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	require.Len(t, result.Resources, 2)
-
-	// Find resources by action
 	var addResource, updateResource *ResourceChange
-	for i := range result.Resources {
-		switch result.Resources[i].Action {
+	for i := range full.Resources {
+		switch full.Resources[i].Action {
 		case "add_to_code":
-			addResource = &result.Resources[i]
+			addResource = &full.Resources[i]
 		case "update_code":
-			updateResource = &result.Resources[i]
+			updateResource = &full.Resources[i]
 		}
 	}
 
-	// add_to_code should use InputProperties (flat map), not Properties
 	require.NotNil(t, addResource)
 	assert.NotNil(t, addResource.InputProperties, "add_to_code should have InputProperties")
 	assert.Nil(t, addResource.Properties, "add_to_code should NOT have Properties")
@@ -1994,7 +1472,6 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	require.True(t, ok, "tags should be a nested map")
 	assert.Equal(t, "production", tags["Environment"])
 
-	// update_code should use Properties (array), not InputProperties
 	require.NotNil(t, updateResource)
 	assert.NotNil(t, updateResource.Properties, "update_code should have Properties")
 	assert.Nil(t, updateResource.InputProperties, "update_code should NOT have InputProperties")
@@ -2383,7 +1860,6 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 }
 
 func TestRunNextStateFileFlag(t *testing.T) {
-	// Create both fixtures
 	tmpDir := t.TempDir()
 	eventsFile := filepath.Join(tmpDir, "events.json")
 	stateFile := filepath.Join(tmpDir, "state.json")
@@ -2396,30 +1872,14 @@ func TestRunNextStateFileFlag(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(stateFile, stateData, 0644))
 
-	// Capture stdout
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--state-file", stateFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
-	_ = cmd.Execute()
+	assert.Equal(t, "changes_needed", summary.Status)
 
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	require.NoError(t, json.Unmarshal(output, &result))
-
-	assert.Equal(t, "changes_needed", result.Status)
-
-	// Verify dependency resolution happened
 	var caCert *ResourceChange
-	for i := range result.Resources {
-		if result.Resources[i].Name == "ca-cert" {
-			caCert = &result.Resources[i]
+	for i := range full.Resources {
+		if full.Resources[i].Name == "ca-cert" {
+			caCert = &full.Resources[i]
 		}
 	}
 	require.NotNil(t, caCert)
@@ -2488,113 +1948,7 @@ func TestDependencyResolutionFromPreviewOnly(t *testing.T) {
 	assert.Equal(t, "privateKeyPem", dep["outputProperty"])
 }
 
-// generateUpdateSteps creates a JSON events string with N update steps for testing auto-limit.
-func generateUpdateSteps(n int) string {
-	var steps []string
-	for i := 0; i < n; i++ {
-		steps = append(steps, fmt.Sprintf(`{
-			"op": "update",
-			"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-%d",
-			"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-			"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-			"detailedDiff": {"tags.Env": {"kind": "update"}}
-		}`, i))
-	}
-	return fmt.Sprintf(`{"steps": [%s]}`, strings.Join(steps, ","))
-}
-
-func TestAutoResourceLimit(t *testing.T) {
-	// 250 resources with no --max-resources → auto-limit to 50, summary.Total == 250
-	eventsContent := generateUpdateSteps(250)
-
-	tmpDir := t.TempDir()
-	eventsFile := filepath.Join(tmpDir, "events.json")
-	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
-
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	require.NoError(t, json.Unmarshal(output, &result))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	assert.Len(t, result.Resources, 50, "auto-limit should cap at 50 for >200 resources")
-	require.NotNil(t, result.Summary)
-	assert.Equal(t, 250, result.Summary.Total, "summary.Total should reflect full count")
-}
-
-func TestAutoResourceLimitBelowThreshold(t *testing.T) {
-	// 150 resources with no --max-resources → all 150 returned (below threshold)
-	eventsContent := generateUpdateSteps(150)
-
-	tmpDir := t.TempDir()
-	eventsFile := filepath.Join(tmpDir, "events.json")
-	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
-
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = cmd.Execute()
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	require.NoError(t, json.Unmarshal(output, &result))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	assert.Len(t, result.Resources, 150, "all resources should be returned when below threshold")
-	require.NotNil(t, result.Summary)
-	assert.Equal(t, 150, result.Summary.Total)
-}
-
-func TestExplicitMaxResourcesOverridesAuto(t *testing.T) {
-	// 250 resources with --max-resources 10 → explicit override, 10 returned
-	eventsContent := generateUpdateSteps(250)
-
-	tmpDir := t.TempDir()
-	eventsFile := filepath.Join(tmpDir, "events.json")
-	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
-
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "10"})
-	_ = cmd.Execute()
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	require.NoError(t, json.Unmarshal(output, &result))
-
-	assert.Equal(t, "changes_needed", result.Status)
-	assert.Len(t, result.Resources, 10, "explicit --max-resources should override auto-limit")
-	require.NotNil(t, result.Summary)
-	assert.Equal(t, 250, result.Summary.Total)
-}
-
 func TestStateFilePathInOutput(t *testing.T) {
-	// When --state-file is provided, stateFilePath should appear in output
 	tmpDir := t.TempDir()
 	eventsFile := filepath.Join(tmpDir, "events.json")
 	stateFile := filepath.Join(tmpDir, "state.json")
@@ -2607,27 +1961,13 @@ func TestStateFilePathInOutput(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(stateFile, stateData, 0644))
 
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--state-file", stateFile})
 
-	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
-	_ = cmd.Execute()
-
-	_ = w.Close()
-	os.Stdout = oldStdout
-	output, err := io.ReadAll(r)
-	require.NoError(t, err)
-
-	var result NextOutput
-	require.NoError(t, json.Unmarshal(output, &result))
-
-	assert.Equal(t, stateFile, result.StateFilePath, "stateFilePath should match provided --state-file path")
+	assert.Equal(t, stateFile, summary.StateFilePath, "stateFilePath should match provided --state-file path")
+	assert.Equal(t, stateFile, full.StateFilePath, "stateFilePath should also be in output file")
 }
 
 func TestSkipRefreshFlagAccepted(t *testing.T) {
-	// --skip-refresh should be accepted without error when using --events-file
 	eventsContent := `{"steps": []}`
 	stateContent := `{"version": 3, "deployment": {"resources": []}}`
 
@@ -2637,21 +1977,98 @@ func TestSkipRefreshFlagAccepted(t *testing.T) {
 	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
 	require.NoError(t, os.WriteFile(stateFile, []byte(stateContent), 0644))
 
+	summary, _ := runNextTest(t, []string{"next", "--events-file", eventsFile, "--state-file", stateFile, "--skip-refresh"})
+	assert.Equal(t, "clean", summary.Status)
+}
+
+// TestNextCommandTempFileDefault verifies that when --output-file is omitted, a temp file is created
+func TestNextCommandTempFileDefault(t *testing.T) {
+	eventsContent := `{"steps": []}`
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+
+	// Don't use runNextTest here since it always adds --output-file
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
 	cmd := newRootCmd()
-	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile, "--skip-refresh"})
-	err := cmd.Execute()
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
-	output, _ := io.ReadAll(r)
+	stdoutBytes, err := io.ReadAll(r)
+	require.NoError(t, err)
 
-	assert.NoError(t, err, "--skip-refresh should be accepted")
+	var summary NextSummaryOutput
+	require.NoError(t, json.Unmarshal(stdoutBytes, &summary))
 
-	var result NextOutput
-	require.NoError(t, json.Unmarshal(output, &result))
-	assert.Equal(t, "clean", result.Status)
+	assert.Equal(t, "clean", summary.Status)
+	assert.NotEmpty(t, summary.OutputFile, "outputFile should be set even when --output-file is omitted")
+	assert.Contains(t, summary.OutputFile, "drift-adopter-output-", "should use temp file naming convention")
+
+	// Verify the temp file exists and is parseable
+	data, err := os.ReadFile(summary.OutputFile)
+	require.NoError(t, err)
+	var full NextOutput
+	require.NoError(t, json.Unmarshal(data, &full))
+	assert.Equal(t, "clean", full.Status)
+
+	// Clean up temp file
+	_ = os.Remove(summary.OutputFile)
+}
+
+// TestNextCommandOutputFileFlag verifies that --output-file writes to the specified path
+func TestNextCommandOutputFileFlag(t *testing.T) {
+	eventsContent := `{
+		"steps": [{
+			"op": "update",
+			"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket",
+			"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
+			"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
+			"detailedDiff": {"tags.Env": {"kind": "update"}}
+		}]
+	}`
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	outputFile := filepath.Join(tmpDir, "custom-output.json")
+	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
+
+	assert.Equal(t, "changes_needed", summary.Status)
+	assert.NotEmpty(t, summary.OutputFile)
+
+	// Verify full output in the file
+	require.Len(t, full.Resources, 1)
+	assert.Equal(t, "update_code", full.Resources[0].Action)
+
+	// Also verify explicit --output-file path works
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--output-file", outputFile})
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	stdoutBytes, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var summary2 NextSummaryOutput
+	require.NoError(t, json.Unmarshal(stdoutBytes, &summary2))
+	assert.Equal(t, outputFile, summary2.OutputFile, "outputFile should match --output-file flag")
+
+	// Verify the file was written to the specified path
+	data, err := os.ReadFile(outputFile)
+	require.NoError(t, err)
+	var full2 NextOutput
+	require.NoError(t, json.Unmarshal(data, &full2))
+	assert.Equal(t, "changes_needed", full2.Status)
+	require.Len(t, full2.Resources, 1)
 }

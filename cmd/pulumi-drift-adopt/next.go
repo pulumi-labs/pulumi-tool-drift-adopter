@@ -48,10 +48,11 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 	cmd.Flags().StringSlice("exclude-urns", nil, "List of resource URNs to exclude from results")
 	cmd.Flags().String("state-file", "", "Path to pulumi stack export JSON file (skips calling stack export)")
 	cmd.Flags().Bool("skip-refresh", false, "Omit --refresh from pulumi preview")
+	cmd.Flags().String("output-file", "", "Path for full output file (defaults to auto-generated temp file)")
 	return cmd
 }
 
-// NextOutput is the JSON structure returned by the next command
+// NextOutput is the full JSON structure written to the output file
 type NextOutput struct {
 	Status        string           `json:"status"` // "changes_needed", "clean", "stop_with_skipped", "error"
 	Error         string           `json:"error,omitempty"`
@@ -59,6 +60,17 @@ type NextOutput struct {
 	Resources     []ResourceChange `json:"resources,omitempty"`
 	Skipped       []ResourceChange `json:"skipped,omitempty"`
 	StateFilePath string           `json:"stateFilePath,omitempty"`
+}
+
+// NextSummaryOutput is the compact JSON written to stdout.
+// The agent reads full resource details from OutputFile using its Read tool.
+type NextSummaryOutput struct {
+	Status        string       `json:"status"`
+	Error         string       `json:"error,omitempty"`
+	Summary       *NextSummary `json:"summary,omitempty"`
+	OutputFile    string       `json:"outputFile,omitempty"`
+	StateFilePath string       `json:"stateFilePath,omitempty"`
+	SkippedCount  int          `json:"skippedCount,omitempty"`
 }
 
 // NextSummary provides aggregate counts of drift for quick orientation
@@ -96,6 +108,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
 	stateFile, _ := cmd.Flags().GetString("state-file")
 	skipRefresh, _ := cmd.Flags().GetBool("skip-refresh")
+	outputFile, _ := cmd.Flags().GetString("output-file")
 
 	// Get preview output from file or command
 	output, err := getPreviewOutput(eventsFile, projectDir, stack, skipRefresh)
@@ -133,7 +146,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	resources := convertStepsToResources(steps, stateLookup)
 
 	// Output result with resource limit and exclusions
-	return outputResult(resources, maxResources, excludeURNs, stateFilePath)
+	return outputResult(resources, maxResources, excludeURNs, stateFilePath, outputFile)
 }
 
 // getPreviewOutput retrieves preview output from either a file or by running pulumi preview
@@ -765,15 +778,9 @@ func extractAllProperties(props map[string]interface{}, prefix string, propertie
 	}
 }
 
-// Auto-limit constants: when maxResources is -1 (default/unlimited), the tool
-// automatically limits output for large drift to keep response sizes manageable.
-const (
-	autoLimitThreshold = 200 // If actionable count exceeds this, auto-limit kicks in
-	autoLimitBatchSize = 50  // Number of resources returned when auto-limiting
-)
-
-// outputResult outputs the final JSON result with filtering, exclusions, and resource limiting
-func outputResult(resources []ResourceChange, maxResources int, excludeURNs []string, stateFilePath string) error {
+// outputResult outputs the final JSON result with filtering, exclusions, and resource limiting.
+// Full output is written to a file; a compact summary is written to stdout.
+func outputResult(resources []ResourceChange, maxResources int, excludeURNs []string, stateFilePath, outputFile string) error {
 	// Build exclude set for O(1) lookup
 	excludeSet := make(map[string]bool, len(excludeURNs))
 	for _, urn := range excludeURNs {
@@ -816,15 +823,12 @@ func outputResult(resources []ResourceChange, maxResources int, excludeURNs []st
 		}
 	}
 
-	// Apply resource limit to actionable bucket only.
-	// Explicit --max-resources N (N > 0) overrides; otherwise auto-limit for large drift.
+	// Apply explicit --max-resources N (N > 0) truncation
 	if maxResources > 0 && len(actionable) > maxResources {
 		actionable = actionable[:maxResources]
-	} else if maxResources == -1 && len(actionable) > autoLimitThreshold {
-		actionable = actionable[:autoLimitBatchSize]
 	}
 
-	// Determine status
+	// Build full output
 	result := NextOutput{
 		StateFilePath: stateFilePath,
 	}
@@ -842,18 +846,56 @@ func outputResult(resources []ResourceChange, maxResources int, excludeURNs []st
 		result.Skipped = skipped
 	}
 
-	// Output JSON
+	// Write full output to file
+	outputFilePath, err := writeOutputFile(result, outputFile)
+	if err != nil {
+		return fmt.Errorf("failed to write output file: %w", err)
+	}
+
+	// Write compact summary to stdout
+	summaryOutput := NextSummaryOutput{
+		Status:        result.Status,
+		Summary:       result.Summary,
+		OutputFile:    outputFilePath,
+		StateFilePath: stateFilePath,
+		SkippedCount:  len(skipped),
+	}
+
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(result); err != nil {
-		return fmt.Errorf("failed to encode output: %w", err)
+	if err := encoder.Encode(summaryOutput); err != nil {
+		return fmt.Errorf("failed to encode summary output: %w", err)
 	}
 
 	return nil
 }
 
+// writeOutputFile writes the full NextOutput to a file. If outputFile is empty, a temp file is created.
+func writeOutputFile(result NextOutput, outputFile string) (string, error) {
+	var f *os.File
+	var err error
+	if outputFile != "" {
+		f, err = os.Create(outputFile)
+	} else {
+		f, err = os.CreateTemp("", "drift-adopter-output-*.json")
+	}
+	if err != nil {
+		return "", err
+	}
+	encoder := json.NewEncoder(f)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(result); err != nil {
+		_ = f.Close()
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
+}
+
 func outputError(errMsg string) error {
-	output := NextOutput{
+	output := NextSummaryOutput{
 		Status: "error",
 		Error:  errMsg,
 	}
