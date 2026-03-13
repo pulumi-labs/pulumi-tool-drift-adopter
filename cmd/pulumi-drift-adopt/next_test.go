@@ -433,7 +433,7 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 
 	// Run the command
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -490,7 +490,7 @@ func TestNextCommandFileNotFound(t *testing.T) {
 
 	// Run the command with non-existent file
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "/tmp/non-existent-file.ndjson"})
+	cmd.SetArgs([]string{"next", "--events-file", "/tmp/non-existent-file.ndjson"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -518,7 +518,7 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 
 	// Run command with realistic NDJSON fixture
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_update.ndjson"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_update.ndjson"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -578,7 +578,7 @@ func TestNextCommandNDJSONMixedEvents(t *testing.T) {
 
 	// Run command with NDJSON containing diagnostics and policy events
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_with_diagnostics.ndjson"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_with_diagnostics.ndjson"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -619,7 +619,7 @@ func TestNextCommandNDJSONEmptyFile(t *testing.T) {
 
 	// Run command with NDJSON containing only metadata events
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_empty.ndjson"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_empty.ndjson"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -715,7 +715,7 @@ func TestNextCommandNDJSONCreateDelete(t *testing.T) {
 
 	// Run command with NDJSON containing create and delete operations
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_create_delete.ndjson"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_create_delete.ndjson"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -764,7 +764,7 @@ func TestNextCommandNDJSONReplace(t *testing.T) {
 
 	// Run command with NDJSON containing replace operations
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_replace.ndjson"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_replace.ndjson"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -867,7 +867,7 @@ func TestNextCommandReplaceWithStandardJSON(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -945,7 +945,7 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 
 	// Run command
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -987,7 +987,7 @@ func TestNextCommandReplaceWithNullDetailedDiff(t *testing.T) {
 
 	// Run command with standard JSON fixture containing a replace with null detailedDiff
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/standard_json_replace.json"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/standard_json_replace.json"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -1096,7 +1096,7 @@ func TestNextCommandReplaceInputDiffOnly(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -1150,7 +1150,7 @@ func TestNextCommandEngineEventsJSON(t *testing.T) {
 
 	// Run command with engine events JSON fixture
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/engine_events_update.json"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/engine_events_update.json"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -1213,7 +1213,7 @@ func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 
 	// Run command with real preview JSON fixture (unlimited resources)
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_replace.json"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_replace.json"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -1352,7 +1352,7 @@ func TestNextCommandSkipsIncompleteResources(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -1419,7 +1419,7 @@ func TestNextCommandExcludeURNs(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{
+	cmd.SetArgs([]string{
 		"next", "--events-file", eventsFile,
 		"--exclude-urns", "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-a",
 	})
@@ -1480,7 +1480,7 @@ func TestNextCommandStopWithSkippedStatus(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -1509,7 +1509,7 @@ func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
 
 	// Run command with real NDJSON file from pulumi-service integration test
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/simple-s3-drift.ndjson"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/simple-s3-drift.ndjson"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -1577,7 +1577,7 @@ func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
 
 	// Run command with Deployments engine events fixture (unlimited resources)
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_deployments.json"})
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_deployments.json"})
 	_ = cmd.Execute()
 
 	// Restore stdout and read output
@@ -1672,7 +1672,7 @@ func TestNextCommandDeletePrefersInputs(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -1728,7 +1728,7 @@ func TestNextCommandDeleteFallsBackToOutputs(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -1793,7 +1793,7 @@ func TestNextCommandSummary(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -1865,7 +1865,7 @@ func TestNextCommandSummaryBeforeTruncation(t *testing.T) {
 
 	// Limit to 1 resource but summary should reflect all 3
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "1"})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "1"})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -1900,7 +1900,7 @@ func TestNextCommandSummaryAbsentForClean(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -1959,7 +1959,7 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "-1"})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "-1"})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -2402,7 +2402,7 @@ func TestRunNextStateFileFlag(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -2516,7 +2516,7 @@ func TestAutoResourceLimit(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -2546,7 +2546,7 @@ func TestAutoResourceLimitBelowThreshold(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -2576,7 +2576,7 @@ func TestExplicitMaxResourcesOverridesAuto(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "10"})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "10"})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -2612,7 +2612,7 @@ func TestStateFilePathInOutput(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
 	_ = cmd.Execute()
 
 	_ = w.Close()
@@ -2642,7 +2642,7 @@ func TestSkipRefreshFlagAccepted(t *testing.T) {
 	os.Stdout = w
 
 	cmd := newRootCmd()
-			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile, "--skip-refresh"})
+	cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile, "--skip-refresh"})
 	err := cmd.Execute()
 
 	_ = w.Close()

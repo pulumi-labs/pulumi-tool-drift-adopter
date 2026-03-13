@@ -472,12 +472,12 @@ func getStateExport(stateFile, projectDir, stack string) (map[string]*apitype.Re
 		return lookup, "", parseErr
 	}
 	if _, err := tmpFile.Write(output); err != nil {
-		tmpFile.Close()
-		os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
 		lookup, parseErr := parseStateExport(output)
 		return lookup, "", parseErr
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	lookup, parseErr := parseStateExport(output)
 	return lookup, tmpFile.Name(), parseErr
