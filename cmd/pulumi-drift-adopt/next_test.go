@@ -16,9 +16,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -153,8 +155,9 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 			os.Stdout = w
 
 			// Run the command
-			rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-			_ = rootCmd.Execute()
+			cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+			_ = cmd.Execute()
 
 			// Restore stdout and read captured output
 			_ = w.Close()
@@ -245,8 +248,9 @@ func TestNextCommandActionMapping(t *testing.T) {
 			os.Stdout = w
 
 			// Run the command
-			rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-			_ = rootCmd.Execute()
+			cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+			_ = cmd.Execute()
 
 			// Restore stdout and read output
 			_ = w.Close()
@@ -353,8 +357,9 @@ func TestNextCommandMaxResourcesLimit(t *testing.T) {
 			}
 
 			// Run the command
-			rootCmd.SetArgs(args)
-			_ = rootCmd.Execute()
+			cmd := newRootCmd()
+			cmd.SetArgs(args)
+			_ = cmd.Execute()
 
 			// Restore stdout and read output
 			_ = w.Close()
@@ -427,8 +432,9 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 	os.Stdout = w
 
 	// Run the command
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -483,8 +489,9 @@ func TestNextCommandFileNotFound(t *testing.T) {
 	os.Stdout = w
 
 	// Run the command with non-existent file
-	rootCmd.SetArgs([]string{"next", "--events-file", "/tmp/non-existent-file.ndjson"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "/tmp/non-existent-file.ndjson"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -510,8 +517,9 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with realistic NDJSON fixture
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_update.ndjson"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_update.ndjson"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -569,8 +577,9 @@ func TestNextCommandNDJSONMixedEvents(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with NDJSON containing diagnostics and policy events
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_with_diagnostics.ndjson"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_with_diagnostics.ndjson"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -609,8 +618,9 @@ func TestNextCommandNDJSONEmptyFile(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with NDJSON containing only metadata events
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_empty.ndjson"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_empty.ndjson"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -666,8 +676,9 @@ func TestNextCommandNDJSONMultipleResources(t *testing.T) {
 			}
 
 			// Run command
-			rootCmd.SetArgs(args)
-			_ = rootCmd.Execute()
+			cmd := newRootCmd()
+			cmd.SetArgs(args)
+			_ = cmd.Execute()
 
 			// Restore stdout and read output
 			_ = w.Close()
@@ -703,8 +714,9 @@ func TestNextCommandNDJSONCreateDelete(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with NDJSON containing create and delete operations
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_create_delete.ndjson"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_create_delete.ndjson"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -751,8 +763,9 @@ func TestNextCommandNDJSONReplace(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with NDJSON containing replace operations
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_replace.ndjson"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/ndjson_replace.ndjson"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -853,8 +866,9 @@ func TestNextCommandReplaceWithStandardJSON(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -930,8 +944,9 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 	os.Stdout = w
 
 	// Run command
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -971,8 +986,9 @@ func TestNextCommandReplaceWithNullDetailedDiff(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with standard JSON fixture containing a replace with null detailedDiff
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/standard_json_replace.json"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/standard_json_replace.json"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -1079,8 +1095,9 @@ func TestNextCommandReplaceInputDiffOnly(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1132,8 +1149,9 @@ func TestNextCommandEngineEventsJSON(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with engine events JSON fixture
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/engine_events_update.json"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/engine_events_update.json"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -1194,8 +1212,9 @@ func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with real preview JSON fixture (unlimited resources)
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_replace.json"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_replace.json"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -1332,8 +1351,9 @@ func TestNextCommandSkipsIncompleteResources(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1398,11 +1418,12 @@ func TestNextCommandExcludeURNs(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{
 		"next", "--events-file", eventsFile,
 		"--exclude-urns", "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-a",
 	})
-	_ = rootCmd.Execute()
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1458,8 +1479,9 @@ func TestNextCommandStopWithSkippedStatus(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1486,8 +1508,9 @@ func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with real NDJSON file from pulumi-service integration test
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/simple-s3-drift.ndjson"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/simple-s3-drift.ndjson"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -1553,8 +1576,9 @@ func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
 	os.Stdout = w
 
 	// Run command with Deployments engine events fixture (unlimited resources)
-	rootCmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_deployments.json"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", "testdata/small_scale_10_deployments.json"})
+	_ = cmd.Execute()
 
 	// Restore stdout and read output
 	_ = w.Close()
@@ -1647,8 +1671,9 @@ func TestNextCommandDeletePrefersInputs(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1702,8 +1727,9 @@ func TestNextCommandDeleteFallsBackToOutputs(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1766,8 +1792,9 @@ func TestNextCommandSummary(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1837,8 +1864,9 @@ func TestNextCommandSummaryBeforeTruncation(t *testing.T) {
 	os.Stdout = w
 
 	// Limit to 1 resource but summary should reflect all 3
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "1"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "1"})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1871,8 +1899,9 @@ func TestNextCommandSummaryAbsentForClean(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -1929,8 +1958,9 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "-1"})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "-1"})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -2371,8 +2401,9 @@ func TestRunNextStateFileFlag(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	rootCmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
-	_ = rootCmd.Execute()
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
+	_ = cmd.Execute()
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -2455,4 +2486,172 @@ func TestDependencyResolutionFromPreviewOnly(t *testing.T) {
 	dep := pkPem["dependsOn"].(map[string]interface{})
 	assert.Equal(t, "inline-key", dep["resourceName"])
 	assert.Equal(t, "privateKeyPem", dep["outputProperty"])
+}
+
+// generateUpdateSteps creates a JSON events string with N update steps for testing auto-limit.
+func generateUpdateSteps(n int) string {
+	var steps []string
+	for i := 0; i < n; i++ {
+		steps = append(steps, fmt.Sprintf(`{
+			"op": "update",
+			"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket-%d",
+			"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
+			"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
+			"detailedDiff": {"tags.Env": {"kind": "update"}}
+		}`, i))
+	}
+	return fmt.Sprintf(`{"steps": [%s]}`, strings.Join(steps, ","))
+}
+
+func TestAutoResourceLimit(t *testing.T) {
+	// 250 resources with no --max-resources → auto-limit to 50, summary.Total == 250
+	eventsContent := generateUpdateSteps(250)
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	require.NoError(t, json.Unmarshal(output, &result))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	assert.Len(t, result.Resources, 50, "auto-limit should cap at 50 for >200 resources")
+	require.NotNil(t, result.Summary)
+	assert.Equal(t, 250, result.Summary.Total, "summary.Total should reflect full count")
+}
+
+func TestAutoResourceLimitBelowThreshold(t *testing.T) {
+	// 150 resources with no --max-resources → all 150 returned (below threshold)
+	eventsContent := generateUpdateSteps(150)
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile})
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	require.NoError(t, json.Unmarshal(output, &result))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	assert.Len(t, result.Resources, 150, "all resources should be returned when below threshold")
+	require.NotNil(t, result.Summary)
+	assert.Equal(t, 150, result.Summary.Total)
+}
+
+func TestExplicitMaxResourcesOverridesAuto(t *testing.T) {
+	// 250 resources with --max-resources 10 → explicit override, 10 returned
+	eventsContent := generateUpdateSteps(250)
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--max-resources", "10"})
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	require.NoError(t, json.Unmarshal(output, &result))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	assert.Len(t, result.Resources, 10, "explicit --max-resources should override auto-limit")
+	require.NotNil(t, result.Summary)
+	assert.Equal(t, 250, result.Summary.Total)
+}
+
+func TestStateFilePathInOutput(t *testing.T) {
+	// When --state-file is provided, stateFilePath should appear in output
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	stateFile := filepath.Join(tmpDir, "state.json")
+
+	eventsData, err := os.ReadFile(filepath.Join("testdata", "events_with_deps.json"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(eventsFile, eventsData, 0644))
+
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(stateFile, stateData, 0644))
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile})
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	require.NoError(t, json.Unmarshal(output, &result))
+
+	assert.Equal(t, stateFile, result.StateFilePath, "stateFilePath should match provided --state-file path")
+}
+
+func TestSkipRefreshFlagAccepted(t *testing.T) {
+	// --skip-refresh should be accepted without error when using --events-file
+	eventsContent := `{"steps": []}`
+	stateContent := `{"version": 3, "deployment": {"resources": []}}`
+
+	tmpDir := t.TempDir()
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	stateFile := filepath.Join(tmpDir, "state.json")
+	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+	require.NoError(t, os.WriteFile(stateFile, []byte(stateContent), 0644))
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+			cmd.SetArgs([]string{"next", "--events-file", eventsFile, "--state-file", stateFile, "--skip-refresh"})
+	err := cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, _ := io.ReadAll(r)
+
+	assert.NoError(t, err, "--skip-refresh should be accepted")
+
+	var result NextOutput
+	require.NoError(t, json.Unmarshal(output, &result))
+	assert.Equal(t, "clean", result.Status)
 }

@@ -27,10 +27,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var nextCmd = &cobra.Command{
-	Use:   "next",
-	Short: "Run preview and show what code changes are needed",
-	Long: `Runs pulumi preview with --refresh to detect drift and analyzes the output.
+// newNextCmd creates a fresh "next" subcommand with all flags registered.
+func newNextCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "next",
+		Short: "Run preview and show what code changes are needed",
+		Long: `Runs pulumi preview with --refresh to detect drift and analyzes the output.
 
 The command automatically refreshes state to match actual infrastructure, then shows
 differences between code and state:
@@ -38,24 +40,25 @@ differences between code and state:
 - New values (code) = what currently exists in code (current/incorrect)
 
 The tool inverts the preview logic to tell you what to change in your code.`,
-	RunE: runNext,
-}
-
-func init() {
-	nextCmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
-	nextCmd.Flags().Int("max-resources", -1, "Maximum number of resources to return per batch (-1 = unlimited)")
-	nextCmd.Flags().String("events-file", "", "Path to engine events file (skips calling preview)")
-	nextCmd.Flags().StringSlice("exclude-urns", nil, "List of resource URNs to exclude from results")
-	nextCmd.Flags().String("state-file", "", "Path to pulumi stack export JSON file (skips calling stack export)")
+		RunE: runNext,
+	}
+	cmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
+	cmd.Flags().Int("max-resources", -1, "Maximum number of resources to return per batch (-1 = unlimited)")
+	cmd.Flags().String("events-file", "", "Path to engine events file (skips calling preview)")
+	cmd.Flags().StringSlice("exclude-urns", nil, "List of resource URNs to exclude from results")
+	cmd.Flags().String("state-file", "", "Path to pulumi stack export JSON file (skips calling stack export)")
+	cmd.Flags().Bool("skip-refresh", false, "Omit --refresh from pulumi preview")
+	return cmd
 }
 
 // NextOutput is the JSON structure returned by the next command
 type NextOutput struct {
-	Status    string           `json:"status"` // "changes_needed", "clean", "stop_with_skipped", "error"
-	Error     string           `json:"error,omitempty"`
-	Summary   *NextSummary     `json:"summary,omitempty"`
-	Resources []ResourceChange `json:"resources,omitempty"`
-	Skipped   []ResourceChange `json:"skipped,omitempty"`
+	Status        string           `json:"status"` // "changes_needed", "clean", "stop_with_skipped", "error"
+	Error         string           `json:"error,omitempty"`
+	Summary       *NextSummary     `json:"summary,omitempty"`
+	Resources     []ResourceChange `json:"resources,omitempty"`
+	Skipped       []ResourceChange `json:"skipped,omitempty"`
+	StateFilePath string           `json:"stateFilePath,omitempty"`
 }
 
 // NextSummary provides aggregate counts of drift for quick orientation
@@ -92,9 +95,10 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	eventsFile, _ := cmd.Flags().GetString("events-file")
 	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
 	stateFile, _ := cmd.Flags().GetString("state-file")
+	skipRefresh, _ := cmd.Flags().GetBool("skip-refresh")
 
 	// Get preview output from file or command
-	output, err := getPreviewOutput(eventsFile, projectDir, stack)
+	output, err := getPreviewOutput(eventsFile, projectDir, stack, skipRefresh)
 	if err != nil {
 		return err
 	}
@@ -106,7 +110,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Load state for dependency resolution
-	stateLookup, err := getStateExport(stateFile, projectDir, stack)
+	stateLookup, stateFilePath, err := getStateExport(stateFile, projectDir, stack)
 	if err != nil {
 		return err
 	}
@@ -129,11 +133,11 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	resources := convertStepsToResources(steps, stateLookup)
 
 	// Output result with resource limit and exclusions
-	return outputResult(resources, maxResources, excludeURNs)
+	return outputResult(resources, maxResources, excludeURNs, stateFilePath)
 }
 
 // getPreviewOutput retrieves preview output from either a file or by running pulumi preview
-func getPreviewOutput(eventsFile, projectDir, stack string) ([]byte, error) {
+func getPreviewOutput(eventsFile, projectDir, stack string, skipRefresh bool) ([]byte, error) {
 	if eventsFile != "" {
 		// Read events file instead of calling preview
 		output, err := os.ReadFile(eventsFile)
@@ -143,8 +147,11 @@ func getPreviewOutput(eventsFile, projectDir, stack string) ([]byte, error) {
 		return output, nil
 	}
 
-	// Build pulumi preview command with JSON output and refresh
-	cmdArgs := []string{"preview", "--json", "--non-interactive", "--refresh"}
+	// Build pulumi preview command with JSON output
+	cmdArgs := []string{"preview", "--json", "--non-interactive"}
+	if !skipRefresh {
+		cmdArgs = append(cmdArgs, "--refresh")
+	}
 	if stack != "" {
 		cmdArgs = append(cmdArgs, "--stack", stack)
 	}
@@ -431,9 +438,13 @@ func resolvePropertyValue(state *apitype.ResourceV3, path string, inputsOnly boo
 }
 
 // getStateExport retrieves state export from a file or by running pulumi stack export.
-func getStateExport(stateFile, projectDir, stack string) (map[string]*apitype.ResourceV3, error) {
+// Returns the parsed lookup map, the path to a state file (for reuse in subsequent calls),
+// and any error. When --state-file is provided, returns that path unchanged.
+// When running stack export live, caches the output to a temp file and returns its path.
+func getStateExport(stateFile, projectDir, stack string) (map[string]*apitype.ResourceV3, string, error) {
 	if stateFile != "" {
-		return parseStateFile(stateFile)
+		lookup, err := parseStateFile(stateFile)
+		return lookup, stateFile, err
 	}
 
 	// Run pulumi stack export to get full state (--show-secrets so secret
@@ -450,9 +461,26 @@ func getStateExport(stateFile, projectDir, stack string) (map[string]*apitype.Re
 	output, err := exportCmd.Output()
 	if err != nil {
 		// State export failure is non-fatal — proceed without dependency resolution
-		return nil, nil
+		return nil, "", nil
 	}
-	return parseStateExport(output)
+
+	// Cache state to temp file for reuse in subsequent invocations
+	tmpFile, err := os.CreateTemp("", "drift-adopter-state-*.json")
+	if err != nil {
+		// Cache failure is non-fatal — parse and return without path
+		lookup, parseErr := parseStateExport(output)
+		return lookup, "", parseErr
+	}
+	if _, err := tmpFile.Write(output); err != nil {
+		tmpFile.Close()
+		os.Remove(tmpFile.Name())
+		lookup, parseErr := parseStateExport(output)
+		return lookup, "", parseErr
+	}
+	tmpFile.Close()
+
+	lookup, parseErr := parseStateExport(output)
+	return lookup, tmpFile.Name(), parseErr
 }
 
 // parseStateFile reads a pulumi stack export JSON and returns a URN-to-resource lookup map.
@@ -737,8 +765,15 @@ func extractAllProperties(props map[string]interface{}, prefix string, propertie
 	}
 }
 
+// Auto-limit constants: when maxResources is -1 (default/unlimited), the tool
+// automatically limits output for large drift to keep response sizes manageable.
+const (
+	autoLimitThreshold = 200 // If actionable count exceeds this, auto-limit kicks in
+	autoLimitBatchSize = 50  // Number of resources returned when auto-limiting
+)
+
 // outputResult outputs the final JSON result with filtering, exclusions, and resource limiting
-func outputResult(resources []ResourceChange, maxResources int, excludeURNs []string) error {
+func outputResult(resources []ResourceChange, maxResources int, excludeURNs []string, stateFilePath string) error {
 	// Build exclude set for O(1) lookup
 	excludeSet := make(map[string]bool, len(excludeURNs))
 	for _, urn := range excludeURNs {
@@ -781,13 +816,18 @@ func outputResult(resources []ResourceChange, maxResources int, excludeURNs []st
 		}
 	}
 
-	// Apply resource limit to actionable bucket only
+	// Apply resource limit to actionable bucket only.
+	// Explicit --max-resources N (N > 0) overrides; otherwise auto-limit for large drift.
 	if maxResources > 0 && len(actionable) > maxResources {
 		actionable = actionable[:maxResources]
+	} else if maxResources == -1 && len(actionable) > autoLimitThreshold {
+		actionable = actionable[:autoLimitBatchSize]
 	}
 
 	// Determine status
-	result := NextOutput{}
+	result := NextOutput{
+		StateFilePath: stateFilePath,
+	}
 	switch {
 	case len(actionable) > 0:
 		result.Status = "changes_needed"
