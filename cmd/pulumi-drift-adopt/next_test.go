@@ -2250,7 +2250,7 @@ func TestSortResourcesByDependencies(t *testing.T) {
 	makeRes := func(name string, inputProps map[string]interface{}) ResourceChange {
 		return ResourceChange{
 			Action:          "add_to_code",
-			URN:             "urn:pulumi:dev::test::pkg:Res::"+name,
+			URN:             "urn:pulumi:dev::test::pkg:Res::" + name,
 			Type:            "pkg:Res",
 			Name:            name,
 			InputProperties: inputProps,
