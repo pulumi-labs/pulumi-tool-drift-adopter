@@ -1711,7 +1711,8 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 
 	t.Run("plaintext secret output matches correctly (show-secrets)", func(t *testing.T) {
 		// With --show-secrets, secret outputs appear as plaintext — no sentinel wrapper.
-		// findMatchingOutput should match them normally.
+		// Each array element is resolved individually: "secret-password-value" matches
+		// the "result" output, so triggers becomes [{dependsOn: {outputProperty: "result"}}].
 		eventsContent := `{
 			"steps": [{
 				"op": "delete",
@@ -1746,19 +1747,24 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		resources := convertStepsToResources(steps, stateLookup)
 		require.Len(t, resources, 1)
 
-		// triggers is an array ["secret-password-value"] which won't match string "secret-password-value"
-		// So it falls back to bare dependsOn (structural mismatch: array vs string)
-		triggers, ok := resources[0].InputProperties["triggers"].(map[string]interface{})
-		require.True(t, ok, "triggers should have dependsOn metadata, got %T", resources[0].InputProperties["triggers"])
-		dep, ok := triggers["dependsOn"].(map[string]interface{})
+		// Array elements are resolved individually: "secret-password-value" matches result output.
+		// triggers should be an array with one dependsOn element (with outputProperty).
+		triggersRaw := resources[0].InputProperties["triggers"]
+		triggers, ok := triggersRaw.([]interface{})
+		require.True(t, ok, "triggers should be an array, got %T", triggersRaw)
+		require.Len(t, triggers, 1)
+		elem, ok := triggers[0].(map[string]interface{})
+		require.True(t, ok, "trigger element should be a map")
+		dep, ok := elem["dependsOn"].(map[string]interface{})
 		require.True(t, ok)
 		assert.Equal(t, "api-pass", dep["resourceName"])
 		assert.Equal(t, "random:index/randomPassword:RandomPassword", dep["resourceType"])
+		assert.Equal(t, "result", dep["outputProperty"])
 	})
 
-	t.Run("bare dependsOn when structural mismatch - array input vs string output", func(t *testing.T) {
-		// Input is ["some-value"] (array), output is "some-value" (string).
-		// Exact JSON match fails, but bare dependsOn should be emitted for single depURN.
+	t.Run("array element matched to string output - resolves outputProperty", func(t *testing.T) {
+		// Input is ["hex-output-value"] (array), output has "hex": "hex-output-value" (string).
+		// With element-level resolution, the element matches the "hex" output directly.
 		eventsContent := `{
 			"steps": [{
 				"op": "delete",
@@ -1793,14 +1799,18 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		resources := convertStepsToResources(steps, stateLookup)
 		require.Len(t, resources, 1)
 
-		// Array vs string mismatch → bare dependsOn
-		triggers, ok := resources[0].InputProperties["triggers"].(map[string]interface{})
-		require.True(t, ok, "triggers should have bare dependsOn")
-		dep, ok := triggers["dependsOn"].(map[string]interface{})
+		// Array element "hex-output-value" matches output "hex" → resolved with outputProperty
+		triggersRaw := resources[0].InputProperties["triggers"]
+		triggers, ok := triggersRaw.([]interface{})
+		require.True(t, ok, "triggers should be an array, got %T", triggersRaw)
+		require.Len(t, triggers, 1)
+		elem, ok := triggers[0].(map[string]interface{})
+		require.True(t, ok, "trigger element should be a map")
+		dep, ok := elem["dependsOn"].(map[string]interface{})
 		require.True(t, ok)
 		assert.Equal(t, "worker-id", dep["resourceName"])
 		assert.Equal(t, "random:index/randomId:RandomId", dep["resourceType"])
-		assert.Nil(t, dep["outputProperty"], "bare dependsOn should not have outputProperty")
+		assert.Equal(t, "hex", dep["outputProperty"])
 	})
 
 	t.Run("multiple depURNs with no match returns plain value", func(t *testing.T) {
@@ -2071,4 +2081,382 @@ func TestNextCommandOutputFileFlag(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &full2))
 	assert.Equal(t, "changes_needed", full2.Status)
 	require.Len(t, full2.Resources, 1)
+}
+
+// TestNestedDependsOnMapProperty verifies that map-valued properties with PropertyDependencies
+// get element-level dependsOn resolution, preserving map keys.
+func TestNestedDependsOnMapProperty(t *testing.T) {
+	t.Run("map value matches dep output - key preserved with outputProperty", func(t *testing.T) {
+		// keepers = {"ref": "pet-name-val"}, dep resource has outputs {"id": "pet-name-val"}
+		// Each map value is resolved individually: "pet-name-val" matches output "id".
+		eventsContent := `{
+			"steps": [{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::api-pass",
+				"oldState": {
+					"type": "random:index/randomPassword:RandomPassword",
+					"inputs": {"keepers": {"ref": "pet-name-val"}},
+					"propertyDependencies": {
+						"keepers": ["urn:pulumi:dev::test::random:index/randomPet:RandomPet::cache-pet"]
+					}
+				}
+			}]
+		}`
+		stateContent := `{
+			"version": 3,
+			"deployment": {
+				"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+				"resources": [{
+					"urn": "urn:pulumi:dev::test::random:index/randomPet:RandomPet::cache-pet",
+					"type": "random:index/randomPet:RandomPet",
+					"inputs": {},
+					"outputs": {"id": "pet-name-val", "separator": "-"}
+				}]
+			}
+		}`
+
+		steps, err := parsePreviewOutput([]byte(eventsContent))
+		require.NoError(t, err)
+		stateLookup, err := parseStateExport([]byte(stateContent))
+		require.NoError(t, err)
+
+		resources := convertStepsToResources(steps, stateLookup)
+		require.Len(t, resources, 1)
+
+		// keepers should be a map with preserved keys and resolved dependsOn per value
+		keepersRaw := resources[0].InputProperties["keepers"]
+		keepers, ok := keepersRaw.(map[string]interface{})
+		require.True(t, ok, "keepers should be a map, got %T", keepersRaw)
+
+		// Key "ref" should be preserved; its value should be a dependsOn wrapper
+		refVal, ok := keepers["ref"].(map[string]interface{})
+		require.True(t, ok, "keepers[\"ref\"] should be a dependsOn map, got %T", keepers["ref"])
+		dep, ok := refVal["dependsOn"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "cache-pet", dep["resourceName"])
+		assert.Equal(t, "random:index/randomPet:RandomPet", dep["resourceType"])
+		assert.Equal(t, "id", dep["outputProperty"])
+	})
+
+	t.Run("map value encrypted - key preserved with bare dependsOn", func(t *testing.T) {
+		// keepers = {"ref": "<encrypted>"}, dep resource has no matching output.
+		// Map key preserved, bare dependsOn emitted for the value.
+		eventsContent := `{
+			"steps": [{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::api-pass",
+				"oldState": {
+					"type": "random:index/randomPassword:RandomPassword",
+					"inputs": {"keepers": {"ref": "<encrypted>"}},
+					"propertyDependencies": {
+						"keepers": ["urn:pulumi:dev::test::random:index/randomPet:RandomPet::cache-pet"]
+					}
+				}
+			}]
+		}`
+		stateContent := `{
+			"version": 3,
+			"deployment": {
+				"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+				"resources": [{
+					"urn": "urn:pulumi:dev::test::random:index/randomPet:RandomPet::cache-pet",
+					"type": "random:index/randomPet:RandomPet",
+					"inputs": {},
+					"outputs": {"id": "pet-name-val"}
+				}]
+			}
+		}`
+
+		steps, err := parsePreviewOutput([]byte(eventsContent))
+		require.NoError(t, err)
+		stateLookup, err := parseStateExport([]byte(stateContent))
+		require.NoError(t, err)
+
+		resources := convertStepsToResources(steps, stateLookup)
+		require.Len(t, resources, 1)
+
+		keepersRaw := resources[0].InputProperties["keepers"]
+		keepers, ok := keepersRaw.(map[string]interface{})
+		require.True(t, ok, "keepers should be a map, got %T", keepersRaw)
+
+		// Key "ref" preserved; value is bare dependsOn (no outputProperty)
+		refVal, ok := keepers["ref"].(map[string]interface{})
+		require.True(t, ok, "keepers[\"ref\"] should be a dependsOn map")
+		dep, ok := refVal["dependsOn"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "cache-pet", dep["resourceName"])
+		assert.Equal(t, "random:index/randomPet:RandomPet", dep["resourceType"])
+		assert.Nil(t, dep["outputProperty"], "bare dependsOn should have no outputProperty")
+	})
+
+	t.Run("array element encrypted - array structure preserved with bare dependsOn", func(t *testing.T) {
+		// triggers = ["<encrypted>"], dep has no matching output.
+		// Array structure preserved; element becomes bare dependsOn.
+		eventsContent := `{
+			"steps": [{
+				"op": "delete",
+				"urn": "urn:pulumi:dev::test::command:local:Command::deploy-cmd",
+				"oldState": {
+					"type": "command:local:Command",
+					"inputs": {"triggers": ["<encrypted>"]},
+					"propertyDependencies": {
+						"triggers": ["urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::api-pass"]
+					}
+				}
+			}]
+		}`
+		stateContent := `{
+			"version": 3,
+			"deployment": {
+				"manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+				"resources": [{
+					"urn": "urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::api-pass",
+					"type": "random:index/randomPassword:RandomPassword",
+					"inputs": {"length": 16},
+					"outputs": {
+						"4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+						"ciphertext": "abc123encrypted"
+					}
+				}]
+			}
+		}`
+
+		steps, err := parsePreviewOutput([]byte(eventsContent))
+		require.NoError(t, err)
+		stateLookup, err := parseStateExport([]byte(stateContent))
+		require.NoError(t, err)
+
+		resources := convertStepsToResources(steps, stateLookup)
+		require.Len(t, resources, 1)
+
+		triggersRaw := resources[0].InputProperties["triggers"]
+		triggers, ok := triggersRaw.([]interface{})
+		require.True(t, ok, "triggers should be an array, got %T", triggersRaw)
+		require.Len(t, triggers, 1)
+
+		// Element becomes bare dependsOn (encrypted = no output match)
+		elem, ok := triggers[0].(map[string]interface{})
+		require.True(t, ok, "trigger element should be a dependsOn map")
+		dep, ok := elem["dependsOn"].(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "api-pass", dep["resourceName"])
+		assert.Equal(t, "random:index/randomPassword:RandomPassword", dep["resourceType"])
+		assert.Nil(t, dep["outputProperty"], "bare dependsOn should have no outputProperty")
+	})
+}
+
+// TestSortResourcesByDependencies verifies topological sorting and DependencyLevel assignment.
+func TestSortResourcesByDependencies(t *testing.T) {
+	makeRes := func(name string, inputProps map[string]interface{}) ResourceChange {
+		return ResourceChange{
+			Action:          "add_to_code",
+			URN:             "urn:pulumi:dev::test::pkg:Res::"+name,
+			Type:            "pkg:Res",
+			Name:            name,
+			InputProperties: inputProps,
+		}
+	}
+
+	dependsOnProp := func(resourceName string) map[string]interface{} {
+		return map[string]interface{}{
+			"dependsOn": map[string]interface{}{
+				"resourceName": resourceName,
+				"resourceType": "pkg:Res",
+			},
+		}
+	}
+
+	t.Run("empty slice", func(t *testing.T) {
+		result := sortResourcesByDependencies(nil)
+		assert.Nil(t, result)
+	})
+
+	t.Run("no dependencies - order preserved, level 0", func(t *testing.T) {
+		resources := []ResourceChange{
+			makeRes("a", map[string]interface{}{"x": 1}),
+			makeRes("b", map[string]interface{}{"y": 2}),
+		}
+		result := sortResourcesByDependencies(resources)
+		require.Len(t, result, 2)
+		for _, r := range result {
+			assert.Equal(t, 0, r.DependencyLevel)
+		}
+	})
+
+	t.Run("simple chain A depends on B - B comes first at level 0, A at level 1", func(t *testing.T) {
+		resources := []ResourceChange{
+			makeRes("a", map[string]interface{}{"ref": dependsOnProp("b")}),
+			makeRes("b", map[string]interface{}{"x": 1}),
+		}
+		result := sortResourcesByDependencies(resources)
+		require.Len(t, result, 2)
+		assert.Equal(t, "b", result[0].Name)
+		assert.Equal(t, 0, result[0].DependencyLevel)
+		assert.Equal(t, "a", result[1].Name)
+		assert.Equal(t, 1, result[1].DependencyLevel)
+	})
+
+	t.Run("diamond A->B, A->C, B->D, C->D - D first, then B and C, then A", func(t *testing.T) {
+		resources := []ResourceChange{
+			makeRes("a", map[string]interface{}{"rb": dependsOnProp("b"), "rc": dependsOnProp("c")}),
+			makeRes("b", map[string]interface{}{"rd": dependsOnProp("d")}),
+			makeRes("c", map[string]interface{}{"rd": dependsOnProp("d")}),
+			makeRes("d", map[string]interface{}{"x": 1}),
+		}
+		result := sortResourcesByDependencies(resources)
+		require.Len(t, result, 4)
+
+		levelByName := make(map[string]int)
+		posByName := make(map[string]int)
+		for i, r := range result {
+			levelByName[r.Name] = r.DependencyLevel
+			posByName[r.Name] = i
+		}
+
+		assert.Equal(t, 0, levelByName["d"])
+		assert.Less(t, posByName["d"], posByName["b"])
+		assert.Less(t, posByName["d"], posByName["c"])
+		assert.Less(t, posByName["b"], posByName["a"])
+		assert.Less(t, posByName["c"], posByName["a"])
+		assert.Equal(t, 2, levelByName["a"]) // a is 2 hops from d
+	})
+
+	t.Run("external dep (not in batch) - resource treated as level 0", func(t *testing.T) {
+		// "a" references "external" which is not in the batch
+		resources := []ResourceChange{
+			makeRes("a", map[string]interface{}{"ref": dependsOnProp("external")}),
+			makeRes("b", map[string]interface{}{"x": 1}),
+		}
+		result := sortResourcesByDependencies(resources)
+		require.Len(t, result, 2)
+		for _, r := range result {
+			assert.Equal(t, 0, r.DependencyLevel)
+		}
+	})
+
+	t.Run("array-wrapped dependsOn resolved correctly", func(t *testing.T) {
+		// triggers = [{"dependsOn": {...}}] — dependency inside array
+		resources := []ResourceChange{
+			makeRes("cmd", map[string]interface{}{
+				"triggers": []interface{}{dependsOnProp("pass")},
+			}),
+			makeRes("pass", map[string]interface{}{"length": 16}),
+		}
+		result := sortResourcesByDependencies(resources)
+		require.Len(t, result, 2)
+		assert.Equal(t, "pass", result[0].Name)
+		assert.Equal(t, 0, result[0].DependencyLevel)
+		assert.Equal(t, "cmd", result[1].Name)
+		assert.Equal(t, 1, result[1].DependencyLevel)
+	})
+}
+
+func TestInvertPropertyKindReplace(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"add", "delete"},
+		{"add-replace", "delete"},
+		{"delete", "add"},
+		{"delete-replace", "add"},
+		{"update", "update"},
+		{"update-replace", "update"},
+		{"unknown", "unknown"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			assert.Equal(t, tc.expected, invertPropertyKind(tc.input))
+		})
+	}
+}
+
+func TestExtractPropertyChangesReplaceKinds(t *testing.T) {
+	t.Run("delete-replace kind inverts to add", func(t *testing.T) {
+		eventsContent := `{
+			"steps": [{
+				"op": "replace",
+				"urn": "urn:pulumi:dev::test::command:local:Command::deploy-cmd",
+				"oldState": {
+					"type": "command:local:Command",
+					"inputs": {"triggers": ["secret-val"]}
+				},
+				"newState": {
+					"type": "command:local:Command",
+					"inputs": {}
+				},
+				"detailedDiff": {
+					"triggers": {"kind": "delete-replace", "inputDiff": true}
+				}
+			}]
+		}`
+		tmpDir := t.TempDir()
+		eventsFile := filepath.Join(tmpDir, "events.json")
+		require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+
+		_, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
+		require.Len(t, full.Resources, 1)
+		require.Len(t, full.Resources[0].Properties, 1)
+		assert.Equal(t, "triggers", full.Resources[0].Properties[0].Path)
+		assert.Equal(t, "add", full.Resources[0].Properties[0].Kind)
+	})
+
+	t.Run("add-replace kind inverts to delete", func(t *testing.T) {
+		eventsContent := `{
+			"steps": [{
+				"op": "replace",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket",
+				"oldState": {
+					"type": "aws:s3/bucket:Bucket",
+					"inputs": {}
+				},
+				"newState": {
+					"type": "aws:s3/bucket:Bucket",
+					"inputs": {"forceDestroy": true}
+				},
+				"detailedDiff": {
+					"forceDestroy": {"kind": "add-replace", "inputDiff": true}
+				}
+			}]
+		}`
+		tmpDir := t.TempDir()
+		eventsFile := filepath.Join(tmpDir, "events.json")
+		require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+
+		_, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
+		require.Len(t, full.Resources, 1)
+		require.Len(t, full.Resources[0].Properties, 1)
+		assert.Equal(t, "forceDestroy", full.Resources[0].Properties[0].Path)
+		assert.Equal(t, "delete", full.Resources[0].Properties[0].Kind)
+	})
+
+	t.Run("null/null properties are skipped", func(t *testing.T) {
+		eventsContent := `{
+			"steps": [{
+				"op": "replace",
+				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket",
+				"oldState": {
+					"type": "aws:s3/bucket:Bucket",
+					"inputs": {"bucket": "old-name"}
+				},
+				"newState": {
+					"type": "aws:s3/bucket:Bucket",
+					"inputs": {"bucket": "new-name"}
+				},
+				"detailedDiff": {
+					"computedField": {"kind": "update", "inputDiff": false},
+					"bucket": {"kind": "update", "inputDiff": true}
+				}
+			}]
+		}`
+		tmpDir := t.TempDir()
+		eventsFile := filepath.Join(tmpDir, "events.json")
+		require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
+
+		_, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
+		require.Len(t, full.Resources, 1)
+		// computedField has nil/nil (not in inputs/outputs) and should be skipped
+		require.Len(t, full.Resources[0].Properties, 1)
+		assert.Equal(t, "bucket", full.Resources[0].Properties[0].Path)
+	})
 }

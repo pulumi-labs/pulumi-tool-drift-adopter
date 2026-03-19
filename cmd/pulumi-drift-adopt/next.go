@@ -87,6 +87,7 @@ type ResourceChange struct {
 	URN             string                 `json:"urn"`
 	Type            string                 `json:"type"`
 	Name            string                 `json:"name"`
+	DependencyLevel int                    `json:"dependencyLevel,omitempty"`
 	Properties      []PropertyChange       `json:"properties,omitempty"`
 	InputProperties map[string]interface{} `json:"inputProperties,omitempty"`
 	Reason          string                 `json:"reason,omitempty"` // Why skipped: "excluded", "missing_properties"
@@ -144,6 +145,9 @@ func runNext(cmd *cobra.Command, _ []string) error {
 
 	// Convert steps to resource changes
 	resources := convertStepsToResources(steps, stateLookup)
+
+	// Sort by dependency order to reduce context pressure: leaf nodes first
+	resources = sortResourcesByDependencies(resources)
 
 	// Output result with resource limit and exclusions
 	return outputResult(resources, maxResources, excludeURNs, stateFilePath, outputFile)
@@ -396,11 +400,11 @@ func getActionForOperation(op string) string {
 // invertPropertyKind inverts the property change kind from preview perspective to code change perspective
 func invertPropertyKind(previewKind string) string {
 	switch previewKind {
-	case "add":
+	case "add", "add-replace":
 		// Preview wants to ADD to infrastructure = property in code but not in state
 		// Action: DELETE from code
 		return "delete"
-	case "delete":
+	case "delete", "delete-replace":
 		// Preview wants to DELETE from infrastructure = property in state but not in code
 		// Action: ADD to code
 		return "add"
@@ -565,7 +569,37 @@ func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apity
 			continue
 		}
 
-		// Try to resolve the dependency
+		// For map values: resolve each map entry individually (preserves keys even when
+		// the whole-map value can't be matched to a single output, e.g. keepers map).
+		if m, ok := value.(map[string]interface{}); ok {
+			resolvedMap := make(map[string]interface{}, len(m))
+			for mk, mv := range m {
+				if dep := resolveDependency(mv, depURNs, stateLookup); dep != nil {
+					resolvedMap[mk] = dep
+				} else {
+					resolvedMap[mk] = truncateValue(mv)
+				}
+			}
+			result[key] = resolvedMap
+			continue
+		}
+
+		// For array values: resolve each element individually (preserves array structure
+		// even when elements are encrypted or structurally mismatched, e.g. triggers).
+		if arr, ok := value.([]interface{}); ok {
+			resolvedArr := make([]interface{}, len(arr))
+			for i, elem := range arr {
+				if dep := resolveDependency(elem, depURNs, stateLookup); dep != nil {
+					resolvedArr[i] = dep
+				} else {
+					resolvedArr[i] = truncateValue(elem)
+				}
+			}
+			result[key] = resolvedArr
+			continue
+		}
+
+		// Scalar: try to resolve the dependency directly
 		if dep := resolveDependency(value, depURNs, stateLookup); dep != nil {
 			result[key] = dep
 		} else {
@@ -744,6 +778,12 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 			}
 		}
 
+		// Skip properties where both values are nil — computed-only fields
+		// in diff metadata with no actionable values for the agent.
+		if currentValue == nil && desiredValue == nil {
+			continue
+		}
+
 		properties = append(properties, PropertyChange{
 			Path:         path,
 			CurrentValue: currentValue,
@@ -776,6 +816,135 @@ func extractAllProperties(props map[string]interface{}, prefix string, propertie
 			})
 		}
 	}
+}
+
+// collectDependencyNames recursively scans a value for dependsOn entries, appending
+// any referenced resourceName values that exist in nameSet to deps (deduped via seen).
+func collectDependencyNames(value interface{}, nameSet map[string]bool, seen map[string]bool, deps *[]string) {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		// If this map is itself a dependsOn wrapper, extract the resourceName and stop
+		if dep, ok := v["dependsOn"]; ok {
+			if depMap, ok := dep.(map[string]interface{}); ok {
+				if name, ok := depMap["resourceName"].(string); ok && nameSet[name] && !seen[name] {
+					seen[name] = true
+					*deps = append(*deps, name)
+				}
+			}
+			return // don't recurse further into the dependsOn structure
+		}
+		// Otherwise recurse into map values (handles map properties after element-level resolution)
+		for _, mv := range v {
+			collectDependencyNames(mv, nameSet, seen, deps)
+		}
+	case []interface{}:
+		for _, elem := range v {
+			collectDependencyNames(elem, nameSet, seen, deps)
+		}
+	}
+}
+
+// extractDependencyNames returns the names of resources (within nameSet) that res depends on,
+// by scanning inputProperties for dependsOn entries at any nesting depth.
+func extractDependencyNames(res ResourceChange, nameSet map[string]bool) []string {
+	var deps []string
+	seen := make(map[string]bool)
+	for _, value := range res.InputProperties {
+		collectDependencyNames(value, nameSet, seen, &deps)
+	}
+	return deps
+}
+
+// sortResourcesByDependencies sorts resources in dependency order (leaf nodes first)
+// using Kahn's topological sort algorithm, and assigns DependencyLevel to each resource.
+// Resources with DependencyLevel 0 have no cross-batch dependencies; higher levels depend
+// on lower-level resources. Cycles are appended at maxLevel+1.
+func sortResourcesByDependencies(resources []ResourceChange) []ResourceChange {
+	n := len(resources)
+	if n == 0 {
+		return resources
+	}
+
+	// Build name->index map and name set for resources in this batch
+	nameToIdx := make(map[string]int, n)
+	for i, res := range resources {
+		nameToIdx[res.Name] = i
+	}
+	nameSet := make(map[string]bool, n)
+	for name := range nameToIdx {
+		nameSet[name] = true
+	}
+
+	// Build dependency graph:
+	//   inDegree[i] = number of batch resources that resource[i] depends on
+	//   dependedBy[j] = list of indices that depend ON resource[j]
+	inDegree := make([]int, n)
+	dependedBy := make([][]int, n)
+
+	for i, res := range resources {
+		depNames := extractDependencyNames(res, nameSet)
+		seen := make(map[int]bool)
+		for _, name := range depNames {
+			j, ok := nameToIdx[name]
+			if !ok || j == i || seen[j] {
+				continue
+			}
+			seen[j] = true
+			inDegree[i]++
+			dependedBy[j] = append(dependedBy[j], i)
+		}
+	}
+
+	// Kahn's BFS: process zero-inDegree nodes first, assigning levels
+	levels := make([]int, n)
+	remaining := make([]int, n)
+	copy(remaining, inDegree)
+
+	var queue []int
+	for i := 0; i < n; i++ {
+		if remaining[i] == 0 {
+			queue = append(queue, i)
+		}
+	}
+
+	order := make([]int, 0, n)
+	for len(queue) > 0 {
+		curr := queue[0]
+		queue = queue[1:]
+		order = append(order, curr)
+		for _, dep := range dependedBy[curr] {
+			remaining[dep]--
+			if levels[curr]+1 > levels[dep] {
+				levels[dep] = levels[curr] + 1
+			}
+			if remaining[dep] == 0 {
+				queue = append(queue, dep)
+			}
+		}
+	}
+
+	// Append cyclic resources at maxLevel+1
+	maxLevel := 0
+	for _, l := range levels {
+		if l > maxLevel {
+			maxLevel = l
+		}
+	}
+	for i := 0; i < n; i++ {
+		if remaining[i] > 0 {
+			levels[i] = maxLevel + 1
+			order = append(order, i)
+		}
+	}
+
+	// Build result in topological order, setting DependencyLevel
+	result := make([]ResourceChange, 0, n)
+	for _, origIdx := range order {
+		res := resources[origIdx]
+		res.DependencyLevel = levels[origIdx]
+		result = append(result, res)
+	}
+	return result
 }
 
 // outputResult outputs the final JSON result with filtering, exclusions, and resource limiting.
