@@ -7,18 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Moved skill to [pulumi/agent-skills](https://github.com/pulumi/agent-skills) repository
-- Simplified CI to run unit tests only
-- Switched task runner from Make to Just
-- Updated Go version to 1.24
-
 ### Added
+- **Two-phase output model**: compact summary JSON to stdout, full resource details written to output file
+- **`--output-file` flag** to specify path for full output file (defaults to auto-generated temp file)
+- **`--skip-refresh` flag** to omit `--refresh` from `pulumi preview`
+- **`--state-file` flag** to provide a cached `pulumi stack export` JSON (skips calling stack export)
+- **`--exclude-urns` flag** to exclude specific resource URNs from results
+- **State file caching**: live `pulumi stack export` output is cached to a temp file and its path returned in output for reuse
+- **Topological dependency sorting**: resources sorted by dependency level (leaf nodes first) using Kahn's algorithm
+- **Element-level dependency resolution**: map and array properties (e.g. `dependsOn`) resolve individual elements instead of collapsing
+- **`-replace` property kind handling**: `add-replace` and `delete-replace` diff kinds are now correctly inverted
+- **`stop_with_skipped` status**: returned when all remaining resources were excluded or had missing properties
 - Apache 2.0 LICENSE file
 - Copyright headers to all Go source files
 - Pre-push git hook for linting and testing
 - CONTRIBUTING.md tailored to this repo (replaces copy from pulumi/pulumi)
 - CODE-OF-CONDUCT.md
+
+### Changed
+- Moved skill to [pulumi/agent-skills](https://github.com/pulumi/agent-skills) repository
+- Simplified CI to run unit tests only
+- Switched task runner from Make to Just
+- Updated Go version to 1.24
+- Command constructors refactored from global vars to `newRootCmd()`/`newNextCmd()` functions for test isolation
+- Properties where both current and desired values are nil (computed-only fields) are now filtered out
 
 ### Removed
 - E2E tests (moved to agent-skills repo)

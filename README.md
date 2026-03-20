@@ -42,15 +42,43 @@ Use this mode when integrating with deployment systems that run preview separate
 
 ## Output
 
+The tool uses a two-phase output model:
+
+1. **Stdout** — A compact summary JSON for the agent to parse quickly
+2. **Output file** — The full JSON with all resource details, written to disk
+
+### Summary (stdout)
+
 ```json
 {
   "status": "changes_needed",
+  "summary": {
+    "total": 3,
+    "byAction": { "update_code": 2, "add_to_code": 1 },
+    "byType": { "aws:s3/bucket:Bucket": 2, "aws:ec2/instance:Instance": 1 },
+    "byTypeAction": { "aws:s3/bucket:Bucket": { "update_code": 2 } }
+  },
+  "outputFile": "/tmp/drift-adopter-output-123456.json",
+  "stateFilePath": "/tmp/drift-adopter-state-123456.json",
+  "skippedCount": 0
+}
+```
+
+The agent reads the full resource details from `outputFile` using its Read tool.
+
+### Full output (file)
+
+```json
+{
+  "status": "changes_needed",
+  "summary": { "total": 1, "byAction": { "update_code": 1 }, "byType": {}, "byTypeAction": {} },
   "resources": [
     {
       "action": "update_code",
       "urn": "urn:pulumi:dev::app::aws:s3/bucket:Bucket::my-bucket",
       "type": "aws:s3/bucket:Bucket",
       "name": "my-bucket",
+      "dependencyLevel": 0,
       "properties": [
         {
           "path": "tags.Environment",
@@ -60,19 +88,24 @@ Use this mode when integrating with deployment systems that run preview separate
         }
       ]
     }
-  ]
+  ],
+  "skipped": [],
+  "stateFilePath": "/tmp/drift-adopter-state-123456.json"
 }
 ```
 
 **Status values:**
-- `changes_needed` - Code changes required
-- `clean` - No drift, code matches state
-- `error` - Preview failed
+- `changes_needed` — Code changes required
+- `clean` — No drift, code matches state
+- `stop_with_skipped` — All remaining resources were skipped (excluded or missing properties)
+- `error` — Preview failed
 
 **Actions:**
-- `update_code` - Update properties in code to match `desiredValue`
-- `delete_from_code` - Remove resource from code (exists in code but not infrastructure)
-- `add_to_code` - Add resource to code (exists in infrastructure but not code)
+- `update_code` — Update properties in code to match `desiredValue`
+- `delete_from_code` — Remove resource from code (exists in code but not infrastructure)
+- `add_to_code` — Add resource to code (exists in infrastructure but not code)
+
+**Resource ordering:** Resources are topologically sorted by dependency level (leaf nodes first). The `dependencyLevel` field indicates depth in the dependency graph — 0 means no cross-batch dependencies.
 
 ## Flags
 
@@ -81,6 +114,10 @@ Use this mode when integrating with deployment systems that run preview separate
 | `--stack` | Pulumi stack name (default: current stack) |
 | `--events-file` | Path to engine events file (skips running preview) |
 | `--max-resources` | Max resources per batch (default: -1, unlimited) |
+| `--exclude-urns` | Resource URNs to exclude from results |
+| `--state-file` | Path to pulumi stack export JSON (skips calling stack export) |
+| `--skip-refresh` | Omit `--refresh` from pulumi preview |
+| `--output-file` | Path for full output file (default: auto-generated temp file) |
 | `--project` | Project directory (default: ".") |
 
 ## Parsing Logic
@@ -206,7 +243,11 @@ Both formats are parsed into `auto.PreviewStep` structs, then processed through 
 
 1. **DetailedDiff normalization** (`normalizeDetailedDiff`) — For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `Kind: "update"` and `InputDiff: true`. The NDJSON parser performs equivalent normalization from its `diffs` field during format conversion.
 
-2. **Property extraction** (`extractPropertyChanges`) — With `DetailedDiff` guaranteed populated for all update/replace steps, a single code path handles property value lookup. The `InputDiff` flag controls lookup strategy: input-diff entries resolve from `Inputs` only, while other entries try `Outputs` first with an `Inputs` fallback (`resolvePropertyValue`). Delete operations (no `DetailedDiff`) extract all properties from `OldState.Outputs`.
+2. **Property extraction** (`extractPropertyChanges`) — With `DetailedDiff` guaranteed populated for all update/replace steps, a single code path handles property value lookup. The `InputDiff` flag controls lookup strategy: input-diff entries resolve from `Inputs` only, while other entries try `Outputs` first with an `Inputs` fallback (`resolvePropertyValue`). Delete operations (no `DetailedDiff`) extract all properties from `OldState.Outputs`. Properties where both current and desired values are nil (computed-only fields) are filtered out.
+
+3. **Element-level dependency resolution** — For map and array properties (e.g. `dependsOn`), individual elements are resolved rather than collapsing to a single value. Map entries preserve their keys; array entries preserve structure.
+
+4. **Dependency sorting** (`sortResourcesByDependencies`) — Resources are topologically sorted using Kahn's algorithm so leaf nodes (no cross-batch dependencies) come first. Each resource is assigned a `DependencyLevel` indicating its depth in the dependency graph.
 
 ### Inversion
 
@@ -216,10 +257,10 @@ Preview output describes what Pulumi *would do* to infrastructure. The tool inve
 |-----------|-------------|------------------------|
 | `create` | `delete_from_code` | — |
 | `delete` | `add_to_code` | — |
-| `update` | `update_code` | `add` → `delete`, `delete` → `add` |
-| `replace` | `update_code` | `add` → `delete`, `delete` → `add` |
+| `update` | `update_code` | `add`/`add-replace` → `delete`, `delete`/`delete-replace` → `add` |
+| `replace` | `update_code` | `add`/`add-replace` → `delete`, `delete`/`delete-replace` → `add` |
 
-For synthesized input-diff entries (from `ReplaceReasons`/`DiffReasons`), property kind is refined from the default `"update"` based on nil values: nil current → `"delete"`, nil desired → `"add"`.
+For synthesized input-diff entries (from `ReplaceReasons`/`DiffReasons`), property kind is refined from the default `"update"` based on nil values: nil current → `"delete"`, nil desired → `"add"`. The `-replace` suffix variants (`add-replace`, `delete-replace`, `update-replace`) are handled identically to their base kinds.
 
 ## Limitations
 
