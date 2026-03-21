@@ -46,7 +46,7 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 	cmd.Flags().Int("max-resources", -1, "Maximum number of resources to return per batch (-1 = unlimited)")
 	cmd.Flags().String("events-file", "", "Path to engine events file (skips calling preview)")
 	cmd.Flags().StringSlice("exclude-urns", nil, "List of resource URNs to exclude from results")
-	cmd.Flags().String("state-file", "", "Path to pulumi stack export JSON file (skips calling stack export)")
+	cmd.Flags().String("dep-map-file", "", "Path to dependency map from a previous run (skips stack export)")
 	cmd.Flags().Bool("skip-refresh", false, "Omit --refresh from pulumi preview")
 	cmd.Flags().String("output-file", "", "Path for full output file (defaults to auto-generated temp file)")
 	return cmd
@@ -54,23 +54,23 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 
 // NextOutput is the full JSON structure written to the output file
 type NextOutput struct {
-	Status        string           `json:"status"` // "changes_needed", "clean", "stop_with_skipped", "error"
-	Error         string           `json:"error,omitempty"`
-	Summary       *NextSummary     `json:"summary,omitempty"`
-	Resources     []ResourceChange `json:"resources,omitempty"`
-	Skipped       []ResourceChange `json:"skipped,omitempty"`
-	StateFilePath string           `json:"stateFilePath,omitempty"`
+	Status     string           `json:"status"` // "changes_needed", "clean", "stop_with_skipped", "error"
+	Error      string           `json:"error,omitempty"`
+	Summary    *NextSummary     `json:"summary,omitempty"`
+	Resources  []ResourceChange `json:"resources,omitempty"`
+	Skipped    []ResourceChange `json:"skipped,omitempty"`
+	DepMapFile string           `json:"depMapFile,omitempty"`
 }
 
 // NextSummaryOutput is the compact JSON written to stdout.
 // The agent reads full resource details from OutputFile using its Read tool.
 type NextSummaryOutput struct {
-	Status        string       `json:"status"`
-	Error         string       `json:"error,omitempty"`
-	Summary       *NextSummary `json:"summary,omitempty"`
-	OutputFile    string       `json:"outputFile,omitempty"`
-	StateFilePath string       `json:"stateFilePath,omitempty"`
-	SkippedCount  int          `json:"skippedCount,omitempty"`
+	Status       string       `json:"status"`
+	Error        string       `json:"error,omitempty"`
+	Summary      *NextSummary `json:"summary,omitempty"`
+	OutputFile   string       `json:"outputFile,omitempty"`
+	DepMapFile   string       `json:"depMapFile,omitempty"`
+	SkippedCount int          `json:"skippedCount,omitempty"`
 }
 
 // NextSummary provides aggregate counts of drift for quick orientation
@@ -79,6 +79,17 @@ type NextSummary struct {
 	ByAction     map[string]int            `json:"byAction"`
 	ByType       map[string]int            `json:"byType"`
 	ByTypeAction map[string]map[string]int `json:"byTypeAction"`
+}
+
+// DependencyMap maps resource URN → property path → dependency metadata.
+// Contains no secret values — only resource names, types, and output property names.
+type DependencyMap map[string]map[string]DependencyRef
+
+// DependencyRef describes a single property-level dependency on another resource.
+type DependencyRef struct {
+	ResourceName   string `json:"resourceName"`
+	ResourceType   string `json:"resourceType"`
+	OutputProperty string `json:"outputProperty,omitempty"`
 }
 
 // ResourceChange describes a resource that needs code changes
@@ -107,7 +118,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	maxResources, _ := cmd.Flags().GetInt("max-resources")
 	eventsFile, _ := cmd.Flags().GetString("events-file")
 	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
-	stateFile, _ := cmd.Flags().GetString("state-file")
+	depMapFile, _ := cmd.Flags().GetString("dep-map-file")
 	skipRefresh, _ := cmd.Flags().GetBool("skip-refresh")
 	outputFile, _ := cmd.Flags().GetString("output-file")
 
@@ -123,34 +134,55 @@ func runNext(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Load state for dependency resolution
-	stateLookup, stateFilePath, err := getStateExport(stateFile, projectDir, stack)
-	if err != nil {
-		return err
-	}
+	var depMap DependencyMap
+	var stateLookup map[string]*apitype.ResourceV3
 
-	// Supplement with state from preview steps (OldState of delete operations)
-	stepLookup := buildStateLookupFromSteps(steps)
-	if stateLookup == nil {
-		stateLookup = stepLookup
+	if depMapFile != "" {
+		// Load pre-computed dependency map — skip state export entirely
+		depMap, err = loadDepMap(depMapFile)
+		if err != nil {
+			return err
+		}
+		// Still build step lookup for fallback resolution (preview-only resources)
+		stateLookup = buildStateLookupFromSteps(steps)
 	} else {
-		// State file entries take precedence (has all resources including unchanged);
-		// supplement with preview step data for resources not in state
-		for urn, res := range stepLookup {
-			if _, exists := stateLookup[urn]; !exists {
-				stateLookup[urn] = res
+		// Load state for dependency resolution (in-memory only, no file written)
+		stateLookup, err = getStateExport(projectDir, stack)
+		if err != nil {
+			return err
+		}
+
+		// Supplement with state from preview steps (OldState of delete operations)
+		stepLookup := buildStateLookupFromSteps(steps)
+		if stateLookup == nil {
+			stateLookup = stepLookup
+		} else {
+			for urn, res := range stepLookup {
+				if _, exists := stateLookup[urn]; !exists {
+					stateLookup[urn] = res
+				}
 			}
 		}
+
+		// Build complete dependency map from state — discards secret values
+		depMap = buildDepMapFromState(stateLookup)
 	}
 
 	// Convert steps to resource changes
-	resources := convertStepsToResources(steps, stateLookup)
+	resources := convertStepsToResources(steps, depMap, stateLookup)
 
 	// Sort by dependency order to reduce context pressure: leaf nodes first
 	resources = sortResourcesByDependencies(resources)
 
+	// Save dependency map for reuse in subsequent calls
+	depMapPath, err := saveDepMap(depMap, depMapFile)
+	if err != nil {
+		// Non-fatal — proceed without dep map path
+		depMapPath = ""
+	}
+
 	// Output result with resource limit and exclusions
-	return outputResult(resources, maxResources, excludeURNs, stateFilePath, outputFile)
+	return outputResult(resources, maxResources, excludeURNs, depMapPath, outputFile)
 }
 
 // getPreviewOutput retrieves preview output from either a file or by running pulumi preview
@@ -330,8 +362,10 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 	return steps, nil
 }
 
-// convertStepsToResources converts preview steps to resource changes for drift adoption
-func convertStepsToResources(steps []auto.PreviewStep, stateLookup map[string]*apitype.ResourceV3) []ResourceChange {
+// convertStepsToResources converts preview steps to resource changes for drift adoption.
+// depMap is used for dependency resolution; stateLookup is a fallback for resolution
+// when depMap doesn't cover a property (e.g., preview-only steps not in state).
+func convertStepsToResources(steps []auto.PreviewStep, depMap DependencyMap, stateLookup map[string]*apitype.ResourceV3) []ResourceChange {
 	var resources []ResourceChange
 
 	for i := range steps {
@@ -352,7 +386,7 @@ func convertStepsToResources(steps []auto.PreviewStep, stateLookup map[string]*a
 
 		if action == "add_to_code" {
 			// For add_to_code, use flat key-value map (more compact than PropertyChange array)
-			inputProps := extractInputProperties(*step, stateLookup)
+			inputProps := extractInputProperties(*step, depMap, stateLookup)
 			resources = append(resources, ResourceChange{
 				Action:          action,
 				URN:             string(step.URN),
@@ -454,16 +488,9 @@ func resolvePropertyValue(state *apitype.ResourceV3, path string, inputsOnly boo
 	return nil
 }
 
-// getStateExport retrieves state export from a file or by running pulumi stack export.
-// Returns the parsed lookup map, the path to a state file (for reuse in subsequent calls),
-// and any error. When --state-file is provided, returns that path unchanged.
-// When running stack export live, caches the output to a temp file and returns its path.
-func getStateExport(stateFile, projectDir, stack string) (map[string]*apitype.ResourceV3, string, error) {
-	if stateFile != "" {
-		lookup, err := parseStateFile(stateFile)
-		return lookup, stateFile, err
-	}
-
+// getStateExport runs pulumi stack export and returns the parsed lookup map in memory.
+// No file is written to disk.
+func getStateExport(projectDir, stack string) (map[string]*apitype.ResourceV3, error) {
 	// Run pulumi stack export to get full state (--show-secrets so secret
 	// outputs are plaintext, enabling value matching in findMatchingOutput)
 	cmdArgs := []string{"stack", "export", "--show-secrets"}
@@ -478,26 +505,10 @@ func getStateExport(stateFile, projectDir, stack string) (map[string]*apitype.Re
 	output, err := exportCmd.Output()
 	if err != nil {
 		// State export failure is non-fatal — proceed without dependency resolution
-		return nil, "", nil
+		return nil, nil
 	}
 
-	// Cache state to temp file for reuse in subsequent invocations
-	tmpFile, err := os.CreateTemp("", "drift-adopter-state-*.json")
-	if err != nil {
-		// Cache failure is non-fatal — parse and return without path
-		lookup, parseErr := parseStateExport(output)
-		return lookup, "", parseErr
-	}
-	if _, err := tmpFile.Write(output); err != nil {
-		_ = tmpFile.Close()
-		_ = os.Remove(tmpFile.Name())
-		lookup, parseErr := parseStateExport(output)
-		return lookup, "", parseErr
-	}
-	_ = tmpFile.Close()
-
-	lookup, parseErr := parseStateExport(output)
-	return lookup, tmpFile.Name(), parseErr
+	return parseStateExport(output)
 }
 
 // parseStateFile reads a pulumi stack export JSON and returns a URN-to-resource lookup map.
@@ -529,19 +540,151 @@ func parseStateExport(data []byte) (map[string]*apitype.ResourceV3, error) {
 	return lookup, nil
 }
 
+// buildDepMapFromState iterates ALL resources in the state lookup and resolves
+// every property dependency, producing a complete DependencyMap. The map contains
+// only resource names, types, and output property names — no secret values.
+func buildDepMapFromState(lookup map[string]*apitype.ResourceV3) DependencyMap {
+	depMap := make(DependencyMap)
+	for urn, res := range lookup {
+		if len(res.PropertyDependencies) == 0 {
+			continue
+		}
+
+		source := res.Inputs
+		if len(source) == 0 {
+			source = res.Outputs
+		}
+		if len(source) == 0 {
+			continue
+		}
+
+		propRefs := make(map[string]DependencyRef)
+
+		for propKey, depURNs := range res.PropertyDependencies {
+			if len(depURNs) == 0 {
+				continue
+			}
+			value := source[string(propKey)]
+			if value == nil {
+				continue
+			}
+
+			// For map values: resolve each map entry individually
+			if m, ok := value.(map[string]interface{}); ok {
+				for mk, mv := range m {
+					path := string(propKey) + "." + mk
+					if ref := resolveDepRef(mv, depURNs, lookup); ref != nil {
+						propRefs[path] = *ref
+					}
+				}
+				continue
+			}
+
+			// For array values: resolve each element individually
+			if arr, ok := value.([]interface{}); ok {
+				for i, elem := range arr {
+					path := fmt.Sprintf("%s[%d]", string(propKey), i)
+					if ref := resolveDepRef(elem, depURNs, lookup); ref != nil {
+						propRefs[path] = *ref
+					}
+				}
+				continue
+			}
+
+			// Scalar: try to resolve the dependency directly
+			if ref := resolveDepRef(value, depURNs, lookup); ref != nil {
+				propRefs[string(propKey)] = *ref
+			}
+		}
+
+		if len(propRefs) > 0 {
+			depMap[urn] = propRefs
+		}
+	}
+	return depMap
+}
+
+// resolveDepRef attempts to match a value against dependent resource outputs,
+// returning a DependencyRef if found. Falls back to bare ref (no outputProperty)
+// when exactly one dep URN exists.
+func resolveDepRef(value interface{}, depURNs []resource.URN, lookup map[string]*apitype.ResourceV3) *DependencyRef {
+	for _, depURN := range depURNs {
+		depRes, ok := lookup[string(depURN)]
+		if !ok {
+			continue
+		}
+		outputProp := findMatchingOutput(value, depRes.Outputs)
+		if outputProp != "" {
+			return &DependencyRef{
+				ResourceName:   extractResourceName(string(depURN)),
+				ResourceType:   string(depRes.Type),
+				OutputProperty: outputProp,
+			}
+		}
+	}
+	// Bare fallback when exactly one dep URN
+	if len(depURNs) == 1 {
+		if depRes, ok := lookup[string(depURNs[0])]; ok {
+			return &DependencyRef{
+				ResourceName: extractResourceName(string(depURNs[0])),
+				ResourceType: string(depRes.Type),
+			}
+		}
+	}
+	return nil
+}
+
+// loadDepMap reads a dependency map from a JSON file.
+func loadDepMap(path string) (DependencyMap, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read dep map file: %w", err)
+	}
+	var depMap DependencyMap
+	if err := json.Unmarshal(data, &depMap); err != nil {
+		return nil, fmt.Errorf("failed to parse dep map file: %w", err)
+	}
+	return depMap, nil
+}
+
+// saveDepMap writes a dependency map to the specified path, or to an auto-generated
+// temp file if path is empty. Returns the path written to.
+func saveDepMap(depMap DependencyMap, path string) (string, error) {
+	var f *os.File
+	var err error
+	if path != "" {
+		f, err = os.Create(path)
+	} else {
+		f, err = os.CreateTemp("", "drift-adopter-depmap-*.json")
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to create dep map file: %w", err)
+	}
+	encoder := json.NewEncoder(f)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(depMap); err != nil {
+		_ = f.Close()
+		return "", fmt.Errorf("failed to write dep map: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
+}
+
 // maxStringValueLen is the maximum length of a string property value before truncation.
 // Values longer than this are replaced with a placeholder to keep output compact.
 const maxStringValueLen = 200
 
 // extractInputProperties returns a flat key-value map of input properties for add_to_code resources.
-// When stateLookup is available, properties with PropertyDependencies get enriched
-// with dependsOn metadata that identifies which resource and output property they reference.
+// When a depMap is available, properties are enriched with dependsOn metadata from pre-computed
+// dependency references. When no depMap is available, falls back to stateLookup-based resolution.
 //
 // Properties without dependencies remain plain values (backward-compatible), with long
 // strings truncated to maxStringValueLen characters.
 // Properties with dependencies become: {"dependsOn": {"resourceName": ..., "resourceType": ..., "outputProperty": ...}}
 // (the literal value is omitted — the agent should use the resource reference).
-func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
+func extractInputProperties(step auto.PreviewStep, depMap DependencyMap, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
 	if step.OldState == nil {
 		return nil
 	}
@@ -553,28 +696,28 @@ func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apity
 		return nil
 	}
 
-	// If no state lookup or no property dependencies, return with truncation only
+	urn := string(step.URN)
+
+	// Check for dep map entries for this resource
+	urnDeps := depMap[urn]
+
+	// If no dep map entries and no property dependencies, return with truncation only
 	propDeps := step.OldState.PropertyDependencies
-	if stateLookup == nil || len(propDeps) == 0 {
+	if len(urnDeps) == 0 && (stateLookup == nil || len(propDeps) == 0) {
 		return truncateStringValues(source)
 	}
 
 	// Enrich properties that have dependencies
 	result := make(map[string]interface{}, len(source))
 	for key, value := range source {
-		propKey := resource.PropertyKey(key)
-		depURNs := propDeps[propKey]
-		if len(depURNs) == 0 {
-			result[key] = truncateValue(value)
-			continue
-		}
-
-		// For map values: resolve each map entry individually (preserves keys even when
-		// the whole-map value can't be matched to a single output, e.g. keepers map).
+		// For map values: resolve each map entry individually
 		if m, ok := value.(map[string]interface{}); ok {
 			resolvedMap := make(map[string]interface{}, len(m))
 			for mk, mv := range m {
-				if dep := resolveDependency(mv, depURNs, stateLookup); dep != nil {
+				path := key + "." + mk
+				if ref, ok := urnDeps[path]; ok {
+					resolvedMap[mk] = depRefToDependsOn(ref)
+				} else if dep := resolveDependencyFallback(mv, key, propDeps, stateLookup); dep != nil {
 					resolvedMap[mk] = dep
 				} else {
 					resolvedMap[mk] = truncateValue(mv)
@@ -584,12 +727,14 @@ func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apity
 			continue
 		}
 
-		// For array values: resolve each element individually (preserves array structure
-		// even when elements are encrypted or structurally mismatched, e.g. triggers).
+		// For array values: resolve each element individually
 		if arr, ok := value.([]interface{}); ok {
 			resolvedArr := make([]interface{}, len(arr))
 			for i, elem := range arr {
-				if dep := resolveDependency(elem, depURNs, stateLookup); dep != nil {
+				path := fmt.Sprintf("%s[%d]", key, i)
+				if ref, ok := urnDeps[path]; ok {
+					resolvedArr[i] = depRefToDependsOn(ref)
+				} else if dep := resolveDependencyFallback(elem, key, propDeps, stateLookup); dep != nil {
 					resolvedArr[i] = dep
 				} else {
 					resolvedArr[i] = truncateValue(elem)
@@ -599,14 +744,40 @@ func extractInputProperties(step auto.PreviewStep, stateLookup map[string]*apity
 			continue
 		}
 
-		// Scalar: try to resolve the dependency directly
-		if dep := resolveDependency(value, depURNs, stateLookup); dep != nil {
+		// Scalar: check dep map first, then fallback
+		if ref, ok := urnDeps[key]; ok {
+			result[key] = depRefToDependsOn(ref)
+		} else if dep := resolveDependencyFallback(value, key, propDeps, stateLookup); dep != nil {
 			result[key] = dep
 		} else {
 			result[key] = truncateValue(value)
 		}
 	}
 	return result
+}
+
+// depRefToDependsOn converts a DependencyRef to the dependsOn map format used in output.
+func depRefToDependsOn(ref DependencyRef) map[string]interface{} {
+	dep := map[string]interface{}{
+		"resourceName": ref.ResourceName,
+		"resourceType": ref.ResourceType,
+	}
+	if ref.OutputProperty != "" {
+		dep["outputProperty"] = ref.OutputProperty
+	}
+	return map[string]interface{}{"dependsOn": dep}
+}
+
+// resolveDependencyFallback attempts resolution using stateLookup when dep map doesn't cover a property.
+func resolveDependencyFallback(value interface{}, key string, propDeps map[resource.PropertyKey][]resource.URN, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
+	if stateLookup == nil || len(propDeps) == 0 {
+		return nil
+	}
+	depURNs := propDeps[resource.PropertyKey(key)]
+	if len(depURNs) == 0 {
+		return nil
+	}
+	return resolveDependency(value, depURNs, stateLookup)
 }
 
 // truncateStringValues returns a shallow copy of props with long string values truncated.
@@ -949,7 +1120,7 @@ func sortResourcesByDependencies(resources []ResourceChange) []ResourceChange {
 
 // outputResult outputs the final JSON result with filtering, exclusions, and resource limiting.
 // Full output is written to a file; a compact summary is written to stdout.
-func outputResult(resources []ResourceChange, maxResources int, excludeURNs []string, stateFilePath, outputFile string) error {
+func outputResult(resources []ResourceChange, maxResources int, excludeURNs []string, depMapFile, outputFile string) error {
 	// Build exclude set for O(1) lookup
 	excludeSet := make(map[string]bool, len(excludeURNs))
 	for _, urn := range excludeURNs {
@@ -999,7 +1170,7 @@ func outputResult(resources []ResourceChange, maxResources int, excludeURNs []st
 
 	// Build full output
 	result := NextOutput{
-		StateFilePath: stateFilePath,
+		DepMapFile: depMapFile,
 	}
 	switch {
 	case len(actionable) > 0:
@@ -1023,11 +1194,11 @@ func outputResult(resources []ResourceChange, maxResources int, excludeURNs []st
 
 	// Write compact summary to stdout
 	summaryOutput := NextSummaryOutput{
-		Status:        result.Status,
-		Summary:       result.Summary,
-		OutputFile:    outputFilePath,
-		StateFilePath: stateFilePath,
-		SkippedCount:  len(skipped),
+		Status:       result.Status,
+		Summary:      result.Summary,
+		OutputFile:   outputFilePath,
+		DepMapFile:   depMapFile,
+		SkippedCount: len(skipped),
 	}
 
 	encoder := json.NewEncoder(os.Stdout)

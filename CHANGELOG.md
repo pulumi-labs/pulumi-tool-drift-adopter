@@ -11,9 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Two-phase output model**: compact summary JSON to stdout, full resource details written to output file
 - **`--output-file` flag** to specify path for full output file (defaults to auto-generated temp file)
 - **`--skip-refresh` flag** to omit `--refresh` from `pulumi preview`
-- **`--state-file` flag** to provide a cached `pulumi stack export` JSON (skips calling stack export)
+- **`--dep-map-file` flag** to provide a pre-computed dependency map (skips stack export on subsequent calls)
 - **`--exclude-urns` flag** to exclude specific resource URNs from results
-- **State file caching**: live `pulumi stack export` output is cached to a temp file and its path returned in output for reuse
+- **Dependency map caching**: state export is processed in memory to build a dependency map (resource names, types, output property names only — no secret values), saved to a file for reuse
 - **Topological dependency sorting**: resources sorted by dependency level (leaf nodes first) using Kahn's algorithm
 - **Element-level dependency resolution**: map and array properties (e.g. `dependsOn`) resolve individual elements instead of collapsing
 - **`-replace` property kind handling**: `add-replace` and `delete-replace` diff kinds are now correctly inverted
@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub issue and PR templates
 
 ### Security
+- **Eliminated plaintext secrets on disk**: state export (containing decrypted secrets) is now processed in memory only and never written to disk; only a dependency map (containing resource names, types, and output property names) is cached
 - Updated golang.org/x/crypto to v0.47.0
 
 ## [1.0.1] - 2026-01-22

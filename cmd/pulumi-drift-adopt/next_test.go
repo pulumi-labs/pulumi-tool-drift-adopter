@@ -1522,7 +1522,8 @@ func TestDependencyResolution(t *testing.T) {
 	stateLookup, err := parseStateExport(stateData)
 	require.NoError(t, err)
 
-	resources := convertStepsToResources(steps, stateLookup)
+	depMap := buildDepMapFromState(stateLookup)
+	resources := convertStepsToResources(steps, depMap, stateLookup)
 	require.Len(t, resources, 2)
 
 	// Find the ca-cert resource (SelfSignedCert)
@@ -1587,7 +1588,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 
 		// nil stateLookup — should return plain values
-		resources := convertStepsToResources(steps, nil)
+		resources := convertStepsToResources(steps, nil, nil)
 		require.NotEmpty(t, resources)
 
 		for _, res := range resources {
@@ -1627,7 +1628,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 		require.Len(t, resources, 1)
 
 		// Should be plain string since dep URN is missing from state
@@ -1645,7 +1646,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 
 		// Build lookup from steps (no external state)
 		stateLookup := buildStateLookupFromSteps(steps)
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 
 		var cert *ResourceChange
 		for i := range resources {
@@ -1696,7 +1697,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 		require.Len(t, resources, 1)
 
 		// Value doesn't match any output, but single depURN → bare dependsOn (no outputProperty)
@@ -1744,7 +1745,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 		require.Len(t, resources, 1)
 
 		// Array elements are resolved individually: "secret-password-value" matches result output.
@@ -1796,7 +1797,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 		require.Len(t, resources, 1)
 
 		// Array element "hex-output-value" matches output "hex" → resolved with outputProperty
@@ -1858,7 +1859,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 		require.Len(t, resources, 1)
 
 		// Multiple depURNs, no exact match → plain value (no bare dependsOn due to ambiguity)
@@ -1869,20 +1870,25 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 	})
 }
 
-func TestRunNextStateFileFlag(t *testing.T) {
-	tmpDir := t.TempDir()
-	eventsFile := filepath.Join(tmpDir, "events.json")
-	stateFile := filepath.Join(tmpDir, "state.json")
+func TestRunNextDepMapFileFlag(t *testing.T) {
+	// Build dep map from state fixture
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+	depMap := buildDepMapFromState(stateLookup)
 
+	tmpDir := t.TempDir()
+	depMapPath := filepath.Join(tmpDir, "depmap.json")
+	_, err = saveDepMap(depMap, depMapPath)
+	require.NoError(t, err)
+
+	eventsFile := filepath.Join(tmpDir, "events.json")
 	eventsData, err := os.ReadFile(filepath.Join("testdata", "events_with_deps.json"))
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(eventsFile, eventsData, 0644))
 
-	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(stateFile, stateData, 0644))
-
-	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--state-file", stateFile})
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--dep-map-file", depMapPath})
 
 	assert.Equal(t, "changes_needed", summary.Status)
 
@@ -1941,7 +1947,7 @@ func TestDependencyResolutionFromPreviewOnly(t *testing.T) {
 	// Build state lookup from the preview steps themselves (no external state file)
 	stateLookup := buildStateLookupFromSteps(steps)
 
-	resources := convertStepsToResources(steps, stateLookup)
+	resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 
 	var cert *ResourceChange
 	for i := range resources {
@@ -1958,36 +1964,38 @@ func TestDependencyResolutionFromPreviewOnly(t *testing.T) {
 	assert.Equal(t, "privateKeyPem", dep["outputProperty"])
 }
 
-func TestStateFilePathInOutput(t *testing.T) {
-	tmpDir := t.TempDir()
-	eventsFile := filepath.Join(tmpDir, "events.json")
-	stateFile := filepath.Join(tmpDir, "state.json")
+func TestDepMapFileInOutput(t *testing.T) {
+	// Build dep map from state fixture and provide via --dep-map-file
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+	depMap := buildDepMapFromState(stateLookup)
 
+	tmpDir := t.TempDir()
+	depMapPath := filepath.Join(tmpDir, "depmap.json")
+	_, err = saveDepMap(depMap, depMapPath)
+	require.NoError(t, err)
+
+	eventsFile := filepath.Join(tmpDir, "events.json")
 	eventsData, err := os.ReadFile(filepath.Join("testdata", "events_with_deps.json"))
 	require.NoError(t, err)
 	require.NoError(t, os.WriteFile(eventsFile, eventsData, 0644))
 
-	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
-	require.NoError(t, err)
-	require.NoError(t, os.WriteFile(stateFile, stateData, 0644))
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--dep-map-file", depMapPath})
 
-	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--state-file", stateFile})
-
-	assert.Equal(t, stateFile, summary.StateFilePath, "stateFilePath should match provided --state-file path")
-	assert.Equal(t, stateFile, full.StateFilePath, "stateFilePath should also be in output file")
+	assert.NotEmpty(t, summary.DepMapFile, "depMapFile should be populated")
+	assert.NotEmpty(t, full.DepMapFile, "depMapFile should also be in output file")
 }
 
 func TestSkipRefreshFlagAccepted(t *testing.T) {
 	eventsContent := `{"steps": []}`
-	stateContent := `{"version": 3, "deployment": {"resources": []}}`
 
 	tmpDir := t.TempDir()
 	eventsFile := filepath.Join(tmpDir, "events.json")
-	stateFile := filepath.Join(tmpDir, "state.json")
 	require.NoError(t, os.WriteFile(eventsFile, []byte(eventsContent), 0644))
-	require.NoError(t, os.WriteFile(stateFile, []byte(stateContent), 0644))
 
-	summary, _ := runNextTest(t, []string{"next", "--events-file", eventsFile, "--state-file", stateFile, "--skip-refresh"})
+	summary, _ := runNextTest(t, []string{"next", "--events-file", eventsFile, "--skip-refresh"})
 	assert.Equal(t, "clean", summary.Status)
 }
 
@@ -2120,7 +2128,7 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 		require.Len(t, resources, 1)
 
 		// keepers should be a map with preserved keys and resolved dependsOn per value
@@ -2172,7 +2180,7 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 		require.Len(t, resources, 1)
 
 		keepersRaw := resources[0].InputProperties["keepers"]
@@ -2226,7 +2234,7 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, stateLookup)
+		resources := convertStepsToResources(steps, buildDepMapFromState(stateLookup), stateLookup)
 		require.Len(t, resources, 1)
 
 		triggersRaw := resources[0].InputProperties["triggers"]
@@ -2459,4 +2467,202 @@ func TestExtractPropertyChangesReplaceKinds(t *testing.T) {
 		require.Len(t, full.Resources[0].Properties, 1)
 		assert.Equal(t, "bucket", full.Resources[0].Properties[0].Path)
 	})
+}
+
+// TestBuildDepMapFromState verifies that buildDepMapFromState correctly resolves
+// all property dependencies from the state fixture.
+func TestBuildDepMapFromState(t *testing.T) {
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+
+	depMap := buildDepMapFromState(stateLookup)
+
+	// ca-cert.privateKeyPem → ca-key.privateKeyPem
+	caCertDeps := depMap["urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert"]
+	require.NotNil(t, caCertDeps, "ca-cert should have dependency entries")
+	pkRef := caCertDeps["privateKeyPem"]
+	assert.Equal(t, "ca-key", pkRef.ResourceName)
+	assert.Equal(t, "tls:index/privateKey:PrivateKey", pkRef.ResourceType)
+	assert.Equal(t, "privateKeyPem", pkRef.OutputProperty)
+
+	// server-cert.caPrivateKeyPem → ca-key.privateKeyPem
+	serverDeps := depMap["urn:pulumi:dev::test::tls:index/locallySignedCert:LocallySignedCert::server-cert"]
+	require.NotNil(t, serverDeps, "server-cert should have dependency entries")
+	caKeyRef := serverDeps["caPrivateKeyPem"]
+	assert.Equal(t, "ca-key", caKeyRef.ResourceName)
+	assert.Equal(t, "privateKeyPem", caKeyRef.OutputProperty)
+
+	// server-cert.caCertPem → ca-cert.certPem
+	caCertRef := serverDeps["caCertPem"]
+	assert.Equal(t, "ca-cert", caCertRef.ResourceName)
+	assert.Equal(t, "tls:index/selfSignedCert:SelfSignedCert", caCertRef.ResourceType)
+	assert.Equal(t, "certPem", caCertRef.OutputProperty)
+
+	// ca-key and server-key have no property dependencies — should not be in dep map
+	assert.Nil(t, depMap["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ca-key"])
+	assert.Nil(t, depMap["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::server-key"])
+}
+
+// TestDepMapRoundTrip verifies save → load produces identical dep map.
+func TestDepMapRoundTrip(t *testing.T) {
+	original := DependencyMap{
+		"urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert": {
+			"privateKeyPem": {
+				ResourceName:   "ca-key",
+				ResourceType:   "tls:index/privateKey:PrivateKey",
+				OutputProperty: "privateKeyPem",
+			},
+		},
+		"urn:pulumi:dev::test::tls:index/locallySignedCert:LocallySignedCert::server-cert": {
+			"caPrivateKeyPem": {
+				ResourceName:   "ca-key",
+				ResourceType:   "tls:index/privateKey:PrivateKey",
+				OutputProperty: "privateKeyPem",
+			},
+			"caCertPem": {
+				ResourceName:   "ca-cert",
+				ResourceType:   "tls:index/selfSignedCert:SelfSignedCert",
+				OutputProperty: "certPem",
+			},
+		},
+	}
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "depmap.json")
+
+	savedPath, err := saveDepMap(original, path)
+	require.NoError(t, err)
+	assert.Equal(t, path, savedPath)
+
+	loaded, err := loadDepMap(path)
+	require.NoError(t, err)
+
+	// Compare each entry
+	for urn, props := range original {
+		loadedProps, ok := loaded[urn]
+		require.True(t, ok, "URN %s missing from loaded dep map", urn)
+		for prop, ref := range props {
+			loadedRef, ok := loadedProps[prop]
+			require.True(t, ok, "property %s missing from loaded dep map for %s", prop, urn)
+			assert.Equal(t, ref, loadedRef)
+		}
+	}
+}
+
+// TestDepMapNoSecretValues verifies the dep map file contains no PEM strings or secret values.
+func TestDepMapNoSecretValues(t *testing.T) {
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+
+	depMap := buildDepMapFromState(stateLookup)
+
+	tmpDir := t.TempDir()
+	path := filepath.Join(tmpDir, "depmap.json")
+	_, err = saveDepMap(depMap, path)
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+
+	content := string(data)
+	assert.NotContains(t, content, "BEGIN RSA PRIVATE KEY")
+	assert.NotContains(t, content, "BEGIN CERTIFICATE")
+	assert.NotContains(t, content, "fake-ca-key")
+	assert.NotContains(t, content, "fake-ca-cert")
+	assert.NotContains(t, content, "fake-server-key")
+	assert.NotContains(t, content, "fake-server-cert")
+
+	// Should contain only metadata
+	assert.Contains(t, content, "ca-key")
+	assert.Contains(t, content, "privateKeyPem")
+	assert.Contains(t, content, "certPem")
+}
+
+// TestDepMapSkipsStateExport verifies that --dep-map-file skips state export and still resolves correctly.
+func TestDepMapSkipsStateExport(t *testing.T) {
+	// First build a dep map from state
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+	depMap := buildDepMapFromState(stateLookup)
+
+	tmpDir := t.TempDir()
+	depMapPath := filepath.Join(tmpDir, "depmap.json")
+	_, err = saveDepMap(depMap, depMapPath)
+	require.NoError(t, err)
+
+	// Copy events file
+	eventsData, err := os.ReadFile(filepath.Join("testdata", "events_with_deps.json"))
+	require.NoError(t, err)
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	require.NoError(t, os.WriteFile(eventsFile, eventsData, 0644))
+
+	// Run with --dep-map-file only (NO --state-file) — state export should not be needed
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--dep-map-file", depMapPath})
+
+	assert.Equal(t, "changes_needed", summary.Status)
+
+	// Verify dependency resolution still works via dep map
+	var caCert *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "ca-cert" {
+			caCert = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, caCert)
+	pkPem, ok := caCert.InputProperties["privateKeyPem"].(map[string]interface{})
+	require.True(t, ok, "privateKeyPem should have dependsOn from dep map")
+	dep, ok := pkPem["dependsOn"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ca-key", dep["resourceName"])
+	assert.Equal(t, "privateKeyPem", dep["outputProperty"])
+}
+
+// TestDepMapReusedOnSubsequentCalls verifies that the dep map produced on first run
+// can be loaded on a subsequent run via --dep-map-file and produces identical results.
+func TestDepMapReusedOnSubsequentCalls(t *testing.T) {
+	// Build dep map from state fixture (simulates first run)
+	stateData, err := os.ReadFile(filepath.Join("testdata", "state_with_deps.json"))
+	require.NoError(t, err)
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+	depMap := buildDepMapFromState(stateLookup)
+
+	tmpDir := t.TempDir()
+	depMapPath := filepath.Join(tmpDir, "depmap.json")
+	_, err = saveDepMap(depMap, depMapPath)
+	require.NoError(t, err)
+
+	eventsFile := filepath.Join(tmpDir, "events.json")
+	eventsData, err := os.ReadFile(filepath.Join("testdata", "events_with_deps.json"))
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(eventsFile, eventsData, 0644))
+
+	// "Subsequent run" with --dep-map-file
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--dep-map-file", depMapPath})
+
+	assert.Equal(t, "changes_needed", summary.Status)
+	assert.NotEmpty(t, summary.DepMapFile, "depMapFile should be populated")
+	assert.NotEmpty(t, full.DepMapFile, "depMapFile should be in output file")
+
+	// Verify dependency resolution works from dep map
+	var caCert *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "ca-cert" {
+			caCert = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, caCert)
+	pkPem, ok := caCert.InputProperties["privateKeyPem"].(map[string]interface{})
+	require.True(t, ok)
+	dep, ok := pkPem["dependsOn"].(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "ca-key", dep["resourceName"])
 }

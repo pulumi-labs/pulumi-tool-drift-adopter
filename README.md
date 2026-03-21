@@ -59,7 +59,7 @@ The tool uses a two-phase output model:
     "byTypeAction": { "aws:s3/bucket:Bucket": { "update_code": 2 } }
   },
   "outputFile": "/tmp/drift-adopter-output-123456.json",
-  "stateFilePath": "/tmp/drift-adopter-state-123456.json",
+  "depMapFile": "/tmp/drift-adopter-depmap-123456.json",
   "skippedCount": 0
 }
 ```
@@ -90,7 +90,7 @@ The agent reads the full resource details from `outputFile` using its Read tool.
     }
   ],
   "skipped": [],
-  "stateFilePath": "/tmp/drift-adopter-state-123456.json"
+  "depMapFile": "/tmp/drift-adopter-depmap-123456.json"
 }
 ```
 
@@ -115,7 +115,7 @@ The agent reads the full resource details from `outputFile` using its Read tool.
 | `--events-file` | Path to engine events file (skips running preview) |
 | `--max-resources` | Max resources per batch (default: -1, unlimited) |
 | `--exclude-urns` | Resource URNs to exclude from results |
-| `--state-file` | Path to pulumi stack export JSON (skips calling stack export) |
+| `--dep-map-file` | Path to dependency map from a previous run (skips stack export) |
 | `--skip-refresh` | Omit `--refresh` from pulumi preview |
 | `--output-file` | Path for full output file (default: auto-generated temp file) |
 | `--project` | Project directory (default: ".") |
