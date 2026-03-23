@@ -37,7 +37,6 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 	}
 	cmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
 	cmd.Flags().String("project", ".", "Pulumi project directory (default: current directory)")
-	cmd.Flags().Int("max-resources", 0, "Maximum number of resources to return (0 = all)")
 	cmd.Flags().String("events-file", "", "Read preview events from file instead of running pulumi preview")
 	cmd.Flags().StringSlice("exclude-urns", nil, "URNs to exclude from output")
 	cmd.Flags().String("dep-map-file", "", "Path to dependency map JSON file (reuse across runs to skip state export)")
@@ -110,7 +109,6 @@ const maxStringValueLen = 200
 func runNext(cmd *cobra.Command, _ []string) error {
 	projectDir, _ := cmd.Flags().GetString("project")
 	stack, _ := cmd.Flags().GetString("stack")
-	maxResources, _ := cmd.Flags().GetInt("max-resources")
 	eventsFile, _ := cmd.Flags().GetString("events-file")
 	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
 	depMapFile, _ := cmd.Flags().GetString("dep-map-file")
@@ -177,7 +175,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	}
 
 	// Output result with resource limit and exclusions
-	return outputResult(resources, maxResources, excludeURNs, depMapPath, outputFile)
+	return outputResult(resources, excludeURNs, depMapPath, outputFile)
 }
 
 // convertStepsToResources converts preview steps to resource changes for drift adoption.

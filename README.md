@@ -113,7 +113,6 @@ The agent reads the full resource details from `outputFile` using its Read tool.
 |------|-------------|
 | `--stack` | Pulumi stack name (default: current stack) |
 | `--events-file` | Path to engine events file (skips running preview) |
-| `--max-resources` | Max resources per batch (default: -1, unlimited) |
 | `--exclude-urns` | Resource URNs to exclude from results |
 | `--dep-map-file` | Path to dependency map from a previous run (skips stack export) |
 | `--skip-refresh` | Omit `--refresh` from pulumi preview |

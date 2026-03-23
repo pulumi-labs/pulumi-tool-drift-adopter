@@ -268,91 +268,6 @@ func TestNextCommandActionMapping(t *testing.T) {
 	}
 }
 
-// TestNextCommandMaxResourcesLimit tests the --max-resources flag with events file
-func TestNextCommandMaxResourcesLimit(t *testing.T) {
-	// Create events with 5 resources, each with a property change so they remain actionable
-	eventsContent := `{
-		"steps": [
-			{
-				"op": "update",
-				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket1",
-				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-				"detailedDiff": {"tags.Env": {"kind": "update"}}
-			},
-			{
-				"op": "update",
-				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket2",
-				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-				"detailedDiff": {"tags.Env": {"kind": "update"}}
-			},
-			{
-				"op": "update",
-				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket3",
-				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-				"detailedDiff": {"tags.Env": {"kind": "update"}}
-			},
-			{
-				"op": "update",
-				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket4",
-				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-				"detailedDiff": {"tags.Env": {"kind": "update"}}
-			},
-			{
-				"op": "update",
-				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::bucket5",
-				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-				"detailedDiff": {"tags.Env": {"kind": "update"}}
-			}
-		]
-	}`
-
-	tests := []struct {
-		name          string
-		maxResources  string
-		expectedCount int
-	}{
-		{
-			name:          "limit to 2 resources",
-			maxResources:  "2",
-			expectedCount: 2,
-		},
-		{
-			name:          "no limit (-1)",
-			maxResources:  "-1",
-			expectedCount: 5,
-		},
-		{
-			name:          "default limit (unlimited) - all resources returned",
-			maxResources:  "",
-			expectedCount: 5,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tmpDir := t.TempDir()
-			eventsFile := filepath.Join(tmpDir, "events.ndjson")
-			err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
-			require.NoError(t, err)
-
-			args := []string{"next", "--events-file", eventsFile}
-			if tt.maxResources != "" {
-				args = append(args, "--max-resources", tt.maxResources)
-			}
-
-			summary, full := runNextTest(t, args)
-
-			assert.Equal(t, "changes_needed", summary.Status)
-			assert.Len(t, full.Resources, tt.expectedCount, "Resource count mismatch")
-		})
-	}
-}
-
 // TestNextCommandPropertyChanges tests that property changes are correctly extracted
 func TestNextCommandPropertyChanges(t *testing.T) {
 	eventsContent := `{
@@ -523,47 +438,16 @@ func TestNextCommandNDJSONEmptyFile(t *testing.T) {
 
 // TestNextCommandNDJSONMultipleResources tests parsing multiple resources from NDJSON
 func TestNextCommandNDJSONMultipleResources(t *testing.T) {
-	tests := []struct {
-		name          string
-		maxResources  string
-		expectedCount int
-	}{
-		{
-			name:          "all resources (default limit)",
-			maxResources:  "",
-			expectedCount: 3,
-		},
-		{
-			name:          "limited to 2 resources",
-			maxResources:  "2",
-			expectedCount: 2,
-		},
-		{
-			name:          "unlimited (-1)",
-			maxResources:  "-1",
-			expectedCount: 3,
-		},
-	}
+	summary, full := runNextTest(t, []string{"next", "--events-file", "testdata/ndjson_multiple_resources.ndjson"})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			args := []string{"next", "--events-file", "testdata/ndjson_multiple_resources.ndjson"}
-			if tt.maxResources != "" {
-				args = append(args, "--max-resources", tt.maxResources)
-			}
+	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Len(t, full.Resources, 3)
 
-			summary, full := runNextTest(t, args)
-
-			assert.Equal(t, "changes_needed", summary.Status)
-			assert.Len(t, full.Resources, tt.expectedCount, "Resource count mismatch")
-
-			if len(full.Resources) > 0 {
-				resource := full.Resources[0]
-				assert.Equal(t, "update_code", resource.Action)
-				assert.Equal(t, "bucket-1", resource.Name)
-				assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
-			}
-		})
+	if len(full.Resources) > 0 {
+		resource := full.Resources[0]
+		assert.Equal(t, "update_code", resource.Action)
+		assert.Equal(t, "bucket-1", resource.Name)
+		assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	}
 }
 
@@ -1352,50 +1236,6 @@ func TestNextCommandSummary(t *testing.T) {
 	assert.Equal(t, 1, s.ByTypeAction["random:index/randomString:RandomString"]["delete_from_code"])
 }
 
-// TestNextCommandSummaryBeforeTruncation verifies summary counts full set even when max-resources truncates
-func TestNextCommandSummaryBeforeTruncation(t *testing.T) {
-	eventsContent := `{
-		"steps": [
-			{
-				"op": "update",
-				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::b1",
-				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-				"detailedDiff": {"tags.Env": {"kind": "update"}}
-			},
-			{
-				"op": "update",
-				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::b2",
-				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-				"detailedDiff": {"tags.Env": {"kind": "update"}}
-			},
-			{
-				"op": "update",
-				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::b3",
-				"oldState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "prod"}}},
-				"newState": {"type": "aws:s3/bucket:Bucket", "outputs": {"tags": {"Env": "dev"}}},
-				"detailedDiff": {"tags.Env": {"kind": "update"}}
-			}
-		]
-	}`
-
-	tmpDir := t.TempDir()
-	eventsFile := filepath.Join(tmpDir, "events.json")
-	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
-	require.NoError(t, err)
-
-	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--max-resources", "1"})
-
-	assert.Equal(t, "changes_needed", summary.Status)
-	assert.Len(t, full.Resources, 1, "should only return 1 resource due to max-resources")
-
-	require.NotNil(t, summary.Summary)
-	assert.Equal(t, 3, summary.Summary.Total, "summary should count all 3 resources before truncation")
-	assert.Equal(t, 3, summary.Summary.ByAction["update_code"])
-	assert.Equal(t, 3, summary.Summary.ByType["aws:s3/bucket:Bucket"])
-}
-
 // TestNextCommandSummaryAbsentForClean verifies no summary when status is clean
 func TestNextCommandSummaryAbsentForClean(t *testing.T) {
 	eventsContent := `{"steps": []}`
@@ -1449,7 +1289,7 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	err := os.WriteFile(eventsFile, []byte(eventsContent), 0644)
 	require.NoError(t, err)
 
-	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--max-resources", "-1"})
+	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile})
 
 	assert.Equal(t, "changes_needed", summary.Status)
 	require.Len(t, full.Resources, 2)

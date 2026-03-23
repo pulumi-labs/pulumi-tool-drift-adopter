@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Properties where both current and desired values are nil (computed-only fields) are now filtered out
 
 ### Removed
+- **`--max-resources` flag**: No longer needed — full output goes to a file, so there is no stdout size concern
 - E2E tests (moved to agent-skills repo)
 - Examples directory
 - GitHub issue and PR templates

@@ -22,7 +22,7 @@ import (
 
 // outputResult outputs the final JSON result with filtering, exclusions, and resource limiting.
 // Full output is written to a file; a compact summary is written to stdout.
-func outputResult(resources []ResourceChange, maxResources int, excludeURNs []string, depMapFile, outputFile string) error {
+func outputResult(resources []ResourceChange, excludeURNs []string, depMapFile, outputFile string) error {
 	// Build exclude set for O(1) lookup
 	excludeSet := make(map[string]bool, len(excludeURNs))
 	for _, urn := range excludeURNs {
@@ -63,11 +63,6 @@ func outputResult(resources []ResourceChange, maxResources int, excludeURNs []st
 			}
 			summary.ByTypeAction[res.Type][res.Action]++
 		}
-	}
-
-	// Apply explicit --max-resources N (N > 0) truncation
-	if maxResources > 0 && len(actionable) > maxResources {
-		actionable = actionable[:maxResources]
 	}
 
 	// Build full output
