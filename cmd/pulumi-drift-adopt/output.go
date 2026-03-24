@@ -22,7 +22,7 @@ import (
 
 // outputResult outputs the final JSON result with filtering, exclusions, and resource limiting.
 // Full output is written to a file; a compact summary is written to stdout.
-func outputResult(resources []ResourceChange, excludeURNs []string, depMapFile, outputFile string) error {
+func outputResult(resources []ResourceChange, excludeURNs []string, depMapFile, outputFile string, parseErrors int) error {
 	// Build exclude set for O(1) lookup
 	excludeSet := make(map[string]bool, len(excludeURNs))
 	for _, urn := range excludeURNs {
@@ -96,6 +96,7 @@ func outputResult(resources []ResourceChange, excludeURNs []string, depMapFile, 
 		OutputFile:   outputFilePath,
 		DepMapFile:   depMapFile,
 		SkippedCount: len(skipped),
+		ParseErrors:  parseErrors,
 	}
 
 	encoder := json.NewEncoder(os.Stdout)

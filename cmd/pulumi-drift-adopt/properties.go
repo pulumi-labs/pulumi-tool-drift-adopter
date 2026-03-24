@@ -29,7 +29,7 @@ import (
 // Properties without dependencies remain plain values (backward-compatible), with long
 // strings truncated to maxStringValueLen characters.
 // Properties with dependencies become: {"dependsOn": {"resourceName": ..., "resourceType": ..., "outputProperty": ...}}
-func extractInputProperties(step auto.PreviewStep, depMap DependencyMap, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
+func extractInputProperties(step auto.PreviewStep, depMap DependencyMap) map[string]interface{} {
 	if step.OldState == nil {
 		return nil
 	}
@@ -46,9 +46,8 @@ func extractInputProperties(step auto.PreviewStep, depMap DependencyMap, stateLo
 	// Check for dep map entries for this resource
 	urnDeps := depMap[urn]
 
-	// If no dep map entries and no property dependencies, return with truncation only
-	propDeps := step.OldState.PropertyDependencies
-	if len(urnDeps) == 0 && (stateLookup == nil || len(propDeps) == 0) {
+	// If no dep map entries, return with truncation only
+	if len(urnDeps) == 0 {
 		return truncateStringValues(source)
 	}
 
@@ -62,8 +61,6 @@ func extractInputProperties(step auto.PreviewStep, depMap DependencyMap, stateLo
 				path := key + "." + mk
 				if ref, ok := urnDeps[path]; ok {
 					resolvedMap[mk] = depRefToDependsOn(ref)
-				} else if dep := resolveDependencyFallback(mv, key, propDeps, stateLookup); dep != nil {
-					resolvedMap[mk] = dep
 				} else {
 					resolvedMap[mk] = truncateValue(mv)
 				}
@@ -79,8 +76,6 @@ func extractInputProperties(step auto.PreviewStep, depMap DependencyMap, stateLo
 				path := fmt.Sprintf("%s[%d]", key, i)
 				if ref, ok := urnDeps[path]; ok {
 					resolvedArr[i] = depRefToDependsOn(ref)
-				} else if dep := resolveDependencyFallback(elem, key, propDeps, stateLookup); dep != nil {
-					resolvedArr[i] = dep
 				} else {
 					resolvedArr[i] = truncateValue(elem)
 				}
@@ -89,11 +84,9 @@ func extractInputProperties(step auto.PreviewStep, depMap DependencyMap, stateLo
 			continue
 		}
 
-		// Scalar: check dep map first, then fallback
+		// Scalar: check dep map
 		if ref, ok := urnDeps[key]; ok {
 			result[key] = depRefToDependsOn(ref)
-		} else if dep := resolveDependencyFallback(value, key, propDeps, stateLookup); dep != nil {
-			result[key] = dep
 		} else {
 			result[key] = truncateValue(value)
 		}

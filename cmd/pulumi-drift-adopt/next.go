@@ -61,6 +61,7 @@ type NextSummaryOutput struct {
 	OutputFile   string       `json:"outputFile,omitempty"`
 	DepMapFile   string       `json:"depMapFile,omitempty"`
 	SkippedCount int          `json:"skippedCount,omitempty"`
+	ParseErrors  int          `json:"parseErrors,omitempty"`
 	Error        string       `json:"error,omitempty"`
 }
 
@@ -121,14 +122,13 @@ func runNext(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Parse preview output into steps
-	steps, err := parsePreviewOutput(output)
+	// Parse preview output into steps (once — shared by dep map building and resource conversion)
+	steps, parseErrors, err := parsePreviewOutput(output)
 	if err != nil {
 		return err
 	}
 
 	var depMap DependencyMap
-	var stateLookup map[string]*apitype.ResourceV3
 
 	if depMapFile != "" {
 		// Load pre-computed dependency map — skip state export entirely
@@ -136,52 +136,59 @@ func runNext(cmd *cobra.Command, _ []string) error {
 		if err != nil {
 			return err
 		}
-		// Still build step lookup for fallback resolution (preview-only resources)
-		stateLookup = buildStateLookupFromSteps(steps)
 	} else {
 		// Load state for dependency resolution (in-memory only, no file written)
-		stateLookup, err = getStateExport(projectDir, stack)
+		stateLookup, err := getStateExport(projectDir, stack)
 		if err != nil {
 			return err
 		}
 
-		// Supplement with state from preview steps (OldState of delete operations)
-		stepLookup := buildStateLookupFromSteps(steps)
-		if stateLookup == nil {
-			stateLookup = stepLookup
-		} else {
-			for urn, res := range stepLookup {
-				if _, exists := stateLookup[urn]; !exists {
-					stateLookup[urn] = res
-				}
+		depMap = mergeStateLookupAndBuildDepMap(steps, stateLookup)
+	}
+
+	// Save dependency map for reuse in subsequent calls (skip if loaded from file)
+	var depMapPath string
+	if depMapFile != "" {
+		depMapPath = depMapFile
+	} else {
+		depMapPath, err = saveDepMap(depMap)
+		if err != nil {
+			return err
+		}
+	}
+
+	return processNext(steps, parseErrors, depMap, excludeURNs, depMapPath, outputFile)
+}
+
+// mergeStateLookupAndBuildDepMap supplements a state lookup with OldState from preview steps,
+// then builds the complete dependency map.
+func mergeStateLookupAndBuildDepMap(steps []auto.PreviewStep, stateLookup map[string]*apitype.ResourceV3) DependencyMap {
+	stepLookup := buildStateLookupFromSteps(steps)
+	if stateLookup == nil {
+		stateLookup = stepLookup
+	} else {
+		for urn, res := range stepLookup {
+			if _, exists := stateLookup[urn]; !exists {
+				stateLookup[urn] = res
 			}
 		}
-
-		// Build complete dependency map from state — discards secret values
-		depMap = buildDepMapFromState(stateLookup)
 	}
+	return buildDepMapFromState(stateLookup)
+}
 
-	// Convert steps to resource changes
-	resources := convertStepsToResources(steps, depMap, stateLookup)
-
-	// Sort by dependency order to reduce context pressure: leaf nodes first
+// processNext is the core pipeline: convert parsed steps to resources and output results.
+// It is separated from runNext so that tests can call it directly without needing CLI flags,
+// state export, or a live Pulumi stack.
+func processNext(steps []auto.PreviewStep, parseErrors int, depMap DependencyMap, excludeURNs []string, depMapPath, outputFile string) error {
+	resources := convertStepsToResources(steps, depMap)
 	resources = sortResourcesByDependencies(resources)
 
-	// Save dependency map for reuse in subsequent calls
-	depMapPath, err := saveDepMap(depMap, depMapFile)
-	if err != nil {
-		// Non-fatal — proceed without dep map path
-		depMapPath = ""
-	}
-
-	// Output result with resource limit and exclusions
-	return outputResult(resources, excludeURNs, depMapPath, outputFile)
+	return outputResult(resources, excludeURNs, depMapPath, outputFile, parseErrors)
 }
 
 // convertStepsToResources converts preview steps to resource changes for drift adoption.
-// depMap is used for dependency resolution; stateLookup is a fallback for resolution
-// when depMap doesn't cover a property (e.g., preview-only steps not in state).
-func convertStepsToResources(steps []auto.PreviewStep, depMap DependencyMap, stateLookup map[string]*apitype.ResourceV3) []ResourceChange {
+// depMap is used for dependency resolution of input properties.
+func convertStepsToResources(steps []auto.PreviewStep, depMap DependencyMap) []ResourceChange {
 	var resources []ResourceChange
 	for i := range steps {
 		step := &steps[i]
@@ -206,7 +213,7 @@ func convertStepsToResources(steps []auto.PreviewStep, depMap DependencyMap, sta
 		switch action {
 		case "add_to_code":
 			// For resources that need to be added, extract all input properties from state
-			res.InputProperties = extractInputProperties(*step, depMap, stateLookup)
+			res.InputProperties = extractInputProperties(*step, depMap)
 		case "remove_from_code":
 			// No properties needed for removal
 		default:

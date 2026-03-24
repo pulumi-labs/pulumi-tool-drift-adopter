@@ -38,7 +38,7 @@ func getPreviewOutput(eventsFile, projectDir, stack string, skipRefresh bool) ([
 	}
 
 	// Build pulumi preview command with JSON output
-	cmdArgs := []string{"preview", "--json", "--non-interactive"}
+	cmdArgs := []string{"preview", "--json", "--non-interactive", "--show-secrets"}
 	if !skipRefresh {
 		cmdArgs = append(cmdArgs, "--refresh")
 	}
@@ -57,18 +57,32 @@ func getPreviewOutput(eventsFile, projectDir, stack string, skipRefresh bool) ([
 	return output, nil
 }
 
-// parsePreviewOutput parses preview output in either single JSON or NDJSON format
-func parsePreviewOutput(output []byte) ([]auto.PreviewStep, error) {
+// parsePreviewOutput parses preview output in either single JSON or NDJSON format.
+// Returns the parsed steps, a count of entries that failed to parse, and any fatal error.
+func parsePreviewOutput(output []byte) ([]auto.PreviewStep, int, error) {
 	// Probe the top-level JSON keys to determine format
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(output, &probe); err == nil {
 		// Format 1: {"steps": [...]} (from pulumi preview --json)
 		if _, hasSteps := probe["steps"]; hasSteps {
-			var previewResult struct {
-				Steps []auto.PreviewStep `json:"steps"`
+			var rawSteps struct {
+				Steps []json.RawMessage `json:"steps"`
 			}
-			if err := json.Unmarshal(output, &previewResult); err == nil {
-				return previewResult.Steps, nil
+			if err := json.Unmarshal(output, &rawSteps); err == nil {
+				var steps []auto.PreviewStep
+				parseErrors := 0
+				for _, raw := range rawSteps.Steps {
+					var step auto.PreviewStep
+					if err := json.Unmarshal(raw, &step); err != nil {
+						parseErrors++
+						continue
+					}
+					steps = append(steps, step)
+				}
+				if parseErrors > 0 {
+					fmt.Fprintf(os.Stderr, "warning: %d preview steps failed to parse\n", parseErrors)
+				}
+				return steps, parseErrors, nil
 			}
 		}
 
@@ -88,19 +102,30 @@ func parsePreviewOutput(output []byte) ([]auto.PreviewStep, error) {
 
 // parseEngineEvents parses engine events from the Pulumi Cloud API response format.
 // Each event is a JSON object with {timestamp, type, resourcePreEvent: {metadata: {...}}}.
-func parseEngineEvents(rawEvents []json.RawMessage) ([]auto.PreviewStep, error) {
+// Returns the parsed steps, a count of events that failed to parse, and any fatal error.
+func parseEngineEvents(rawEvents []json.RawMessage) ([]auto.PreviewStep, int, error) {
 	var steps []auto.PreviewStep
+	parseErrors := 0
 	for _, raw := range rawEvents {
-		if step, ok := parseEngineEvent(raw); ok {
+		step, ok, err := parseEngineEvent(raw)
+		if err != nil {
+			parseErrors++
+			continue
+		}
+		if ok {
 			steps = append(steps, step)
 		}
 	}
-	return steps, nil
+	if parseErrors > 0 {
+		fmt.Fprintf(os.Stderr, "warning: %d engine events failed to parse\n", parseErrors)
+	}
+	return steps, parseErrors, nil
 }
 
 // parseEngineEvent parses a single engine event JSON object. Returns a PreviewStep and true
-// for resourcePreEvent events; returns false for all other event types (prelude, summary, etc.).
-func parseEngineEvent(data []byte) (auto.PreviewStep, bool) {
+// for resourcePreEvent events; returns (_, false, nil) for non-resource event types (prelude,
+// summary, etc.); returns (_, false, error) when the event JSON is corrupt.
+func parseEngineEvent(data []byte) (auto.PreviewStep, bool, error) {
 	var event struct {
 		Type             string `json:"type"`
 		ResourcePreEvent *struct {
@@ -108,10 +133,10 @@ func parseEngineEvent(data []byte) (auto.PreviewStep, bool) {
 		} `json:"resourcePreEvent"`
 	}
 	if err := json.Unmarshal(data, &event); err != nil {
-		return auto.PreviewStep{}, false
+		return auto.PreviewStep{}, false, fmt.Errorf("failed to unmarshal engine event: %w", err)
 	}
 	if event.Type != "resourcePreEvent" || event.ResourcePreEvent == nil {
-		return auto.PreviewStep{}, false
+		return auto.PreviewStep{}, false, nil
 	}
 
 	// Parse metadata using pulumi-service format:
@@ -130,7 +155,7 @@ func parseEngineEvent(data []byte) (auto.PreviewStep, bool) {
 	}
 
 	if err := json.Unmarshal(event.ResourcePreEvent.Metadata, &customStep); err != nil {
-		return auto.PreviewStep{}, false
+		return auto.PreviewStep{}, false, fmt.Errorf("failed to unmarshal resource event metadata: %w", err)
 	}
 
 	// Convert DetailedDiff from "diffKind" to standard "kind" format
@@ -168,14 +193,16 @@ func parseEngineEvent(data []byte) (auto.PreviewStep, bool) {
 		OldState:     customStep.Old, // Map "old" -> "OldState"
 		NewState:     customStep.New, // Map "new" -> "NewState"
 		DetailedDiff: standardDetailedDiff,
-	}, true
+	}, true, nil
 }
 
-// parseNDJSON parses NDJSON format with resourcePreEvent objects from pulumi-service MCP tool
-func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
+// parseNDJSON parses NDJSON format with resourcePreEvent objects from pulumi-service MCP tool.
+// Returns the parsed steps, a count of lines that failed to parse, and any fatal error.
+func parseNDJSON(output []byte) ([]auto.PreviewStep, int, error) {
 	var steps []auto.PreviewStep
 	lines := strings.Split(string(output), "\n")
 	validLinesFound := 0
+	jsonErrors := 0
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -186,21 +213,31 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
 		// Check if it's valid JSON
 		var raw json.RawMessage
 		if err := json.Unmarshal([]byte(line), &raw); err != nil {
+			jsonErrors++
 			continue
 		}
 		validLinesFound++
 
-		if step, ok := parseEngineEvent([]byte(line)); ok {
+		step, ok, err := parseEngineEvent([]byte(line))
+		if err != nil {
+			jsonErrors++
+			continue
+		}
+		if ok {
 			steps = append(steps, step)
 		}
 	}
 
 	// If we found no valid JSON lines at all, the input is malformed
 	if validLinesFound == 0 && len(strings.TrimSpace(string(output))) > 0 {
-		return nil, outputError("failed to parse preview output: no valid JSON found")
+		return nil, 0, outputError("failed to parse preview output: no valid JSON found")
 	}
 
-	return steps, nil
+	if jsonErrors > 0 {
+		fmt.Fprintf(os.Stderr, "warning: %d NDJSON lines failed to parse\n", jsonErrors)
+	}
+
+	return steps, jsonErrors, nil
 }
 
 // getStateExport runs pulumi stack export and returns the parsed lookup map in memory.
@@ -219,20 +256,10 @@ func getStateExport(projectDir, stack string) (map[string]*apitype.ResourceV3, e
 
 	output, err := exportCmd.Output()
 	if err != nil {
-		// State export failure is non-fatal — proceed without dependency resolution
-		return nil, nil
+		return nil, fmt.Errorf("pulumi stack export failed: %w", err)
 	}
 
 	return parseStateExport(output)
-}
-
-// parseStateFile reads a pulumi stack export JSON and returns a URN-to-resource lookup map.
-func parseStateFile(path string) (map[string]*apitype.ResourceV3, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read state file: %w", err)
-	}
-	return parseStateExport(data)
 }
 
 // parseStateExport parses pulumi stack export JSON into a URN-to-resource lookup map.

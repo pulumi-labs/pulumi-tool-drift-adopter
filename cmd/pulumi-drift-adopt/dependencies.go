@@ -130,16 +130,10 @@ func loadDepMap(path string) (DependencyMap, error) {
 	return depMap, nil
 }
 
-// saveDepMap writes a dependency map to the specified path, or to an auto-generated
-// temp file if path is empty. Returns the path written to.
-func saveDepMap(depMap DependencyMap, path string) (string, error) {
-	var f *os.File
-	var err error
-	if path != "" {
-		f, err = os.Create(path)
-	} else {
-		f, err = os.CreateTemp("", "drift-adopter-depmap-*.json")
-	}
+// saveDepMap writes a dependency map to an auto-generated temp file.
+// Returns the path written to.
+func saveDepMap(depMap DependencyMap) (string, error) {
+	f, err := os.CreateTemp("", "drift-adopter-depmap-*.json")
 	if err != nil {
 		return "", fmt.Errorf("failed to create dep map file: %w", err)
 	}

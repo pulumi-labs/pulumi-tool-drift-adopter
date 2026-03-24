@@ -24,6 +24,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - CONTRIBUTING.md tailored to this repo (replaces copy from pulumi/pulumi)
 - CODE-OF-CONDUCT.md
 
+### Fixed
+- **Dep map no longer overwritten when passed in**: `--dep-map-file` now reuses the provided file instead of unconditionally rewriting it
+- **Parse failures are no longer silent**: All three format paths (standard JSON, engine events, NDJSON) now track and report corrupt entries via stderr warnings and a `parseErrors` field in the summary output
+- **State export failures are now fatal**: `getStateExport` returns errors instead of silently degrading to no dependency resolution
+- **`--show-secrets` added to `pulumi preview`**: Ensures preview OldState values are plaintext, consistent with state export, so `DeepEquals` matching works correctly
+
 ### Changed
 - Moved skill to [pulumi/agent-skills](https://github.com/pulumi/agent-skills) repository
 - Simplified CI to run unit tests only
