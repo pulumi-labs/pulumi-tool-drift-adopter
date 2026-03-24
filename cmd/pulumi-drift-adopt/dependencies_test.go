@@ -408,8 +408,7 @@ func TestRunNextDepMapFileFlag(t *testing.T) {
 	depMap := buildDepMapFromState(stateLookup)
 
 	tmpDir := t.TempDir()
-	depMapPath := filepath.Join(tmpDir, "depmap.json")
-	depMapPath, err = saveDepMap(depMap)
+	depMapPath, err := saveDepMap(depMap)
 	require.NoError(t, err)
 
 	eventsFile := filepath.Join(tmpDir, "events.json")
