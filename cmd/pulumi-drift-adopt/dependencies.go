@@ -155,81 +155,19 @@ func saveDepMap(depMap DependencyMap, path string) (string, error) {
 	return f.Name(), nil
 }
 
-// resolveDependency attempts to match a resolved input value against the outputs
-// of dependent resources to identify the source output property.
-func resolveDependency(value interface{}, depURNs []resource.URN, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
-	for _, depURN := range depURNs {
-		depRes, ok := stateLookup[string(depURN)]
-		if !ok {
-			continue
-		}
-
-		// Search outputs for exact value match
-		outputProp := findMatchingOutput(value, depRes.Outputs)
-		if outputProp == "" {
-			continue
-		}
-
-		// Omit the literal value — the agent should use the resource reference
-		return map[string]interface{}{
-			"dependsOn": map[string]interface{}{
-				"resourceName":   extractResourceName(string(depURN)),
-				"resourceType":   string(depRes.Type),
-				"outputProperty": outputProp,
-			},
-		}
-	}
-
-	// Fallback: when value match fails but exactly one dep URN exists,
-	// emit bare dependsOn (without outputProperty) so the agent knows
-	// which resource to reference even when structural mismatch prevents
-	// exact value matching (e.g., input is ["value"] array, output is "value" string).
-	if len(depURNs) == 1 {
-		depRes, ok := stateLookup[string(depURNs[0])]
-		if ok {
-			return map[string]interface{}{
-				"dependsOn": map[string]interface{}{
-					"resourceName": extractResourceName(string(depURNs[0])),
-					"resourceType": string(depRes.Type),
-				},
-			}
-		}
-	}
-	return nil
-}
-
 // findMatchingOutput searches a resource's outputs for one whose value exactly matches
-// the given input value. Returns the output property name, or "" if no match found.
+// the given input value using Pulumi SDK's PropertyValue.DeepEquals for order-independent
+// comparison. Returns the output property name, or "" if no match found.
 //
-// Known limitation: Pulumi secret values are wrapped in a sentinel structure
-// ({"4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270", "ciphertext": "..."}).
-// If an output is a secret, the exact-match comparison will fail because the input has the
-// plaintext value while the output has the encrypted wrapper. In this case, the function
-// falls back to returning "" and the property is emitted as a plain value without dependsOn.
+// Both inputValue and outputs come from JSON-unmarshaled state data (exported with
+// --show-secrets), so all values are plaintext — no secret sentinel wrappers to worry about.
 func findMatchingOutput(inputValue interface{}, outputs map[string]interface{}) string {
 	if outputs == nil {
 		return ""
 	}
-
-	// Marshal input value for reliable comparison (handles nested structures)
-	inputJSON, err := json.Marshal(inputValue)
-	if err != nil {
-		return ""
-	}
-
+	inputPV := resource.NewPropertyValue(inputValue)
 	for key, outputValue := range outputs {
-		// Skip Pulumi secret-wrapped values (sentinel: "4dabf18193072939515e22adb298388d")
-		if m, ok := outputValue.(map[string]interface{}); ok {
-			if _, isSecret := m["4dabf18193072939515e22adb298388d"]; isSecret {
-				continue
-			}
-		}
-
-		outputJSON, err := json.Marshal(outputValue)
-		if err != nil {
-			continue
-		}
-		if string(inputJSON) == string(outputJSON) {
+		if inputPV.DeepEquals(resource.NewPropertyValue(outputValue)) {
 			return key
 		}
 	}
@@ -246,18 +184,6 @@ func depRefToDependsOn(ref DependencyRef) map[string]interface{} {
 		dep["outputProperty"] = ref.OutputProperty
 	}
 	return map[string]interface{}{"dependsOn": dep}
-}
-
-// resolveDependencyFallback attempts resolution using stateLookup when dep map doesn't cover a property.
-func resolveDependencyFallback(value interface{}, key string, propDeps map[resource.PropertyKey][]resource.URN, stateLookup map[string]*apitype.ResourceV3) map[string]interface{} {
-	if stateLookup == nil || len(propDeps) == 0 {
-		return nil
-	}
-	depURNs := propDeps[resource.PropertyKey(key)]
-	if len(depURNs) == 0 {
-		return nil
-	}
-	return resolveDependency(value, depURNs, stateLookup)
 }
 
 // collectDependencyNames recursively scans a value for dependsOn entries, appending

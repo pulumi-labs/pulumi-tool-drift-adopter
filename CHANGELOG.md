@@ -38,6 +38,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Examples directory
 - GitHub issue and PR templates
 
+### Fixed
+- **Removed dead sentinel skip in `findMatchingOutput`**: `--show-secrets` ensures plaintext outputs, so the `sig.Key` sentinel check was unreachable. Replaced JSON marshal comparison with Pulumi SDK `DeepEquals` for idiomatic, order-independent value matching.
+
 ### Security
 - **Eliminated plaintext secrets on disk**: state export (containing decrypted secrets) is now processed in memory only and never written to disk; only a dependency map (containing resource names, types, and output property names) is cached
 - Updated golang.org/x/crypto to v0.47.0
