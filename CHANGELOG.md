@@ -39,7 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - GitHub issue and PR templates
 
 ### Security
-- **Eliminated plaintext secrets on disk**: state export (containing decrypted secrets) is now processed in memory only and never written to disk; only a dependency map (containing resource names, types, and output property names) is cached
+- **No secrets on disk**: state export (via `--show-secrets`) is processed in memory; only a dependency map (resource names, types, output property names) is persisted
 - Updated golang.org/x/crypto to v0.47.0
 
 ## [1.0.1] - 2026-01-22
