@@ -83,8 +83,7 @@ The agent reads the full resource details from `outputFile` using its Read tool.
         {
           "path": "tags.Environment",
           "currentValue": "dev",
-          "desiredValue": "production",
-          "kind": "update"
+          "desiredValue": "production"
         }
       ]
     }
@@ -252,14 +251,17 @@ Both formats are parsed into `auto.PreviewStep` structs, then processed through 
 
 Preview output describes what Pulumi *would do* to infrastructure. The tool inverts this to describe what the *code* needs:
 
-| Preview Op | Code Action | Property Kind Inversion |
-|-----------|-------------|------------------------|
-| `create` | `delete_from_code` | — |
-| `delete` | `add_to_code` | — |
-| `update` | `update_code` | `add`/`add-replace` → `delete`, `delete`/`delete-replace` → `add` |
-| `replace` | `update_code` | `add`/`add-replace` → `delete`, `delete`/`delete-replace` → `add` |
+| Preview Op | Code Action |
+|-----------|-------------|
+| `create` | `delete_from_code` |
+| `delete` | `add_to_code` |
+| `update` | `update_code` |
+| `replace` | `update_code` |
 
-For synthesized input-diff entries (from `ReplaceReasons`/`DiffReasons`), property kind is refined from the default `"update"` based on nil values: nil current → `"delete"`, nil desired → `"add"`. The `-replace` suffix variants (`add-replace`, `delete-replace`, `update-replace`) are handled identically to their base kinds.
+At the property level, the intent is conveyed entirely by `currentValue` and `desiredValue`:
+- `currentValue=X, desiredValue=Y` → update the property
+- `currentValue=nil, desiredValue=Y` → add the property to code
+- `currentValue=X, desiredValue=nil` → remove the property from code
 
 ## Limitations
 

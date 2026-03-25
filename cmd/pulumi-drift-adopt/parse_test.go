@@ -189,12 +189,10 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 	require.NotNil(t, envProp, "tags.Environment property not found")
 	assert.Equal(t, "dev", envProp.CurrentValue)
 	assert.Equal(t, "production", envProp.DesiredValue)
-	assert.Equal(t, "update", envProp.Kind)
 
 	require.NotNil(t, managedByProp, "tags.ManagedBy property not found")
 	assert.Equal(t, nil, managedByProp.CurrentValue)
 	assert.Equal(t, "pulumi", managedByProp.DesiredValue)
-	assert.Equal(t, "add", managedByProp.Kind)
 }
 
 // TestNextCommandNDJSONMixedEvents tests that non-resourcePreEvent lines are properly skipped
@@ -214,7 +212,6 @@ func TestNextCommandNDJSONMixedEvents(t *testing.T) {
 	assert.Equal(t, "versioning.enabled", prop.Path)
 	assert.Equal(t, false, prop.CurrentValue)
 	assert.Equal(t, true, prop.DesiredValue)
-	assert.Equal(t, "update", prop.Kind)
 }
 
 // TestNextCommandNDJSONEmptyFile tests NDJSON with no resource events returns clean
@@ -298,7 +295,6 @@ func TestNextCommandNDJSONReplace(t *testing.T) {
 		}
 	}
 	require.NotNil(t, lengthProp, "length property not found")
-	assert.Equal(t, "update", lengthProp.Kind)
 	// Old inputs has length=16 (desired), new inputs has length=32 (current)
 	assert.Equal(t, float64(32), lengthProp.CurrentValue)
 	assert.Equal(t, float64(16), lengthProp.DesiredValue)
@@ -317,7 +313,6 @@ func TestNextCommandNDJSONReplace(t *testing.T) {
 		}
 	}
 	require.NotNil(t, algoProp, "algorithm property not found")
-	assert.Equal(t, "update", algoProp.Kind)
 	// Old inputs has algorithm="RSA" (desired), new inputs has algorithm="ECDSA" (current)
 	assert.Equal(t, "ECDSA", algoProp.CurrentValue)
 	assert.Equal(t, "RSA", algoProp.DesiredValue)
@@ -351,12 +346,10 @@ func TestNextCommandEngineEventsJSON(t *testing.T) {
 	require.NotNil(t, envProp, "tags.Environment property not found")
 	assert.Equal(t, "dev", envProp.CurrentValue)
 	assert.Equal(t, "production", envProp.DesiredValue)
-	assert.Equal(t, "update", envProp.Kind)
 
 	require.NotNil(t, managedByProp, "tags.ManagedBy property not found")
 	assert.Equal(t, nil, managedByProp.CurrentValue)
 	assert.Equal(t, "pulumi", managedByProp.DesiredValue)
-	assert.Equal(t, "add", managedByProp.Kind)
 }
 
 // TestNextCommandRealPulumiServiceNDJSON tests parsing of real NDJSON from pulumi-service integration test
@@ -449,7 +442,6 @@ func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 
 	ecdsaProp := tlsPropMap["ecdsaCurve"]
 	require.NotNil(t, ecdsaProp, "ecdsaCurve property not found on tls-key-0")
-	assert.Equal(t, "delete", ecdsaProp.Kind)
 	assert.Nil(t, ecdsaProp.CurrentValue)
 	assert.Equal(t, "P256", ecdsaProp.DesiredValue)
 }
@@ -548,7 +540,6 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 	assert.Equal(t, "versioning.enabled", prop.Path)
 	assert.Equal(t, true, prop.CurrentValue)
 	assert.Equal(t, false, prop.DesiredValue)
-	assert.Equal(t, "update", prop.Kind)
 }
 
 // TestNextCommandFileNotFound tests error handling when events file doesn't exist

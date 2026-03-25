@@ -118,18 +118,6 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 		currentValue := resolvePropertyValue(step.NewState, path, inputsOnly)
 		desiredValue := resolvePropertyValue(step.OldState, path, inputsOnly)
 
-		kind := invertPropertyKind(diff.Kind)
-		// For entries synthesized by normalizeDetailedDiff (Kind="update", InputDiff=true),
-		// refine kind based on nil values (preserving original behavior where
-		// ReplaceReasons-derived entries get "delete"/"add" based on nil values).
-		if inputsOnly && diff.Kind == "update" {
-			if currentValue == nil {
-				kind = "delete"
-			} else if desiredValue == nil {
-				kind = "add"
-			}
-		}
-
 		// Skip properties where both values are nil — computed-only fields
 		// in diff metadata with no actionable values for the agent.
 		if currentValue == nil && desiredValue == nil {
@@ -140,7 +128,6 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 			Path:         path,
 			CurrentValue: currentValue,
 			DesiredValue: desiredValue,
-			Kind:         kind,
 		})
 	}
 
@@ -159,12 +146,10 @@ func extractAllProperties(props map[string]interface{}, prefix string, propertie
 		if nestedMap, ok := value.(map[string]interface{}); ok {
 			extractAllProperties(nestedMap, path, properties)
 		} else {
-			// Leaf property - add it
+			// Leaf property — not in code, needs to be added
 			*properties = append(*properties, PropertyChange{
 				Path:         path,
-				CurrentValue: nil,   // Not in code
-				DesiredValue: value, // From state
-				Kind:         "add", // Need to add to code
+				DesiredValue: value,
 			})
 		}
 	}
@@ -187,26 +172,6 @@ func normalizeDetailedDiff(step *auto.PreviewStep) {
 	step.DetailedDiff = make(map[string]auto.PropertyDiff, len(diffKeys))
 	for _, key := range diffKeys {
 		step.DetailedDiff[string(key)] = auto.PropertyDiff{Kind: "update", InputDiff: true}
-	}
-}
-
-// invertPropertyKind inverts the property change kind from preview perspective to code perspective.
-func invertPropertyKind(previewKind string) string {
-	switch previewKind {
-	case "add", "add-replace":
-		// Preview wants to ADD to infrastructure = property in code but not in state
-		// Action: DELETE from code
-		return "delete"
-	case "delete", "delete-replace":
-		// Preview wants to DELETE from infrastructure = property in state but not in code
-		// Action: ADD to code
-		return "add"
-	case "update", "update-replace":
-		// Update is symmetric - need to update code to match state
-		return "update"
-	default:
-		// Pass through other kinds unchanged
-		return previewKind
 	}
 }
 

@@ -143,12 +143,10 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 	require.NotNil(t, envProp, "Environment property not found")
 	assert.Equal(t, "dev", envProp.CurrentValue)
 	assert.Equal(t, "production", envProp.DesiredValue)
-	assert.Equal(t, "update", envProp.Kind)
 
 	require.NotNil(t, versioningProp, "Versioning property not found")
 	assert.Equal(t, false, versioningProp.CurrentValue)
 	assert.Equal(t, true, versioningProp.DesiredValue)
-	assert.Equal(t, "update", versioningProp.Kind)
 }
 
 // TestNextCommandReplaceWithStandardJSON tests replace operations in standard JSON format
@@ -191,7 +189,6 @@ func TestNextCommandReplaceWithStandardJSON(t *testing.T) {
 		}
 	}
 	require.NotNil(t, lengthProp, "length property not found")
-	assert.Equal(t, "update", lengthProp.Kind)
 	assert.Equal(t, float64(32), lengthProp.CurrentValue)
 	assert.Equal(t, float64(16), lengthProp.DesiredValue)
 }
@@ -234,14 +231,12 @@ func TestNextCommandReplaceWithNullDetailedDiff(t *testing.T) {
 	}
 
 	require.NotNil(t, algoProp, "algorithm property not found")
-	assert.Equal(t, "update", algoProp.Kind)
 	// NewState.inputs has the current code value, OldState.inputs has the desired state value
 	assert.Equal(t, "RSA", algoProp.CurrentValue)
 	assert.Equal(t, "ECDSA", algoProp.DesiredValue)
 
 	require.NotNil(t, ecdsaProp, "ecdsaCurve property not found")
-	// ecdsaCurve is in OldState.inputs (desired) but not NewState.inputs (current) -> kind=delete
-	assert.Equal(t, "delete", ecdsaProp.Kind)
+	// ecdsaCurve is in OldState.inputs (desired) but not NewState.inputs (current)
 	assert.Nil(t, ecdsaProp.CurrentValue)
 	assert.Equal(t, "P256", ecdsaProp.DesiredValue)
 
@@ -304,12 +299,10 @@ func TestNextCommandReplaceInputDiffOnly(t *testing.T) {
 
 	for _, prop := range resource.Properties {
 		if prop.Path == "algorithm" {
-			assert.Equal(t, "update", prop.Kind)
 			assert.Equal(t, "RSA", prop.CurrentValue)
 			assert.Equal(t, "ECDSA", prop.DesiredValue)
 		}
 		if prop.Path == "ecdsaCurve" {
-			assert.Equal(t, "delete", prop.Kind)
 			assert.Nil(t, prop.CurrentValue)
 			assert.Equal(t, "P256", prop.DesiredValue)
 		}
@@ -451,28 +444,8 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	assert.Equal(t, "tags.Environment", updateResource.Properties[0].Path)
 }
 
-func TestInvertPropertyKindReplace(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected string
-	}{
-		{"add", "delete"},
-		{"add-replace", "delete"},
-		{"delete", "add"},
-		{"delete-replace", "add"},
-		{"update", "update"},
-		{"update-replace", "update"},
-		{"unknown", "unknown"},
-	}
-	for _, tc := range tests {
-		t.Run(tc.input, func(t *testing.T) {
-			assert.Equal(t, tc.expected, invertPropertyKind(tc.input))
-		})
-	}
-}
-
 func TestExtractPropertyChangesReplaceKinds(t *testing.T) {
-	t.Run("delete-replace kind inverts to add", func(t *testing.T) {
+	t.Run("delete-replace produces desiredValue with nil currentValue", func(t *testing.T) {
 		eventsContent := `{
 			"steps": [{
 				"op": "replace",
@@ -493,11 +466,13 @@ func TestExtractPropertyChangesReplaceKinds(t *testing.T) {
 		_, full := runProcessTest(t, []byte(eventsContent))
 		require.Len(t, full.Resources, 1)
 		require.Len(t, full.Resources[0].Properties, 1)
-		assert.Equal(t, "triggers", full.Resources[0].Properties[0].Path)
-		assert.Equal(t, "add", full.Resources[0].Properties[0].Kind)
+		prop := full.Resources[0].Properties[0]
+		assert.Equal(t, "triggers", prop.Path)
+		assert.Nil(t, prop.CurrentValue)
+		assert.NotNil(t, prop.DesiredValue)
 	})
 
-	t.Run("add-replace kind inverts to delete", func(t *testing.T) {
+	t.Run("add-replace produces currentValue with nil desiredValue", func(t *testing.T) {
 		eventsContent := `{
 			"steps": [{
 				"op": "replace",
@@ -519,8 +494,10 @@ func TestExtractPropertyChangesReplaceKinds(t *testing.T) {
 		_, full := runProcessTest(t, []byte(eventsContent))
 		require.Len(t, full.Resources, 1)
 		require.Len(t, full.Resources[0].Properties, 1)
-		assert.Equal(t, "forceDestroy", full.Resources[0].Properties[0].Path)
-		assert.Equal(t, "delete", full.Resources[0].Properties[0].Kind)
+		prop := full.Resources[0].Properties[0]
+		assert.Equal(t, "forceDestroy", prop.Path)
+		assert.NotNil(t, prop.CurrentValue)
+		assert.Nil(t, prop.DesiredValue)
 	})
 
 	t.Run("null/null properties are skipped", func(t *testing.T) {

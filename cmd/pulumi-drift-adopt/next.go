@@ -96,9 +96,12 @@ type ResourceChange struct {
 }
 
 // PropertyChange represents a single property change within a resource.
+// The intent is conveyed by currentValue and desiredValue:
+//   - currentValue=X, desiredValue=Y → update property
+//   - currentValue=nil, desiredValue=Y → add property to code
+//   - currentValue=X, desiredValue=nil → remove property from code
 type PropertyChange struct {
 	Path         string      `json:"path"`
-	Kind         string      `json:"kind"`
 	CurrentValue interface{} `json:"currentValue,omitempty"`
 	DesiredValue interface{} `json:"desiredValue,omitempty"`
 }
