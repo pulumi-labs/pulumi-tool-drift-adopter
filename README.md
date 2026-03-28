@@ -113,7 +113,7 @@ The agent reads the full resource details from `outputFile` using its Read tool.
 | `--stack` | Pulumi stack name (default: current stack) |
 | `--events-file` | Path to engine events file (skips running preview) |
 | `--exclude-urns` | Resource URNs to exclude from results |
-| `--dep-map-file` | Path to dependency map from a previous run (skips stack export) |
+| `--dep-map-file` | Path to metadata file from a previous run (skips state export and schema fetch) |
 | `--skip-refresh` | Omit `--refresh` from pulumi preview |
 | `--output-file` | Path for full output file (default: auto-generated temp file) |
 | `--project` | Project directory (default: ".") |
@@ -235,17 +235,51 @@ A JSON object with an `events` array, returned by the Pulumi Cloud API endpoint 
 | Diff kind | `detailedDiff[key].kind` | `detailedDiff[key].diffKind` |
 | Diff keys (fallback) | `replaceReasons`, `diffReasons` | `diffs` |
 
-### Normalization Pipeline
+### Processing Pipeline
 
-Both formats are parsed into `auto.PreviewStep` structs, then processed through two normalization stages before property extraction:
+Both formats are parsed into `auto.PreviewStep` structs, then processed through the following stages:
 
-1. **DetailedDiff normalization** (`normalizeDetailedDiff`) — For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `Kind: "update"` and `InputDiff: true`. The NDJSON parser performs equivalent normalization from its `diffs` field during format conversion.
+#### 1. DetailedDiff normalization
 
-2. **Property extraction** (`extractPropertyChanges`) — With `DetailedDiff` guaranteed populated for all update/replace steps, a single code path handles property value lookup. The `InputDiff` flag controls lookup strategy: input-diff entries resolve from `Inputs` only, while other entries try `Outputs` first with an `Inputs` fallback (`resolvePropertyValue`). Delete operations (no `DetailedDiff`) extract all properties from `OldState.Outputs`. Properties where both current and desired values are nil (computed-only fields) are filtered out.
+For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `Kind: "update"` and `InputDiff: true`. The NDJSON parser performs equivalent normalization from its `diffs` field during format conversion.
 
-3. **Element-level dependency resolution** — For map and array properties (e.g. `dependsOn`), individual elements are resolved rather than collapsing to a single value. Map entries preserve their keys; array entries preserve structure.
+#### 2. Schema-based output filtering
 
-4. **Dependency sorting** (`sortResourcesByDependencies`) — Resources are topologically sorted using Kahn's algorithm so leaf nodes (no cross-batch dependencies) come first. Each resource is assigned a `DependencyLevel` indicating its depth in the dependency graph.
+The tool fetches provider schemas via `pulumi package get-schema <provider>` and extracts the set of `inputProperties` for each resource type. DetailedDiff entries whose top-level property key is NOT in the schema's input properties are computed-only outputs (e.g., `tagsAll`, `arn`, `version`) and are automatically filtered out. This prevents the agent from trying to set properties that are managed by the provider.
+
+Schema results are cached in the metadata file (`--dep-map-file`) to avoid re-fetching on subsequent calls.
+
+#### 3. Value resolution
+
+Property values are resolved with correct engine semantics:
+
+- **`currentValue`** (what code says) — Always resolved from `NewState.Inputs`. During preview, `NewState.Outputs` may contain stale or placeholder data since the provider's `Update`/`Create` hasn't been called yet. Using Inputs only ensures the value reflects what the code actually declares.
+
+- **`desiredValue`** (what infrastructure has) — Resolved from `OldState.Outputs` by default (the provider's last-known state), or from `OldState.Inputs` when `inputDiff=true` (comparing input-to-input).
+
+This matches the Pulumi engine's own `TranslateDetailedDiff()` semantics documented in `pkg/engine/detailedDiff.go`.
+
+#### 4. Unknown sentinel filtering
+
+Preview data may contain Pulumi's unknown sentinel UUIDs as placeholder values (e.g., in cascading replace scenarios where a dependent resource's inputs aren't known yet). The tool recognizes all 7 sentinel types from the SDK (`plugin.UnknownStringValue`, etc.) and replaces them with nil. Properties where both current and desired values are nil after filtering are dropped.
+
+#### 5. Secret value supplementation
+
+When the tool detects `"[secret]"` as a property value, it supplements the real plaintext value from the state export (which is run with `--show-secrets`). The state export stores secrets in Pulumi's envelope format (`{sig.Key: sig.Secret, "plaintext": "..."}`) which the tool unwraps automatically. This ensures the agent receives actual values it can use to write working code, rather than opaque `[secret]` placeholders.
+
+Secret supplementation only applies to `desiredValue` (from infrastructure state). `currentValue` retains `[secret]` since the agent can read the actual code value directly from the source file.
+
+#### 6. Property path parsing
+
+Property paths (e.g., `tags.Environment`, `ingress[0].fromPort`, `tags["kubernetes.io/name"]`) are parsed using the Pulumi SDK's `resource.PropertyPath` parser, which correctly handles bracket-quoted keys with dots, consecutive array indices, and mixed nested paths.
+
+#### 7. Element-level dependency resolution
+
+For map and array properties (e.g. `dependsOn`), individual elements are resolved rather than collapsing to a single value. Map entries preserve their keys; array entries preserve structure.
+
+#### 8. Dependency sorting
+
+Resources are topologically sorted using Kahn's algorithm so leaf nodes (no cross-batch dependencies) come first. Each resource is assigned a `DependencyLevel` indicating its depth in the dependency graph.
 
 ### Inversion
 

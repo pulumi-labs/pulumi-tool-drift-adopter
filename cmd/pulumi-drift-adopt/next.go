@@ -73,8 +73,21 @@ type NextSummary struct {
 	ByTypeAction map[string]map[string]int `json:"byTypeAction"`
 }
 
-// DependencyMap maps resource URN -> property path -> DependencyRef.
-type DependencyMap map[string]map[string]DependencyRef
+// ResourceMetadata holds pre-computed dependency and schema information for reuse across tool calls.
+type ResourceMetadata struct {
+	// Dependencies maps resource URN -> property path -> DependencyRef.
+	Dependencies map[string]map[string]DependencyRef `json:"dependencies"`
+	// InputProperties maps resource type -> set of input property names from provider schema.
+	// Properties in DetailedDiff whose top-level key is NOT in this set are computed-only outputs.
+	InputProperties map[string][]string `json:"inputProperties,omitempty"`
+	// StateLookup is the parsed state export, used for supplementing secret values.
+	// Not serialized — only available during the initial run (not from cached metadata).
+	StateLookup map[string]*apitype.ResourceV3 `json:"-"`
+}
+
+// DependencyMap is an alias for the dependencies portion of ResourceMetadata.
+// Used as a convenience type throughout the codebase.
+type DependencyMap = map[string]map[string]DependencyRef
 
 // DependencyRef describes a cross-resource dependency for a single property.
 type DependencyRef struct {
@@ -131,11 +144,11 @@ func runNext(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	var depMap DependencyMap
+	var meta *ResourceMetadata
 
 	if depMapFile != "" {
-		// Load pre-computed dependency map — skip state export entirely
-		depMap, err = loadDepMap(depMapFile)
+		// Load pre-computed metadata — skip state export and schema fetch entirely
+		meta, err = loadMetadata(depMapFile)
 		if err != nil {
 			return err
 		}
@@ -146,21 +159,33 @@ func runNext(cmd *cobra.Command, _ []string) error {
 			return err
 		}
 
-		depMap = mergeStateLookupAndBuildDepMap(steps, stateLookup)
+		depMap := mergeStateLookupAndBuildDepMap(steps, stateLookup)
+
+		// Fetch provider schemas to determine input vs computed-only properties
+		inputProps, err := getInputPropertiesFromSchema(steps, projectDir)
+		if err != nil {
+			return err
+		}
+
+		meta = &ResourceMetadata{
+			Dependencies:    depMap,
+			InputProperties: inputProps,
+			StateLookup:     stateLookup,
+		}
 	}
 
-	// Save dependency map for reuse in subsequent calls (skip if loaded from file)
-	var depMapPath string
+	// Save metadata for reuse in subsequent calls (skip if loaded from file)
+	var metaPath string
 	if depMapFile != "" {
-		depMapPath = depMapFile
+		metaPath = depMapFile
 	} else {
-		depMapPath, err = saveDepMap(depMap)
+		metaPath, err = saveMetadata(meta)
 		if err != nil {
 			return err
 		}
 	}
 
-	return processNext(steps, parseErrors, depMap, excludeURNs, depMapPath, outputFile)
+	return processNext(steps, parseErrors, meta, excludeURNs, metaPath, outputFile)
 }
 
 // mergeStateLookupAndBuildDepMap supplements a state lookup with OldState from preview steps,
@@ -182,16 +207,25 @@ func mergeStateLookupAndBuildDepMap(steps []auto.PreviewStep, stateLookup map[st
 // processNext is the core pipeline: convert parsed steps to resources and output results.
 // It is separated from runNext so that tests can call it directly without needing CLI flags,
 // state export, or a live Pulumi stack.
-func processNext(steps []auto.PreviewStep, parseErrors int, depMap DependencyMap, excludeURNs []string, depMapPath, outputFile string) error {
-	resources := convertStepsToResources(steps, depMap)
+func processNext(steps []auto.PreviewStep, parseErrors int, meta *ResourceMetadata, excludeURNs []string, depMapPath, outputFile string) error {
+	resources := convertStepsToResources(steps, meta)
 	resources = sortResourcesByDependencies(resources)
 
 	return outputResult(resources, excludeURNs, depMapPath, outputFile, parseErrors)
 }
 
 // convertStepsToResources converts preview steps to resource changes for drift adoption.
-// depMap is used for dependency resolution of input properties.
-func convertStepsToResources(steps []auto.PreviewStep, depMap DependencyMap) []ResourceChange {
+// meta provides dependency resolution and schema-based input property filtering.
+func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) []ResourceChange {
+	var depMap DependencyMap
+	var inputPropSet map[string]map[string]bool
+	var stateLookup map[string]*apitype.ResourceV3
+	if meta != nil {
+		depMap = meta.Dependencies
+		inputPropSet = buildInputPropertySet(meta.InputProperties)
+		stateLookup = meta.StateLookup
+	}
+
 	var resources []ResourceChange
 	for i := range steps {
 		step := &steps[i]
@@ -220,8 +254,12 @@ func convertStepsToResources(steps []auto.PreviewStep, depMap DependencyMap) []R
 		case "remove_from_code":
 			// No properties needed for removal
 		default:
-			// For update/replace, extract changed properties
-			res.Properties = extractPropertyChanges(*step)
+			// For update/replace, extract changed properties with schema-based filtering
+			res.Properties = extractPropertyChanges(*step, inputPropSet)
+			// Supplement "[secret]" values with real values from state export
+			if stateLookup != nil {
+				supplementSecretValues(res.Properties, string(step.URN), stateLookup)
+			}
 		}
 
 		resources = append(resources, res)

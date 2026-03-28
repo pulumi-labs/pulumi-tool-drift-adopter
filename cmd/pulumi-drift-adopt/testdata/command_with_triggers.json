@@ -1,0 +1,118 @@
+{
+  "steps": [
+    {
+      "op": "update",
+      "urn": "urn:pulumi:dev::test::command:local:Command::api-cmd",
+      "oldState": {
+        "type": "command:local:Command",
+        "inputs": {
+          "create": "echo \"api ready\"",
+          "environment": {
+            "APP_NAME": "api",
+            "LOG_LEVEL": "error",
+            "DRIFT": "true"
+          }
+        },
+        "outputs": {
+          "create": "echo \"api ready\"",
+          "environment": {
+            "APP_NAME": "api",
+            "LOG_LEVEL": "error",
+            "DRIFT": "true"
+          },
+          "stderr": "",
+          "stdout": "api ready"
+        }
+      },
+      "newState": {
+        "type": "command:local:Command",
+        "inputs": {
+          "create": "echo \"api ready\"",
+          "environment": {
+            "APP_NAME": "api",
+            "LOG_LEVEL": "error"
+          }
+        }
+      },
+      "diffReasons": ["environment"],
+      "detailedDiff": {
+        "environment.DRIFT": {
+          "kind": "delete",
+          "inputDiff": false
+        }
+      }
+    },
+    {
+      "op": "replace",
+      "urn": "urn:pulumi:dev::test::random:index/randomPassword:RandomPassword::cache-pass",
+      "oldState": {
+        "type": "random:index/randomPassword:RandomPassword",
+        "inputs": {"length": 32, "special": false},
+        "outputs": {"length": 32, "special": false, "result": "old-password-value"}
+      },
+      "newState": {
+        "type": "random:index/randomPassword:RandomPassword",
+        "inputs": {"length": 16, "special": false},
+        "outputs": {"length": 16, "special": false, "result": "new-placeholder"}
+      },
+      "diffReasons": ["length"],
+      "replaceReasons": ["length"],
+      "detailedDiff": null
+    },
+    {
+      "op": "replace",
+      "urn": "urn:pulumi:dev::test::command:local:Command::cache-cmd",
+      "oldState": {
+        "type": "command:local:Command",
+        "inputs": {
+          "create": "echo \"Initializing cache\"",
+          "environment": {
+            "APP_NAME": "cache",
+            "DRIFT": "true"
+          },
+          "triggers": ["old-secret-val"]
+        },
+        "outputs": {
+          "create": "echo \"Initializing cache\"",
+          "environment": {
+            "APP_NAME": "cache",
+            "DRIFT": "true"
+          },
+          "stderr": "",
+          "stdout": "Initializing cache",
+          "triggers": ["old-secret-val"]
+        }
+      },
+      "newState": {
+        "type": "command:local:Command",
+        "inputs": {
+          "create": "echo \"Initializing cache\"",
+          "environment": {
+            "APP_NAME": "cache"
+          },
+          "triggers": ["new-computed-val"]
+        },
+        "outputs": {
+          "create": "echo \"Initializing cache\"",
+          "environment": {
+            "APP_NAME": "cache"
+          },
+          "stderr": "placeholder",
+          "stdout": "placeholder",
+          "triggers": ["new-computed-val"]
+        }
+      },
+      "diffReasons": ["environment", "triggers"],
+      "detailedDiff": {
+        "environment.DRIFT": {
+          "kind": "delete",
+          "inputDiff": false
+        },
+        "triggers[0]": {
+          "kind": "update-replace",
+          "inputDiff": false
+        }
+      }
+    }
+  ]
+}

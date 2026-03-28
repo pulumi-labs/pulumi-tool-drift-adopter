@@ -15,6 +15,8 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -84,6 +86,15 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 			"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket",
 			"oldState": {
 				"type": "aws:s3/bucket:Bucket",
+				"inputs": {
+					"tags": {
+						"Environment": "production",
+						"Owner": "team-a"
+					},
+					"versioning": {
+						"enabled": true
+					}
+				},
 				"outputs": {
 					"tags": {
 						"Environment": "production",
@@ -96,6 +107,15 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 			},
 			"newState": {
 				"type": "aws:s3/bucket:Bucket",
+				"inputs": {
+					"tags": {
+						"Environment": "dev",
+						"Owner": "team-a"
+					},
+					"versioning": {
+						"enabled": false
+					}
+				},
 				"outputs": {
 					"tags": {
 						"Environment": "dev",
@@ -444,6 +464,90 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	assert.Equal(t, "tags.Environment", updateResource.Properties[0].Path)
 }
 
+func TestGetNestedPropertyArrayIndex(t *testing.T) {
+	props := map[string]interface{}{
+		"triggers": []interface{}{"val-0", "val-1", "val-2"},
+		"environment": map[string]interface{}{
+			"APP_NAME": "cache",
+		},
+		"nested": map[string]interface{}{
+			"items": []interface{}{
+				map[string]interface{}{"name": "first"},
+				map[string]interface{}{"name": "second"},
+			},
+		},
+	}
+
+	t.Run("array index at top level", func(t *testing.T) {
+		assert.Equal(t, "val-0", getNestedProperty(props, "triggers[0]"))
+		assert.Equal(t, "val-1", getNestedProperty(props, "triggers[1]"))
+		assert.Equal(t, "val-2", getNestedProperty(props, "triggers[2]"))
+	})
+
+	t.Run("array index out of bounds", func(t *testing.T) {
+		assert.Nil(t, getNestedProperty(props, "triggers[3]"))
+		assert.Nil(t, getNestedProperty(props, "triggers[-1]"))
+	})
+
+	t.Run("array index on non-array", func(t *testing.T) {
+		assert.Nil(t, getNestedProperty(props, "environment[0]"))
+	})
+
+	t.Run("array index on missing key", func(t *testing.T) {
+		assert.Nil(t, getNestedProperty(props, "missing[0]"))
+	})
+
+	t.Run("nested array with dot path", func(t *testing.T) {
+		result := getNestedProperty(props, "nested.items[0]")
+		m, ok := result.(map[string]interface{})
+		require.True(t, ok)
+		assert.Equal(t, "first", m["name"])
+	})
+
+	t.Run("dot path still works", func(t *testing.T) {
+		assert.Equal(t, "cache", getNestedProperty(props, "environment.APP_NAME"))
+	})
+}
+
+func TestCommandWithTriggersNotSkipped(t *testing.T) {
+	// Regression test: Command resources with array-indexed detailedDiff paths
+	// (e.g., triggers[0]) were being skipped because getNestedProperty couldn't
+	// resolve array indices, causing both currentValue and desiredValue to be nil.
+	summary, full := runProcessTestFile(t, "testdata/command_with_triggers.json")
+
+	assert.Equal(t, "changes_needed", summary.Status)
+
+	// All 3 resources should be actionable (not skipped)
+	require.Len(t, full.Resources, 3)
+	assert.Empty(t, full.Skipped, "no resources should be skipped")
+
+	// Find cache-cmd (the replace with triggers[0] diff)
+	var cacheCmd *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "cache-cmd" {
+			cacheCmd = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, cacheCmd, "cache-cmd should be in resources, not skipped")
+	assert.Equal(t, "update_code", cacheCmd.Action)
+
+	// Should have properties for both environment.DRIFT and triggers[0]
+	paths := make(map[string]bool)
+	for _, p := range cacheCmd.Properties {
+		paths[p.Path] = true
+	}
+	assert.True(t, paths["environment.DRIFT"], "should have environment.DRIFT property")
+	assert.True(t, paths["triggers[0]"], "should have triggers[0] property")
+
+	// Verify triggers[0] values
+	for _, p := range cacheCmd.Properties {
+		if p.Path == "triggers[0]" {
+			assert.Equal(t, "new-computed-val", p.CurrentValue)
+			assert.Equal(t, "old-secret-val", p.DesiredValue)
+		}
+	}
+}
+
 func TestExtractPropertyChangesReplaceKinds(t *testing.T) {
 	t.Run("delete-replace produces desiredValue with nil currentValue", func(t *testing.T) {
 		eventsContent := `{
@@ -526,4 +630,504 @@ func TestExtractPropertyChangesReplaceKinds(t *testing.T) {
 		require.Len(t, full.Resources[0].Properties, 1)
 		assert.Equal(t, "bucket", full.Resources[0].Properties[0].Path)
 	})
+}
+
+// =============================================================================
+// Bridged-provider tests using real AWS preview data + state exports
+// =============================================================================
+
+// runAWSProcessTest loads a preview JSON and state export, builds a dependency map
+// from the state, and processes the preview through the full pipeline — matching
+// the real tool behavior (parsePreviewOutput → parseStateExport → mergeStateLookupAndBuildDepMap → processNext).
+func runAWSProcessTest(t *testing.T, previewFile, stateFile string) (NextSummaryOutput, NextOutput) {
+	t.Helper()
+	previewData, err := os.ReadFile(previewFile)
+	require.NoError(t, err)
+
+	stateData, err := os.ReadFile(stateFile)
+	require.NoError(t, err)
+
+	steps, parseErrors, err := parsePreviewOutput(previewData)
+	require.NoError(t, err)
+	assert.Equal(t, 0, parseErrors, "real AWS preview JSON should parse without errors")
+
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+
+	depMap := mergeStateLookupAndBuildDepMap(steps, stateLookup)
+
+	meta := &ResourceMetadata{
+		Dependencies: depMap,
+		StateLookup:  stateLookup,
+	}
+	return runProcessTestWithOptions(t, previewData, meta, nil, "")
+}
+
+// runAWSProcessTestWithSchema is like runAWSProcessTest but also loads schema-derived
+// input properties from aws_input_properties.json and includes them in the metadata.
+// Use this for tests that verify computed-property filtering.
+func runAWSProcessTestWithSchema(t *testing.T, previewFile, stateFile string) (NextSummaryOutput, NextOutput) {
+	t.Helper()
+	previewData, err := os.ReadFile(previewFile)
+	require.NoError(t, err)
+
+	stateData, err := os.ReadFile(stateFile)
+	require.NoError(t, err)
+
+	steps, parseErrors, err := parsePreviewOutput(previewData)
+	require.NoError(t, err)
+	assert.Equal(t, 0, parseErrors, "real AWS preview JSON should parse without errors")
+
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+
+	depMap := mergeStateLookupAndBuildDepMap(steps, stateLookup)
+
+	inputPropsData, err := os.ReadFile("testdata/aws_input_properties.json")
+	require.NoError(t, err)
+	var inputProps map[string][]string
+	require.NoError(t, json.Unmarshal(inputPropsData, &inputProps))
+
+	meta := &ResourceMetadata{
+		Dependencies:    depMap,
+		InputProperties: inputProps,
+		StateLookup:     stateLookup,
+	}
+	return runProcessTestWithOptions(t, previewData, meta, nil, "")
+}
+
+// TestAWSTagsAndSets_S3BucketProperties verifies that property changes for S3 bucket
+// tag updates are correctly extracted from real AWS bridged-provider preview data.
+// All DetailedDiff entries have inputDiff=false (bridged-provider behavior).
+func TestAWSTagsAndSets_S3BucketProperties(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_tags_and_sets.json",
+		"testdata/aws_tags_and_sets_state.json")
+
+	assert.Equal(t, "changes_needed", full.Status)
+
+	var bucket *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "test-bucket" {
+			bucket = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, bucket, "test-bucket not found in resources")
+	assert.Equal(t, "update_code", bucket.Action)
+	assert.Equal(t, "aws:s3/bucket:Bucket", bucket.Type)
+
+	props := make(map[string]PropertyChange)
+	for _, p := range bucket.Properties {
+		props[p.Path] = p
+	}
+
+	// tags.Environment: update — currentValue (code) = "production", desiredValue (infra) = "staging"
+	require.Contains(t, props, "tags.Environment")
+	assert.Equal(t, "production", props["tags.Environment"].CurrentValue)
+	assert.Equal(t, "staging", props["tags.Environment"].DesiredValue)
+
+	// tags.Owner: update — currentValue = "team-a", desiredValue = "team-b"
+	require.Contains(t, props, "tags.Owner")
+	assert.Equal(t, "team-a", props["tags.Owner"].CurrentValue)
+	assert.Equal(t, "team-b", props["tags.Owner"].DesiredValue)
+
+	// tags.CostCenter: add — exists in code (new) but not in infra (old)
+	require.Contains(t, props, "tags.CostCenter")
+	assert.Equal(t, "cc-100", props["tags.CostCenter"].CurrentValue)
+
+	// tags.Team: delete — exists in infra (old) but not in code (new)
+	require.Contains(t, props, "tags.Team")
+	assert.Equal(t, "platform", props["tags.Team"].DesiredValue)
+}
+
+// TestAWSTagsAndSets_TagsAllFiltering verifies that tagsAll entries are filtered when
+// schema data is available. tagsAll is a bridge-computed mirror of tags — it appears in
+// the bridge's inputs but is NOT in the provider schema's inputProperties.
+func TestAWSTagsAndSets_TagsAllFiltering(t *testing.T) {
+	_, full := runAWSProcessTestWithSchema(t,
+		"testdata/aws_tags_and_sets.json",
+		"testdata/aws_tags_and_sets_state.json")
+
+	var bucket *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "test-bucket" {
+			bucket = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, bucket)
+
+	for _, p := range bucket.Properties {
+		assert.NotContains(t, p.Path, "tagsAll",
+			"tagsAll entries should be filtered — they are not in the schema's inputProperties")
+	}
+}
+
+// TestAWSCascadingDeps_ComputedPropertyFiltering verifies that output-only properties
+// like `version`, `insecureValue`, and `lastModified` are filtered from the output.
+// These properties exist only in Outputs, not in any Inputs map, and the user cannot
+// set them in code — they are computed by the provider.
+func TestAWSCascadingDeps_ComputedPropertyFiltering(t *testing.T) {
+	_, full := runAWSProcessTestWithSchema(t,
+		"testdata/aws_cascading_deps.json",
+		"testdata/aws_cascading_deps_state.json")
+
+	for _, res := range full.Resources {
+		if res.Type == "aws:ssm/parameter:Parameter" {
+			for _, p := range res.Properties {
+				assert.NotEqual(t, "version", p.Path,
+					"%s: 'version' is output-only and should be filtered", res.Name)
+				assert.NotEqual(t, "insecureValue", p.Path,
+					"%s: 'insecureValue' is output-only and should be filtered", res.Name)
+			}
+		}
+		if res.Type == "aws:lambda/function:Function" {
+			for _, p := range res.Properties {
+				assert.NotEqual(t, "lastModified", p.Path,
+					"lastModified is output-only and should be filtered")
+			}
+		}
+	}
+}
+
+// TestAWSCascadingDeps_KMSKeyProperties verifies correct value extraction for KMS key
+// properties where all DetailedDiff entries have inputDiff=false.
+func TestAWSCascadingDeps_KMSKeyProperties(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_cascading_deps.json",
+		"testdata/aws_cascading_deps_state.json")
+
+	var kmsKey *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "app-key" {
+			kmsKey = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, kmsKey, "app-key not found")
+	assert.Equal(t, "update_code", kmsKey.Action)
+
+	props := make(map[string]PropertyChange)
+	for _, p := range kmsKey.Properties {
+		props[p.Path] = p
+	}
+
+	// description: currentValue (code) = "KMS key for app secrets",
+	// desiredValue (infra) = "KMS key for app secrets - rotated"
+	require.Contains(t, props, "description")
+	assert.Equal(t, "KMS key for app secrets", props["description"].CurrentValue)
+	assert.Equal(t, "KMS key for app secrets - rotated", props["description"].DesiredValue)
+
+	// enableKeyRotation: currentValue = true, desiredValue = false
+	require.Contains(t, props, "enableKeyRotation")
+	assert.Equal(t, true, props["enableKeyRotation"].CurrentValue)
+	assert.Equal(t, false, props["enableKeyRotation"].DesiredValue)
+}
+
+// TestAWSCascadingDeps_LambdaInputProperties verifies Lambda function property changes
+// correctly resolve from Inputs, including deeply nested paths and delete ops.
+func TestAWSCascadingDeps_LambdaInputProperties(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_cascading_deps.json",
+		"testdata/aws_cascading_deps_state.json")
+
+	var lambda *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "app-handler" {
+			lambda = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, lambda, "app-handler not found")
+
+	props := make(map[string]PropertyChange)
+	for _, p := range lambda.Properties {
+		props[p.Path] = p
+	}
+
+	// runtime: currentValue = "python3.11" (code), desiredValue = "python3.12" (infra)
+	require.Contains(t, props, "runtime")
+	assert.Equal(t, "python3.11", props["runtime"].CurrentValue)
+	assert.Equal(t, "python3.12", props["runtime"].DesiredValue)
+
+	// memorySize: currentValue = 128 (code), desiredValue = 256 (infra)
+	require.Contains(t, props, "memorySize")
+	assert.Equal(t, float64(128), props["memorySize"].CurrentValue)
+	assert.Equal(t, float64(256), props["memorySize"].DesiredValue)
+
+	// timeout: currentValue = 30 (code), desiredValue = 60 (infra)
+	require.Contains(t, props, "timeout")
+	assert.Equal(t, float64(30), props["timeout"].CurrentValue)
+	assert.Equal(t, float64(60), props["timeout"].DesiredValue)
+
+	// environment.variables.APP_ENV: currentValue = "production", desiredValue = "staging"
+	require.Contains(t, props, "environment.variables.APP_ENV")
+	assert.Equal(t, "production", props["environment.variables.APP_ENV"].CurrentValue)
+	assert.Equal(t, "staging", props["environment.variables.APP_ENV"].DesiredValue)
+
+	// environment.variables.LOG_LEVEL: delete — desiredValue = "debug", currentValue = nil
+	require.Contains(t, props, "environment.variables.LOG_LEVEL")
+	assert.Equal(t, "debug", props["environment.variables.LOG_LEVEL"].DesiredValue)
+	assert.Nil(t, props["environment.variables.LOG_LEVEL"].CurrentValue)
+}
+
+// TestAWSTagsAndSets_SecurityGroupReplace verifies that replace operations with
+// set elements (ingress rules) are correctly handled.
+func TestAWSTagsAndSets_SecurityGroupReplace(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_tags_and_sets.json",
+		"testdata/aws_tags_and_sets_state.json")
+
+	var sg *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "test-sg" {
+			sg = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, sg, "test-sg not found")
+	assert.Equal(t, "update_code", sg.Action)
+
+	props := make(map[string]PropertyChange)
+	for _, p := range sg.Properties {
+		props[p.Path] = p
+	}
+
+	// description: update-replace trigger
+	require.Contains(t, props, "description")
+	assert.Equal(t, "Security group for drift-adopter testing", props["description"].CurrentValue)
+	assert.Equal(t, "Updated security group for testing", props["description"].DesiredValue)
+}
+
+// TestAWSTagsAndSets_BucketVersioning verifies nested property path resolution.
+func TestAWSTagsAndSets_BucketVersioning(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_tags_and_sets.json",
+		"testdata/aws_tags_and_sets_state.json")
+
+	var versioning *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "test-bucket-versioning" {
+			versioning = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, versioning, "test-bucket-versioning not found")
+
+	require.Len(t, versioning.Properties, 1)
+	p := versioning.Properties[0]
+	assert.Equal(t, "versioningConfiguration.status", p.Path)
+	assert.Equal(t, "Enabled", p.CurrentValue)
+	assert.Equal(t, "Suspended", p.DesiredValue)
+}
+
+// TestAWSSecretInput_OutputOnlyFiltering verifies output-only property filtering
+// and secret value handling for SSM SecureString parameters.
+func TestAWSSecretInput_OutputOnlyFiltering(t *testing.T) {
+	_, full := runAWSProcessTestWithSchema(t,
+		"testdata/aws_secret_input.json",
+		"testdata/aws_secret_input_state.json")
+
+	for _, res := range full.Resources {
+		if res.Type != "aws:ssm/parameter:Parameter" {
+			continue
+		}
+		for _, p := range res.Properties {
+			assert.NotEqual(t, "version", p.Path,
+				"%s: version is output-only", res.Name)
+			assert.NotEqual(t, "insecureValue", p.Path,
+				"%s: insecureValue is output-only", res.Name)
+		}
+	}
+}
+
+// TestAWSSecretInput_SecretValueSupplementation verifies that "[secret]" property values
+// are supplemented with real values from the state export. The agent needs actual secret
+// values to write working code — there's no `pulumi config get` equivalent for state-sourced drift.
+func TestAWSSecretInput_SecretValueSupplementation(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_secret_input.json",
+		"testdata/aws_secret_input_state.json")
+
+	var dbPassword *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "db-password" {
+			dbPassword = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, dbPassword, "db-password not found")
+
+	props := make(map[string]PropertyChange)
+	for _, p := range dbPassword.Properties {
+		props[p.Path] = p
+	}
+
+	require.Contains(t, props, "value")
+	valProp := props["value"]
+
+	// desiredValue (what infra has) should be the REAL secret, not "[secret]".
+	// The state export contains the actual plaintext via --show-secrets.
+	assert.NotEqual(t, "[secret]", valProp.DesiredValue,
+		"desiredValue should be supplemented with real secret from state export")
+	assert.Equal(t, "new-db-password-def456", valProp.DesiredValue,
+		"desiredValue should be the actual secret value from state export")
+}
+
+// TestValueResolution_CurrentValueFromInputsNotOutputs verifies that currentValue
+// (from NewState) always uses Inputs, not stale Outputs. This matches the engine's
+// TranslateDetailedDiff semantics: NEW values always come from Inputs.
+//
+// This matters during provider version upgrades where NewState.Outputs may carry
+// forward stale values from the old provider version while NewState.Inputs reflects
+// the new provider's Check output. The Terraform bridge is particularly susceptible
+// because it carries forward old state outputs during preview planning.
+func TestValueResolution_CurrentValueFromInputsNotOutputs(t *testing.T) {
+	eventsContent := `{
+		"steps": [{
+			"op": "update",
+			"urn": "urn:pulumi:dev::test::some:provider:Resource::my-resource",
+			"oldState": {
+				"type": "some:provider:Resource",
+				"inputs": {"setting": "old-value"},
+				"outputs": {"setting": "old-value", "computed": "old-computed"}
+			},
+			"newState": {
+				"type": "some:provider:Resource",
+				"inputs": {"setting": "new-from-code"},
+				"outputs": {"setting": "stale-output-value", "computed": "stale-computed"}
+			},
+			"detailedDiff": {
+				"setting": {"kind": "update", "inputDiff": false}
+			}
+		}]
+	}`
+
+	_, full := runProcessTest(t, []byte(eventsContent))
+	require.Len(t, full.Resources, 1)
+	require.Len(t, full.Resources[0].Properties, 1)
+
+	prop := full.Resources[0].Properties[0]
+	assert.Equal(t, "setting", prop.Path)
+	// currentValue must come from NewState.Inputs, not stale Outputs from old provider version
+	assert.Equal(t, "new-from-code", prop.CurrentValue,
+		"currentValue should be from NewState.Inputs, not stale Outputs")
+	assert.Equal(t, "old-value", prop.DesiredValue)
+}
+
+// TestGetNestedProperty_BracketQuotedKeys verifies that property paths with
+// bracket-quoted keys (e.g., tags["kubernetes.io/name"]) are correctly parsed.
+// The current getNestedProperty uses naive dot-splitting which fails on dots inside keys.
+// PropertyPath from the Pulumi SDK handles this correctly.
+func TestGetNestedProperty_BracketQuotedKeys(t *testing.T) {
+	props := map[string]interface{}{
+		"tags": map[string]interface{}{
+			"kubernetes.io/name":    "my-cluster",
+			"app.kubernetes.io/env": "prod",
+		},
+		"metadata": map[string]interface{}{
+			"annotations": map[string]interface{}{
+				"key.with.dots": "value",
+			},
+		},
+	}
+
+	// Bracket-quoted key with dots — standard PropertyPath syntax
+	assert.Equal(t, "my-cluster", getNestedProperty(props, `tags["kubernetes.io/name"]`))
+	assert.Equal(t, "prod", getNestedProperty(props, `tags["app.kubernetes.io/env"]`))
+
+	// Nested bracket-quoted key
+	assert.Equal(t, "value", getNestedProperty(props, `metadata.annotations["key.with.dots"]`))
+}
+
+// TestGetNestedProperty_ConsecutiveIndices verifies paths with consecutive array indices
+// like "matrix[0][1]" which the current implementation doesn't handle.
+func TestGetNestedProperty_ConsecutiveIndices(t *testing.T) {
+	props := map[string]interface{}{
+		"matrix": []interface{}{
+			[]interface{}{"a", "b", "c"},
+			[]interface{}{"d", "e", "f"},
+		},
+	}
+
+	assert.Equal(t, "b", getNestedProperty(props, "matrix[0][1]"))
+	assert.Equal(t, "f", getNestedProperty(props, "matrix[1][2]"))
+	assert.Nil(t, getNestedProperty(props, "matrix[2][0]")) // out of bounds
+}
+
+// TestUnknownSentinelFiltering verifies that the Pulumi engine's unknown sentinel
+// UUID ("04da6b54-80e4-46f7-96ec-b56ff0331ba9") is filtered from property values.
+// These appear in Outputs during cascading replaces when a dependent resource
+// hasn't been created yet.
+func TestUnknownSentinelFiltering(t *testing.T) {
+	const sentinel = "04da6b54-80e4-46f7-96ec-b56ff0331ba9"
+
+	eventsContent := `{
+		"steps": [{
+			"op": "update",
+			"urn": "urn:pulumi:dev::test::aws:ssm/parameter:Parameter::my-param",
+			"oldState": {
+				"type": "aws:ssm/parameter:Parameter",
+				"inputs": {"keyId": "` + sentinel + `"},
+				"outputs": {"keyId": "` + sentinel + `", "arn": "arn:aws:ssm:us-west-2:123:parameter/my-param"}
+			},
+			"newState": {
+				"type": "aws:ssm/parameter:Parameter",
+				"inputs": {"keyId": "real-key-id"},
+				"outputs": {}
+			},
+			"detailedDiff": {
+				"keyId": {"kind": "update", "inputDiff": true}
+			}
+		}]
+	}`
+
+	_, full := runProcessTest(t, []byte(eventsContent))
+	require.Len(t, full.Resources, 1)
+	require.Len(t, full.Resources[0].Properties, 1)
+
+	prop := full.Resources[0].Properties[0]
+	assert.Equal(t, "keyId", prop.Path)
+	assert.Equal(t, "real-key-id", prop.CurrentValue)
+	// desiredValue should be nil (sentinel filtered), not the literal UUID string
+	assert.Nil(t, prop.DesiredValue,
+		"unknown sentinel should be filtered to nil, not passed as literal string")
+}
+
+// TestAWSCascadingDeps_DependencyMapFromState verifies that the dep map built from
+// the real state export correctly resolves cross-resource dependencies.
+func TestAWSCascadingDeps_DependencyMapFromState(t *testing.T) {
+	stateData, err := os.ReadFile("testdata/aws_cascading_deps_state.json")
+	require.NoError(t, err)
+
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+
+	depMap := buildDepMapFromState(stateLookup)
+
+	// Find Lambda URN — its role should reference lambda-role
+	var lambdaURN string
+	for urn, res := range stateLookup {
+		if string(res.Type) == "aws:lambda/function:Function" {
+			lambdaURN = urn
+		}
+	}
+	require.NotEmpty(t, lambdaURN, "Lambda URN not found in state")
+
+	lambdaDeps := depMap[lambdaURN]
+	require.NotNil(t, lambdaDeps, "Lambda should have dependency entries")
+
+	if roleRef, ok := lambdaDeps["role"]; ok {
+		assert.Equal(t, "lambda-role", roleRef.ResourceName)
+		assert.Equal(t, "aws:iam/role:Role", roleRef.ResourceType)
+	}
+
+	// SSM parameter keyId should depend on KMS key
+	for urn, res := range stateLookup {
+		if string(res.Type) != "aws:ssm/parameter:Parameter" {
+			continue
+		}
+		ssmDeps := depMap[urn]
+		if ssmDeps == nil {
+			continue
+		}
+		if keyRef, ok := ssmDeps["keyId"]; ok {
+			assert.Equal(t, "app-key", keyRef.ResourceName)
+			assert.Equal(t, "aws:kms/key:Key", keyRef.ResourceType)
+		}
+	}
 }

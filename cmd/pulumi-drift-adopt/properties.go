@@ -15,11 +15,15 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/sig"
 )
 
 // extractInputProperties returns a flat key-value map of input properties for add_to_code resources.
@@ -97,7 +101,9 @@ func extractInputProperties(step auto.PreviewStep, depMap DependencyMap) map[str
 // extractPropertyChanges extracts property changes from a preview step.
 // For update/replace ops, normalizeDetailedDiff must be called first so that
 // DetailedDiff is always populated when diff information is available.
-func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
+// inputPropSet provides schema-based filtering: if the top-level property key is not
+// a known input property for this resource type, it's a computed-only output and is skipped.
+func extractPropertyChanges(step auto.PreviewStep, inputPropSet map[string]map[string]bool) []PropertyChange {
 	var properties []PropertyChange
 
 	// For delete operations (add_to_code), DetailedDiff is empty but we need all properties from state.
@@ -113,10 +119,39 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 		return properties
 	}
 
+	// Get the set of known input properties for this resource type (from provider schema)
+	resourceType := extractResourceType(step)
+	var knownInputs map[string]bool
+	if inputPropSet != nil {
+		knownInputs = inputPropSet[resourceType]
+	}
+
 	for path, diff := range step.DetailedDiff {
+		// Schema-based filtering: skip computed-only output properties.
+		// Extract the top-level property key from the path (e.g., "tags" from "tags.Environment",
+		// "ingress" from "ingress[0].fromPort").
+		if knownInputs != nil {
+			topKey := topLevelKey(path)
+			if !knownInputs[topKey] {
+				continue // computed-only output, user can't set in code
+			}
+		}
+
 		inputsOnly := diff.InputDiff
-		currentValue := resolvePropertyValue(step.NewState, path, inputsOnly)
+
+		// For currentValue (what code says): ALWAYS use Inputs. During preview,
+		// NewState.Outputs may contain stale data from a prior provider version
+		// since Update/Create hasn't been called yet.
+		currentValue := resolveInputValue(step.NewState, path)
+
+		// For desiredValue (what infra has): follow the inputDiff flag.
+		// Outputs when comparing against provider state, Inputs when input-to-input.
 		desiredValue := resolvePropertyValue(step.OldState, path, inputsOnly)
+
+		// Filter unknown sentinels — these are preview placeholders for values
+		// that haven't been computed yet (e.g., cascading replaces).
+		currentValue = filterUnknownSentinel(currentValue)
+		desiredValue = filterUnknownSentinel(desiredValue)
 
 		// Skip properties where both values are nil — computed-only fields
 		// in diff metadata with no actionable values for the agent.
@@ -132,6 +167,107 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 	}
 
 	return properties
+}
+
+// pulumiSecretSigKey is the envelope key that identifies secret values in state exports.
+// From github.com/pulumi/pulumi/sdk/v3/go/common/resource/sig.Key.
+// State export with --show-secrets wraps secret values as:
+//
+//	{sig.Key: sig.Secret, "plaintext": "\"actual-value\""}
+var pulumiSecretSigKey = sig.Key
+
+// supplementSecretValues replaces "[secret]" property values with real values from the
+// state export. The state export (run with --show-secrets) contains actual secret values
+// in a Pulumi envelope format that we can unwrap.
+func supplementSecretValues(properties []PropertyChange, urn string, stateLookup map[string]*apitype.ResourceV3) {
+	stateRes := stateLookup[urn]
+	if stateRes == nil {
+		return
+	}
+
+	for i := range properties {
+		if properties[i].DesiredValue == "[secret]" {
+			// desiredValue comes from OldState (infrastructure) — look up in state export
+			if real := resolveSecretFromState(stateRes.Inputs, properties[i].Path); real != nil {
+				properties[i].DesiredValue = real
+			} else if real := resolveSecretFromState(stateRes.Outputs, properties[i].Path); real != nil {
+				properties[i].DesiredValue = real
+			}
+		}
+		// Note: currentValue "[secret]" is NOT supplemented. It comes from NewState (code),
+		// and the state export only has the deployed version. The agent reads the actual
+		// code value directly from the source file.
+	}
+}
+
+// resolveSecretFromState looks up a property path in state data and unwraps
+// the Pulumi secret envelope if present. Returns the plaintext value or nil.
+func resolveSecretFromState(props map[string]interface{}, path string) interface{} {
+	if props == nil {
+		return nil
+	}
+	v := getNestedProperty(props, path)
+	return unwrapSecret(v)
+}
+
+// unwrapSecret unwraps a Pulumi secret envelope, returning the plaintext value.
+// The envelope format in state exports is: {sig.Key: sig.Secret, "plaintext": "\"value\""}
+// If the value is not a secret envelope, returns nil.
+func unwrapSecret(v interface{}) interface{} {
+	m, ok := v.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	if _, hasSig := m[pulumiSecretSigKey]; !hasSig {
+		return nil
+	}
+	plaintext, ok := m["plaintext"]
+	if !ok {
+		return nil
+	}
+	// The plaintext value is JSON-encoded (e.g., "\"actual-value\"").
+	// Use the SDK's NewPropertyValue to parse it correctly.
+	if s, ok := plaintext.(string); ok {
+		var parsed interface{}
+		if err := json.Unmarshal([]byte(s), &parsed); err == nil {
+			return parsed
+		}
+		return s
+	}
+	return plaintext
+}
+
+// filterUnknownSentinel returns nil if the value is any of the Pulumi engine's
+// unknown sentinel UUIDs, otherwise returns the value unchanged.
+// Sentinels from github.com/pulumi/pulumi/sdk/v3/go/common/resource/plugin.
+func filterUnknownSentinel(v interface{}) interface{} {
+	s, ok := v.(string)
+	if !ok {
+		return v
+	}
+	switch s {
+	case plugin.UnknownStringValue,
+		plugin.UnknownBoolValue,
+		plugin.UnknownNumberValue,
+		plugin.UnknownArrayValue,
+		plugin.UnknownAssetValue,
+		plugin.UnknownArchiveValue,
+		plugin.UnknownObjectValue:
+		return nil
+	}
+	return v
+}
+
+// topLevelKey extracts the top-level property key from a DetailedDiff path.
+// "tags.Environment" → "tags", "ingress[0].fromPort" → "ingress", "description" → "description"
+func topLevelKey(path string) string {
+	if i := strings.IndexByte(path, '.'); i >= 0 {
+		path = path[:i]
+	}
+	if i := strings.IndexByte(path, '['); i >= 0 {
+		path = path[:i]
+	}
+	return path
 }
 
 // extractAllProperties recursively extracts all properties from a map for add_to_code operations
@@ -173,6 +309,15 @@ func normalizeDetailedDiff(step *auto.PreviewStep) {
 	for _, key := range diffKeys {
 		step.DetailedDiff[string(key)] = auto.PropertyDiff{Kind: "update", InputDiff: true}
 	}
+}
+
+// resolveInputValue looks up a property value from Inputs only.
+// Used for NewState (currentValue) where Outputs may be stale.
+func resolveInputValue(state *apitype.ResourceV3, path string) interface{} {
+	if state == nil || state.Inputs == nil {
+		return nil
+	}
+	return getNestedProperty(state.Inputs, path)
 }
 
 // resolvePropertyValue looks up a property value from a resource state,
@@ -240,21 +385,40 @@ func extractResourceName(urn string) string {
 	return ""
 }
 
-// getNestedProperty extracts a value from a nested map using a dot-separated path
+// getNestedProperty extracts a value from a nested map using a Pulumi property path.
+// Supports dot-separated keys ("tags.Environment"), array indices ("triggers[0]"),
+// bracket-quoted keys with dots ("tags[\"kubernetes.io/name\"]"), and consecutive
+// indices ("matrix[0][1]"). Uses the Pulumi SDK's PropertyPath parser for correctness.
 func getNestedProperty(props map[string]interface{}, path string) interface{} {
-	parts := strings.Split(path, ".")
-	var current interface{} = props
+	pp, err := resource.ParsePropertyPath(path)
+	if err != nil {
+		return nil
+	}
 
-	for _, part := range parts {
-		m, ok := current.(map[string]interface{})
-		if !ok {
-			return nil
-		}
-		current, ok = m[part]
-		if !ok {
+	var current interface{} = props
+	for _, segment := range pp {
+		switch s := segment.(type) {
+		case string:
+			m, ok := current.(map[string]interface{})
+			if !ok {
+				return nil
+			}
+			current, ok = m[s]
+			if !ok {
+				return nil
+			}
+		case int:
+			arr, ok := current.([]interface{})
+			if !ok {
+				return nil
+			}
+			if s < 0 || s >= len(arr) {
+				return nil
+			}
+			current = arr[s]
+		default:
 			return nil
 		}
 	}
-
 	return current
 }

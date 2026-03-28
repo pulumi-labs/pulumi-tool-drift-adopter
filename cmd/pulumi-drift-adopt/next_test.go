@@ -32,8 +32,8 @@ func runProcessTest(t *testing.T, input []byte) (NextSummaryOutput, NextOutput) 
 	return runProcessTestWithOptions(t, input, nil, nil, "")
 }
 
-// runProcessTestWithOptions calls processNext with the given preview output, dep map, and exclude URNs.
-func runProcessTestWithOptions(t *testing.T, input []byte, depMap DependencyMap, excludeURNs []string, depMapPath string) (NextSummaryOutput, NextOutput) {
+// runProcessTestWithOptions calls processNext with the given preview output, metadata, and exclude URNs.
+func runProcessTestWithOptions(t *testing.T, input []byte, meta *ResourceMetadata, excludeURNs []string, depMapPath string) (NextSummaryOutput, NextOutput) {
 	t.Helper()
 
 	steps, parseErrors, err := parsePreviewOutput(input)
@@ -47,7 +47,7 @@ func runProcessTestWithOptions(t *testing.T, input []byte, depMap DependencyMap,
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	outErr := processNext(steps, parseErrors, depMap, excludeURNs, depMapPath, outputFile)
+	outErr := processNext(steps, parseErrors, meta, excludeURNs, depMapPath, outputFile)
 
 	_ = w.Close()
 	os.Stdout = oldStdout

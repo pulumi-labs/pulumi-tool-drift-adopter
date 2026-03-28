@@ -502,6 +502,11 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 				"urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::legacy-bucket",
 				"oldState": {
 					"type": "aws:s3/bucket:Bucket",
+					"inputs": {
+						"versioning": {
+							"enabled": false
+						}
+					},
 					"outputs": {
 						"versioning": {
 							"enabled": false
@@ -510,6 +515,11 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 				},
 				"newState": {
 					"type": "aws:s3/bucket:Bucket",
+					"inputs": {
+						"versioning": {
+							"enabled": true
+						}
+					},
 					"outputs": {
 						"versioning": {
 							"enabled": true

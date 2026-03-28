@@ -117,36 +117,49 @@ func resolveDepRef(value interface{}, depURNs []resource.URN, lookup map[string]
 	return nil
 }
 
-// loadDepMap reads a dependency map from a JSON file.
-func loadDepMap(path string) (DependencyMap, error) {
+// loadMetadata reads a ResourceMetadata from a JSON file.
+func loadMetadata(path string) (*ResourceMetadata, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read dep map file: %w", err)
+		return nil, fmt.Errorf("failed to read metadata file: %w", err)
 	}
-	var depMap DependencyMap
-	if err := json.Unmarshal(data, &depMap); err != nil {
-		return nil, fmt.Errorf("failed to parse dep map file: %w", err)
+	var meta ResourceMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata file: %w", err)
 	}
-	return depMap, nil
+	return &meta, nil
 }
 
-// saveDepMap writes a dependency map to an auto-generated temp file.
+// saveMetadata writes a ResourceMetadata to an auto-generated temp file.
 // Returns the path written to.
-func saveDepMap(depMap DependencyMap) (string, error) {
-	f, err := os.CreateTemp("", "drift-adopter-depmap-*.json")
+func saveMetadata(meta *ResourceMetadata) (string, error) {
+	f, err := os.CreateTemp("", "drift-adopter-metadata-*.json")
 	if err != nil {
-		return "", fmt.Errorf("failed to create dep map file: %w", err)
+		return "", fmt.Errorf("failed to create metadata file: %w", err)
 	}
 	encoder := json.NewEncoder(f)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(depMap); err != nil {
+	if err := encoder.Encode(meta); err != nil {
 		_ = f.Close()
-		return "", fmt.Errorf("failed to write dep map: %w", err)
+		return "", fmt.Errorf("failed to write metadata: %w", err)
 	}
 	if err := f.Close(); err != nil {
 		return "", err
 	}
 	return f.Name(), nil
+}
+
+// Backward-compatible aliases
+func loadDepMap(path string) (DependencyMap, error) {
+	meta, err := loadMetadata(path)
+	if err != nil {
+		return nil, err
+	}
+	return meta.Dependencies, nil
+}
+
+func saveDepMap(depMap DependencyMap) (string, error) {
+	return saveMetadata(&ResourceMetadata{Dependencies: depMap})
 }
 
 // findMatchingOutput searches a resource's outputs for one whose value exactly matches
