@@ -1088,6 +1088,302 @@ func TestUnknownSentinelFiltering(t *testing.T) {
 		"unknown sentinel should be filtered to nil, not passed as literal string")
 }
 
+// TestAWSTagsAndSets_SecurityGroupSetElements verifies that array-indexed set elements
+// (ingress rules) in security group replace operations resolve values correctly.
+// AWS security groups use TypeSet for ingress/egress rules, which produces array-indexed
+// paths like "ingress[0]" in DetailedDiff even though the underlying type is a set.
+func TestAWSTagsAndSets_SecurityGroupSetElements(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_tags_and_sets.json",
+		"testdata/aws_tags_and_sets_state.json")
+
+	var sg *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "test-sg" {
+			sg = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, sg, "test-sg not found")
+
+	// Collect all property paths
+	paths := make(map[string]bool)
+	for _, p := range sg.Properties {
+		paths[p.Path] = true
+	}
+
+	// Security group should have ingress array-indexed paths (set elements)
+	hasIngressPath := false
+	for path := range paths {
+		if len(path) >= 7 && path[:7] == "ingress" {
+			hasIngressPath = true
+			break
+		}
+	}
+	assert.True(t, hasIngressPath, "security group should have ingress paths from TypeSet")
+
+	// description change should be present (replace trigger)
+	assert.True(t, paths["description"], "description should be a changed property")
+}
+
+// TestAWSTagsAndSets_SchemaFiltersCombined verifies that when schema data is available,
+// all three scenarios work correctly together: tag filtering, set elements, and nested objects.
+func TestAWSTagsAndSets_SchemaFiltersCombined(t *testing.T) {
+	_, full := runAWSProcessTestWithSchema(t,
+		"testdata/aws_tags_and_sets.json",
+		"testdata/aws_tags_and_sets_state.json")
+
+	for _, res := range full.Resources {
+		for _, p := range res.Properties {
+			// No resource should have tagsAll paths when schema filtering is active
+			assert.NotContains(t, p.Path, "tagsAll",
+				"%s/%s: tagsAll should be filtered by schema", res.Name, p.Path)
+		}
+	}
+
+	// Verify each resource type is present
+	types := make(map[string]bool)
+	for _, res := range full.Resources {
+		types[res.Type] = true
+	}
+	assert.True(t, types["aws:s3/bucket:Bucket"], "S3 bucket should be present")
+	assert.True(t, types["aws:ec2/securityGroup:SecurityGroup"], "security group should be present")
+}
+
+// TestAWSTagsAndSets_IAMInlinePolicyArrayPath verifies that array-indexed nested paths
+// like "inlinePolicies[0].policy" resolve correctly from Inputs.
+func TestAWSTagsAndSets_IAMInlinePolicyArrayPath(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_tags_and_sets.json",
+		"testdata/aws_tags_and_sets_state.json")
+
+	var role *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "test-role" {
+			role = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, role, "test-role not found")
+	assert.Equal(t, "update_code", role.Action)
+
+	// Should have inlinePolicies[0].policy path
+	props := make(map[string]PropertyChange)
+	for _, p := range role.Properties {
+		props[p.Path] = p
+	}
+
+	require.Contains(t, props, "inlinePolicies[0].policy",
+		"IAM role should have inlinePolicies[0].policy from array-indexed DetailedDiff")
+
+	// Both values should be non-nil (update, not add/delete)
+	p := props["inlinePolicies[0].policy"]
+	assert.NotNil(t, p.CurrentValue, "currentValue should be non-nil (from NewState.Inputs)")
+	assert.NotNil(t, p.DesiredValue, "desiredValue should be non-nil (from OldState)")
+}
+
+// TestAWSCascadingDeps_SchemaFiltersOutputProperties verifies the full pipeline
+// with schema filtering on the cascading-deps scenario: KMS → SSM → Lambda.
+func TestAWSCascadingDeps_SchemaFiltersOutputProperties(t *testing.T) {
+	_, full := runAWSProcessTestWithSchema(t,
+		"testdata/aws_cascading_deps.json",
+		"testdata/aws_cascading_deps_state.json")
+
+	// Collect all property paths by resource type
+	propsByType := make(map[string][]string)
+	for _, res := range full.Resources {
+		for _, p := range res.Properties {
+			propsByType[res.Type] = append(propsByType[res.Type], p.Path)
+		}
+	}
+
+	// Lambda should NOT have lastModified (output-only)
+	for _, path := range propsByType["aws:lambda/function:Function"] {
+		assert.NotEqual(t, "lastModified", path, "lastModified is output-only")
+	}
+
+	// SSM should NOT have version or insecureValue (output-only per schema)
+	for _, path := range propsByType["aws:ssm/parameter:Parameter"] {
+		assert.NotEqual(t, "version", path, "version is output-only")
+	}
+
+	// KMS key should still have description and enableKeyRotation (real inputs)
+	kmsProps := propsByType["aws:kms/key:Key"]
+	assert.Contains(t, kmsProps, "description", "description is an input property")
+	assert.Contains(t, kmsProps, "enableKeyRotation", "enableKeyRotation is an input property")
+}
+
+// TestAWSCascadingDeps_LambdaNestedMapDelete verifies that environment.variables.LOG_LEVEL
+// delete is correctly handled with schema filtering — the nested path should survive
+// filtering because "environment" IS a known input property.
+func TestAWSCascadingDeps_LambdaNestedMapDelete(t *testing.T) {
+	_, full := runAWSProcessTestWithSchema(t,
+		"testdata/aws_cascading_deps.json",
+		"testdata/aws_cascading_deps_state.json")
+
+	var lambda *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "app-handler" {
+			lambda = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, lambda)
+
+	props := make(map[string]PropertyChange)
+	for _, p := range lambda.Properties {
+		props[p.Path] = p
+	}
+
+	// environment.variables.LOG_LEVEL should be present even with schema filtering
+	// because "environment" is a known input property — the top-level key passes the filter
+	require.Contains(t, props, "environment.variables.LOG_LEVEL",
+		"nested map delete should survive schema filtering via top-level key 'environment'")
+	assert.Nil(t, props["environment.variables.LOG_LEVEL"].CurrentValue,
+		"LOG_LEVEL was deleted from code, currentValue should be nil")
+	assert.Equal(t, "debug", props["environment.variables.LOG_LEVEL"].DesiredValue,
+		"LOG_LEVEL desiredValue should be the old infrastructure value")
+}
+
+// TestAWSSecretInput_MixedSecretAndPlaintext verifies that resources with both secret
+// and non-secret properties are handled correctly — secrets are supplemented while
+// plain values pass through unchanged.
+func TestAWSSecretInput_MixedSecretAndPlaintext(t *testing.T) {
+	_, full := runAWSProcessTestWithSchema(t,
+		"testdata/aws_secret_input.json",
+		"testdata/aws_secret_input_state.json")
+
+	var appConfig *ResourceChange
+	for i := range full.Resources {
+		if full.Resources[i].Name == "app-config" {
+			appConfig = &full.Resources[i]
+		}
+	}
+	require.NotNil(t, appConfig, "app-config not found")
+
+	props := make(map[string]PropertyChange)
+	for _, p := range appConfig.Properties {
+		props[p.Path] = p
+	}
+
+	// description is a plain (non-secret) property — should have real values
+	if descProp, ok := props["description"]; ok {
+		assert.NotEqual(t, "[secret]", descProp.CurrentValue,
+			"description is not secret, should have real value")
+		assert.NotEqual(t, "[secret]", descProp.DesiredValue,
+			"description is not secret, should have real value")
+	}
+
+	// tags.Environment is a plain property — should have real values
+	if tagProp, ok := props["tags.Environment"]; ok {
+		assert.IsType(t, "", tagProp.CurrentValue, "tag value should be a string")
+		assert.IsType(t, "", tagProp.DesiredValue, "tag value should be a string")
+	}
+}
+
+// TestAWSSecretInput_AllSSMSecretsSupplemented verifies that ALL SSM SecureString
+// parameters in the secret-input scenario have their "[secret]" values supplemented.
+func TestAWSSecretInput_AllSSMSecretsSupplemented(t *testing.T) {
+	_, full := runAWSProcessTest(t,
+		"testdata/aws_secret_input.json",
+		"testdata/aws_secret_input_state.json")
+
+	for _, res := range full.Resources {
+		if res.Type != "aws:ssm/parameter:Parameter" {
+			continue
+		}
+
+		for _, p := range res.Properties {
+			if p.Path == "value" {
+				// desiredValue (from infra state) should be supplemented — not "[secret]"
+				assert.NotEqual(t, "[secret]", p.DesiredValue,
+					"%s: value desiredValue should be supplemented from state export", res.Name)
+				assert.NotNil(t, p.DesiredValue,
+					"%s: value desiredValue should not be nil", res.Name)
+			}
+		}
+	}
+}
+
+// TestMetadataRoundTrip_WithInputProperties verifies that ResourceMetadata with
+// InputProperties survives a save → load round-trip correctly.
+func TestMetadataRoundTrip_WithInputProperties(t *testing.T) {
+	inputProps := loadInputProperties(t)
+
+	meta := &ResourceMetadata{
+		Dependencies: DependencyMap{
+			"urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket": {
+				"tags.Name": {
+					ResourceName:   "some-resource",
+					ResourceType:   "aws:something:Something",
+					OutputProperty: "name",
+				},
+			},
+		},
+		InputProperties: inputProps,
+	}
+
+	path, err := saveMetadata(meta)
+	require.NoError(t, err)
+	defer os.Remove(path)
+
+	loaded, err := loadMetadata(path)
+	require.NoError(t, err)
+
+	// Dependencies should match
+	assert.Equal(t, meta.Dependencies, loaded.Dependencies)
+
+	// InputProperties should match
+	assert.Equal(t, len(meta.InputProperties), len(loaded.InputProperties),
+		"number of resource types should match")
+
+	for resType, props := range meta.InputProperties {
+		assert.Equal(t, props, loaded.InputProperties[resType],
+			"input properties for %s should match", resType)
+	}
+
+	// StateLookup should be nil (not serialized)
+	assert.Nil(t, loaded.StateLookup, "StateLookup should not survive round-trip")
+}
+
+// TestAWSFullPipelineWithSchema runs the complete pipeline (parse → extract → filter → sort → output)
+// on all three AWS scenarios with schema filtering, verifying the end-to-end result.
+func TestAWSFullPipelineWithSchema(t *testing.T) {
+	scenarios := []struct {
+		name        string
+		previewFile string
+		stateFile   string
+	}{
+		{"tags-and-sets", "testdata/aws_tags_and_sets.json", "testdata/aws_tags_and_sets_state.json"},
+		{"cascading-deps", "testdata/aws_cascading_deps.json", "testdata/aws_cascading_deps_state.json"},
+		{"secret-input", "testdata/aws_secret_input.json", "testdata/aws_secret_input_state.json"},
+	}
+
+	for _, sc := range scenarios {
+		t.Run(sc.name, func(t *testing.T) {
+			_, full := runAWSProcessTestWithSchema(t, sc.previewFile, sc.stateFile)
+
+			assert.Equal(t, "changes_needed", full.Status, "all scenarios should have changes")
+			assert.NotEmpty(t, full.Resources, "should have at least one resource")
+
+			for _, res := range full.Resources {
+				// Every resource should have a valid action
+				assert.Contains(t, []string{"update_code", "add_to_code", "delete_from_code"}, res.Action,
+					"invalid action for %s", res.Name)
+
+				// update_code resources should have properties
+				if res.Action == "update_code" {
+					assert.NotEmpty(t, res.Properties,
+						"%s: update_code should have properties", res.Name)
+				}
+
+				// No property should have tagsAll (schema-filtered)
+				for _, p := range res.Properties {
+					assert.NotContains(t, p.Path, "tagsAll",
+						"%s/%s: tagsAll should be filtered", res.Name, p.Path)
+				}
+			}
+		})
+	}
+}
+
 // TestAWSCascadingDeps_DependencyMapFromState verifies that the dep map built from
 // the real state export correctly resolves cross-resource dependencies.
 func TestAWSCascadingDeps_DependencyMapFromState(t *testing.T) {

@@ -79,6 +79,16 @@ func runProcessTestFile(t *testing.T, path string) (NextSummaryOutput, NextOutpu
 	return runProcessTest(t, data)
 }
 
+// loadInputProperties loads testdata/aws_input_properties.json for use in tests.
+func loadInputProperties(t *testing.T) map[string][]string {
+	t.Helper()
+	data, err := os.ReadFile("testdata/aws_input_properties.json")
+	require.NoError(t, err)
+	var result map[string][]string
+	require.NoError(t, json.Unmarshal(data, &result))
+	return result
+}
+
 // runNextTest executes the next command with the given args and returns both the
 // stdout summary and the full output parsed from the output file.
 // It automatically adds --output-file pointing to a temp file in the test's temp dir.
