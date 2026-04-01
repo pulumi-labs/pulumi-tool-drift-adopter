@@ -18,9 +18,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/spf13/cobra"
 )
 
@@ -43,35 +43,87 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 	cmd.Flags().String("events-file", "", "Read preview events from file instead of running pulumi preview")
 	cmd.Flags().StringSlice("exclude-urns", nil, "URNs to exclude from output")
 	cmd.Flags().Bool("skip-refresh", false, "Skip --refresh flag on pulumi preview (use existing state)")
+	cmd.Flags().String("output-file", "", "Path to write full output JSON (default: auto-generated temp file)")
 	return cmd
 }
 
-// NextOutput is the JSON structure returned by the next command
+// NextOutput is the full output written to a file, containing all resource details.
 type NextOutput struct {
-	Status    string           `json:"status"` // "changes_needed", "clean", "error"
-	Error     string           `json:"error,omitempty"`
-	Resources []ResourceChange `json:"resources,omitempty"`
+	Status     string           `json:"status"`
+	Summary    *NextSummary     `json:"summary,omitempty"`
+	Resources  []ResourceChange `json:"resources,omitempty"`
+	Skipped    []ResourceChange `json:"skipped,omitempty"`
+	DepMapFile string           `json:"depMapFile,omitempty"`
 }
 
-// ResourceChange describes a resource that needs code changes
+// NextSummaryOutput is the compact summary written to stdout.
+type NextSummaryOutput struct {
+	Status       string       `json:"status"`
+	Summary      *NextSummary `json:"summary,omitempty"`
+	OutputFile   string       `json:"outputFile,omitempty"`
+	DepMapFile   string       `json:"depMapFile,omitempty"`
+	SkippedCount int          `json:"skippedCount,omitempty"`
+	ParseErrors  int          `json:"parseErrors,omitempty"`
+	Error        string       `json:"error,omitempty"`
+}
+
+// NextSummary contains aggregate counts for the output.
+type NextSummary struct {
+	Total        int                       `json:"total"`
+	ByAction     map[string]int            `json:"byAction"`
+	ByType       map[string]int            `json:"byType"`
+	ByTypeAction map[string]map[string]int `json:"byTypeAction"`
+}
+
+// ResourceMetadata holds pre-computed dependency and schema information for reuse across tool calls.
+type ResourceMetadata struct {
+	// Dependencies maps resource URN -> property path -> DependencyRef.
+	Dependencies map[string]map[string]DependencyRef `json:"dependencies"`
+	// InputProperties maps resource type -> set of input property names from provider schema.
+	// Properties in DetailedDiff whose top-level key is NOT in this set are computed-only outputs.
+	InputProperties map[string][]string `json:"inputProperties,omitempty"`
+	// StateLookup is the parsed state export, used for supplementing secret values.
+	// Not serialized — only available during the initial run (not from cached metadata).
+	StateLookup map[string]*apitype.ResourceV3 `json:"-"`
+}
+
+// DependencyMap is an alias for the dependencies portion of ResourceMetadata.
+// Used as a convenience type throughout the codebase.
+type DependencyMap = map[string]map[string]DependencyRef
+
+// DependencyRef describes a cross-resource dependency for a single property.
+type DependencyRef struct {
+	ResourceName   string `json:"resourceName"`
+	ResourceType   string `json:"resourceType"`
+	OutputProperty string `json:"outputProperty,omitempty"`
+}
+
+// ResourceChange represents a single resource that needs code changes.
 type ResourceChange struct {
-	Action     string           `json:"action"` // "update_code", "delete_from_code", "add_to_code"
-	URN        string           `json:"urn"`
-	Type       string           `json:"type"`
-	Name       string           `json:"name"`
-	Properties []PropertyChange `json:"properties,omitempty"`
+	URN             string                 `json:"urn"`
+	Name            string                 `json:"name"`
+	Type            string                 `json:"type"`
+	Action          string                 `json:"action"`
+	Properties      []PropertyChange       `json:"properties,omitempty"`
+	InputProperties map[string]interface{} `json:"inputProperties,omitempty"`
+	DependencyLevel int                    `json:"dependencyLevel,omitempty"`
+	Reason          string                 `json:"reason,omitempty"`
 }
 
-// PropertyChange describes a property that needs to be changed.
+// PropertyChange represents a single property change within a resource.
 // The intent is conveyed by currentValue and desiredValue:
 //   - currentValue=X, desiredValue=Y → update property
 //   - currentValue=nil, desiredValue=Y → add property to code
 //   - currentValue=X, desiredValue=nil → remove property from code
 type PropertyChange struct {
 	Path         string      `json:"path"`
-	CurrentValue interface{} `json:"currentValue,omitempty"` // What's in code now (RHS from preview)
-	DesiredValue interface{} `json:"desiredValue,omitempty"` // What it should be (LHS from preview/state)
+	CurrentValue interface{} `json:"currentValue,omitempty"`
+	DesiredValue interface{} `json:"desiredValue,omitempty"`
 }
+
+// maxStringValueLen is the maximum length of a string property value before truncation.
+// Values longer than this are replaced with a placeholder to keep output compact.
+const maxStringValueLen = 200
 
 func runNext(cmd *cobra.Command, _ []string) error {
 	projectDir, _ := cmd.Flags().GetString("project")
@@ -79,6 +131,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	eventsFile, _ := cmd.Flags().GetString("events-file")
 	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
 	skipRefresh, _ := cmd.Flags().GetBool("skip-refresh")
+	outputFile, _ := cmd.Flags().GetString("output-file")
 
 	// Get preview output from file or command
 	output, err := getPreviewOutput(eventsFile, projectDir, stack, skipRefresh)
@@ -86,176 +139,302 @@ func runNext(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Parse preview output into steps
-	steps, _, err := parsePreviewOutput(output)
+	// Parse preview output into steps (once — shared by dep map building and resource conversion)
+	steps, parseErrors, err := parsePreviewOutput(output)
 	if err != nil {
 		return err
 	}
 
-	// Convert steps to resource changes
-	resources := convertStepsToResources(steps)
+	// Load state for dependency resolution (in-memory only, no file written)
+	stateLookup, err := getStateExport(projectDir, stack)
+	if err != nil {
+		return err
+	}
 
-	// Output result
-	return outputResult(resources, excludeURNs)
+	depMap := mergeStateLookupAndBuildDepMap(steps, stateLookup)
+
+	// Fetch provider schemas to determine input vs computed-only properties
+	inputProps, err := getInputPropertiesFromSchema(steps, projectDir)
+	if err != nil {
+		return err
+	}
+
+	meta := &ResourceMetadata{
+		Dependencies:    depMap,
+		InputProperties: inputProps,
+		StateLookup:     stateLookup,
+	}
+
+	return processNext(steps, parseErrors, meta, excludeURNs, "", outputFile)
 }
 
-// convertStepsToResources converts preview steps to resource changes for drift adoption
-func convertStepsToResources(steps []auto.PreviewStep) []ResourceChange {
-	var resources []ResourceChange
+// mergeStateLookupAndBuildDepMap supplements a state lookup with OldState from preview steps,
+// then builds the complete dependency map.
+func mergeStateLookupAndBuildDepMap(steps []auto.PreviewStep, stateLookup map[string]*apitype.ResourceV3) DependencyMap {
+	stepLookup := buildStateLookupFromSteps(steps)
+	if stateLookup == nil {
+		stateLookup = stepLookup
+	} else {
+		for urn, res := range stepLookup {
+			if _, exists := stateLookup[urn]; !exists {
+				stateLookup[urn] = res
+			}
+		}
+	}
+	return buildDepMapFromState(stateLookup)
+}
 
-	for _, step := range steps {
-		// Skip operations that don't require code changes
+// buildDepMapFromState iterates ALL resources in the state lookup and produces a DependencyMap.
+// This is a placeholder until dependencies.go is introduced.
+func buildDepMapFromState(lookup map[string]*apitype.ResourceV3) DependencyMap {
+	return make(DependencyMap)
+}
+
+// processNext is the core pipeline: convert parsed steps to resources and output results.
+// It is separated from runNext so that tests can call it directly without needing CLI flags,
+// state export, or a live Pulumi stack.
+func processNext(steps []auto.PreviewStep, parseErrors int, meta *ResourceMetadata, excludeURNs []string, depMapPath, outputFile string) error {
+	resources := convertStepsToResources(steps, meta)
+
+	return outputResult(resources, excludeURNs, depMapPath, outputFile, parseErrors)
+}
+
+// convertStepsToResources converts preview steps to resource changes for drift adoption.
+// meta provides dependency resolution and schema-based input property filtering.
+func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) []ResourceChange {
+	var depMap DependencyMap
+	var inputPropSet map[string]map[string]bool
+	var stateLookup map[string]*apitype.ResourceV3
+	if meta != nil {
+		depMap = meta.Dependencies
+		inputPropSet = buildInputPropertySet(meta.InputProperties)
+		stateLookup = meta.StateLookup
+	}
+
+	var resources []ResourceChange
+	for i := range steps {
+		step := &steps[i]
 		action := getActionForOperation(step.Op)
 		if action == "" {
 			continue
 		}
 
-		// Extract resource metadata
-		resourceType := extractResourceType(step)
+		// Normalize DetailedDiff from ReplaceReasons/DiffReasons for consistent handling
+		normalizeDetailedDiff(step)
+
+		resourceType := extractResourceType(*step)
 		name := extractResourceName(string(step.URN))
 
-		// Parse property changes
-		properties := extractPropertyChanges(step)
+		res := ResourceChange{
+			URN:    string(step.URN),
+			Name:   name,
+			Type:   resourceType,
+			Action: action,
+		}
 
-		resources = append(resources, ResourceChange{
-			Action:     action,
-			URN:        string(step.URN),
-			Type:       resourceType,
-			Name:       name,
-			Properties: properties,
-		})
+		switch action {
+		case "add_to_code":
+			// For resources that need to be added, extract all input properties from state
+			res.InputProperties = extractInputProperties(*step, depMap)
+		case "remove_from_code":
+			// No properties needed for removal
+		default:
+			// For update/replace, extract changed properties with schema-based filtering
+			res.Properties = extractPropertyChanges(*step, inputPropSet)
+			// Supplement "[secret]" values with real values from state export
+			if stateLookup != nil {
+				supplementSecretValues(res.Properties, string(step.URN), stateLookup)
+			}
+		}
+
+		resources = append(resources, res)
 	}
-
 	return resources
 }
 
-// getActionForOperation inverts the preview operation to determine the code action
+// getActionForOperation maps a Pulumi preview operation to a drift-adoption action.
 func getActionForOperation(op string) string {
 	switch op {
-	case "create":
-		// Preview wants to CREATE = resource is in code but not in state
-		// Action: DELETE from code
-		return "delete_from_code"
 	case "delete":
-		// Preview wants to DELETE = resource is in state but not in code
-		// Action: ADD to code
+		// Preview wants to DELETE from infrastructure = resource exists in state but not in code
+		// Action: ADD resource to code
 		return "add_to_code"
-	case "update", "replace":
-		// Preview wants to UPDATE/REPLACE = resource exists in both but differs
+	case "create":
+		// Preview wants to CREATE in infrastructure = resource exists in code but not in state
+		// Action: REMOVE resource from code (or it's intentionally new)
+		return "delete_from_code"
+	case "update":
+		// Preview wants to UPDATE infrastructure = code differs from state
 		// Action: UPDATE code to match state
 		return "update_code"
+	case "replace":
+		// Preview wants to REPLACE infrastructure = code change requires replacement
+		// Action: UPDATE code to match state (replace implies update)
+		return "update_code"
 	default:
-		// Skip "same", "refresh", etc.
+		// same, read, refresh, etc. — no code changes needed
 		return ""
 	}
 }
 
-// extractResourceType extracts the resource type from old or new state
-func extractResourceType(step auto.PreviewStep) string {
-	if step.OldState != nil {
-		return string(step.OldState.Type)
-	}
-	if step.NewState != nil {
-		return string(step.NewState.Type)
-	}
-	return ""
-}
-
-// extractPropertyChanges extracts property changes from a preview step
-func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
-	var properties []PropertyChange
-
-	// For delete operations (add_to_code), DetailedDiff is empty but we need all properties from state
-	if step.Op == "delete" && len(step.DetailedDiff) == 0 && step.OldState != nil && step.OldState.Outputs != nil {
-		// Extract all properties from OldState.Outputs
-		extractAllProperties(step.OldState.Outputs, "", &properties)
-		return properties
-	}
-
-	// For other operations, use DetailedDiff
-	for path := range step.DetailedDiff {
-		// Get actual values from old/new states
-		var currentValue, desiredValue interface{}
-
-		// OldState contains what's in state (what we want)
-		if step.OldState != nil && step.OldState.Outputs != nil {
-			desiredValue = getNestedProperty(step.OldState.Outputs, path)
-		}
-
-		// NewState contains what the code will produce (what currently exists or will be created)
-		if step.NewState != nil && step.NewState.Outputs != nil {
-			currentValue = getNestedProperty(step.NewState.Outputs, path)
-		}
-
-		properties = append(properties, PropertyChange{
-			Path:         path,
-			CurrentValue: currentValue,
-			DesiredValue: desiredValue,
-		})
-	}
-
-	return properties
-}
-
-// extractAllProperties recursively extracts all properties from a map for add_to_code operations
-func extractAllProperties(props map[string]interface{}, prefix string, properties *[]PropertyChange) {
-	for key, value := range props {
-		path := key
-		if prefix != "" {
-			path = prefix + "." + key
-		}
-
-		// If value is a nested map, recurse
-		if nestedMap, ok := value.(map[string]interface{}); ok {
-			extractAllProperties(nestedMap, path, properties)
-		} else {
-			// Leaf property - add it (currentValue=nil means it needs to be added to code)
-			*properties = append(*properties, PropertyChange{
-				Path:         path,
-				DesiredValue: value,
-			})
-		}
-	}
-}
-
-// outputResult outputs the final JSON result with optional URN exclusion
-func outputResult(resources []ResourceChange, excludeURNs []string) error {
+// outputResult outputs the final JSON result with filtering, exclusions, and resource limiting.
+// Full output is written to a file; a compact summary is written to stdout.
+func outputResult(resources []ResourceChange, excludeURNs []string, depMapFile, outputFile string, parseErrors int) error {
 	// Build exclude set for O(1) lookup
 	excludeSet := make(map[string]bool, len(excludeURNs))
 	for _, urn := range excludeURNs {
 		excludeSet[urn] = true
 	}
 
-	// Filter excluded URNs
-	var filtered []ResourceChange
+	// Partition resources into actionable and skipped
+	var actionable, skipped []ResourceChange
 	for _, res := range resources {
-		if !excludeSet[res.URN] {
-			filtered = append(filtered, res)
+		if excludeSet[res.URN] {
+			res.Reason = "excluded"
+			skipped = append(skipped, res)
+		} else if res.Action == "add_to_code" && len(res.InputProperties) == 0 {
+			res.Reason = "missing_properties"
+			skipped = append(skipped, res)
+		} else if res.Action == "update_code" && len(res.Properties) == 0 {
+			res.Reason = "missing_properties"
+			skipped = append(skipped, res)
+		} else {
+			actionable = append(actionable, res)
 		}
 	}
-	resources = filtered
 
-	// Determine status
-	result := NextOutput{}
-	if len(resources) == 0 {
-		result.Status = "clean"
-	} else {
-		result.Status = "changes_needed"
-		result.Resources = resources
+	// Compute summary from full actionable set (before truncation)
+	var summary *NextSummary
+	if len(actionable) > 0 {
+		summary = &NextSummary{
+			Total:        len(actionable),
+			ByAction:     make(map[string]int),
+			ByType:       make(map[string]int),
+			ByTypeAction: make(map[string]map[string]int),
+		}
+		for _, res := range actionable {
+			summary.ByAction[res.Action]++
+			summary.ByType[res.Type]++
+			if summary.ByTypeAction[res.Type] == nil {
+				summary.ByTypeAction[res.Type] = make(map[string]int)
+			}
+			summary.ByTypeAction[res.Type][res.Action]++
+		}
 	}
 
-	// Output JSON
+	// Build full output
+	result := NextOutput{
+		DepMapFile: depMapFile,
+	}
+	switch {
+	case len(actionable) > 0:
+		result.Status = "changes_needed"
+		result.Summary = summary
+		result.Resources = actionable
+	case len(skipped) > 0:
+		result.Status = "stop_with_skipped"
+	default:
+		result.Status = "clean"
+	}
+	if len(skipped) > 0 {
+		result.Skipped = skipped
+	}
+
+	// Write full output to file
+	outputFilePath, err := writeOutputFile(result, outputFile)
+	if err != nil {
+		return fmt.Errorf("failed to write output file: %w", err)
+	}
+
+	// Write compact summary to stdout
+	summaryOutput := NextSummaryOutput{
+		Status:       result.Status,
+		Summary:      result.Summary,
+		OutputFile:   outputFilePath,
+		DepMapFile:   depMapFile,
+		SkippedCount: len(skipped),
+		ParseErrors:  parseErrors,
+	}
+
 	encoder := json.NewEncoder(os.Stdout)
 	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(result); err != nil {
-		return fmt.Errorf("failed to encode output: %w", err)
+	if err := encoder.Encode(summaryOutput); err != nil {
+		return fmt.Errorf("failed to encode summary output: %w", err)
 	}
 
 	return nil
 }
 
+// writeOutputFile writes the full NextOutput to a file. If outputFile is empty, a temp file is created.
+func writeOutputFile(result NextOutput, outputFile string) (string, error) {
+	var f *os.File
+	var err error
+	if outputFile != "" {
+		f, err = os.Create(outputFile)
+	} else {
+		f, err = os.CreateTemp("", "drift-adopter-output-*.json")
+	}
+	if err != nil {
+		return "", err
+	}
+	encoder := json.NewEncoder(f)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(result); err != nil {
+		_ = f.Close()
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
+}
+
+// loadMetadata reads a ResourceMetadata from a JSON file.
+func loadMetadata(path string) (*ResourceMetadata, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metadata file: %w", err)
+	}
+	var meta ResourceMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata file: %w", err)
+	}
+	return &meta, nil
+}
+
+// saveMetadata writes a ResourceMetadata to an auto-generated temp file.
+// Returns the path written to.
+func saveMetadata(meta *ResourceMetadata) (string, error) {
+	f, err := os.CreateTemp("", "drift-adopter-metadata-*.json")
+	if err != nil {
+		return "", fmt.Errorf("failed to create metadata file: %w", err)
+	}
+	encoder := json.NewEncoder(f)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(meta); err != nil {
+		_ = f.Close()
+		return "", fmt.Errorf("failed to write metadata: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
+}
+
+// depRefToDependsOn converts a DependencyRef to the dependsOn map format used in output.
+func depRefToDependsOn(ref DependencyRef) map[string]interface{} {
+	dep := map[string]interface{}{
+		"resourceName": ref.ResourceName,
+		"resourceType": ref.ResourceType,
+	}
+	if ref.OutputProperty != "" {
+		dep["outputProperty"] = ref.OutputProperty
+	}
+	return map[string]interface{}{"dependsOn": dep}
+}
+
 func outputError(errMsg string) error {
-	output := NextOutput{
+	output := NextSummaryOutput{
 		Status: "error",
 		Error:  errMsg,
 	}
@@ -265,32 +444,4 @@ func outputError(errMsg string) error {
 		return fmt.Errorf("failed to encode error message %s with error %w", errMsg, err)
 	}
 	return fmt.Errorf("%s", errMsg)
-}
-
-func extractResourceName(urn string) string {
-	// URN format: urn:pulumi:stack::project::type::name
-	parts := strings.Split(urn, "::")
-	if len(parts) >= 4 {
-		return parts[len(parts)-1]
-	}
-	return ""
-}
-
-// getNestedProperty extracts a value from a nested map using a dot-separated path
-func getNestedProperty(props map[string]interface{}, path string) interface{} {
-	parts := strings.Split(path, ".")
-	var current interface{} = props
-
-	for _, part := range parts {
-		m, ok := current.(map[string]interface{})
-		if !ok {
-			return nil
-		}
-		current, ok = m[part]
-		if !ok {
-			return nil
-		}
-	}
-
-	return current
 }

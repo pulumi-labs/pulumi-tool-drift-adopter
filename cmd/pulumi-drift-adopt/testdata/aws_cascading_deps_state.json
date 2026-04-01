@@ -1,0 +1,738 @@
+{
+  "version": 3,
+  "deployment": {
+    "manifest": {
+      "time": "2026-03-28T13:54:10.297826-04:00",
+      "magic": "d84edda13b0dac93f38d7eb0bee5825e2cf4feafaa1502a991a8460148e3fb59",
+      "version": "v3.218.0"
+    },
+    "secrets_providers": {
+      "type": "service",
+      "state": {
+        "url": "https://api.pulumi.com",
+        "owner": "pulumi",
+        "project": "aws-cascading-deps",
+        "stack": "test-d67e0b53"
+      }
+    },
+    "resources": [
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:pulumi:Stack::aws-cascading-deps-test-d67e0b53",
+        "custom": false,
+        "type": "pulumi:pulumi:Stack",
+        "outputs": {
+          "apiKeyArn": "arn:aws:ssm:us-west-2:616138583583:parameter/drift-adopter/api-key",
+          "dbPasswordArn": "arn:aws:ssm:us-west-2:616138583583:parameter/drift-adopter/db-password",
+          "kmsKeyArn": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "kmsKeyId": "71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "lambdaArn": "arn:aws:lambda:us-west-2:616138583583:function:drift-adopter-app-handler"
+        },
+        "created": "2026-03-28T17:53:08.59812Z",
+        "modified": "2026-03-28T17:53:08.59812Z",
+        "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#37,19",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#37,19"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#603,38"
+          }
+        ]
+      },
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:providers:aws::default_6_83_2",
+        "custom": true,
+        "id": "18b67791-bea0-47e1-b7d1-d10100da0396",
+        "type": "pulumi:providers:aws",
+        "inputs": {
+          "__internal": {},
+          "region": "us-west-2",
+          "skipCredentialsValidation": "false",
+          "skipRegionValidation": "true",
+          "version": "6.83.2"
+        },
+        "outputs": {
+          "region": "us-west-2",
+          "skipCredentialsValidation": "false",
+          "skipRegionValidation": "true",
+          "version": "6.83.2"
+        },
+        "created": "2026-03-28T17:53:12.8619Z",
+        "modified": "2026-03-28T17:53:12.8619Z"
+      },
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:iam/role:Role::lambda-role",
+        "custom": true,
+        "id": "drift-adopter-lambda-role",
+        "type": "aws:iam/role:Role",
+        "inputs": {
+          "__defaults": [
+            "forceDetachPolicies",
+            "maxSessionDuration",
+            "path"
+          ],
+          "assumeRolePolicy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":\"sts:AssumeRole\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}]}",
+          "forceDetachPolicies": false,
+          "maxSessionDuration": 3600,
+          "name": "drift-adopter-lambda-role",
+          "path": "/"
+        },
+        "outputs": {
+          "arn": "arn:aws:iam::616138583583:role/drift-adopter-lambda-role",
+          "assumeRolePolicy": "{\"Statement\":[{\"Action\":\"sts:AssumeRole\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}",
+          "createDate": "2026-03-28T17:53:13Z",
+          "description": "",
+          "forceDetachPolicies": false,
+          "id": "drift-adopter-lambda-role",
+          "inlinePolicies": [],
+          "managedPolicyArns": [],
+          "maxSessionDuration": 3600,
+          "name": "drift-adopter-lambda-role",
+          "namePrefix": "",
+          "path": "/",
+          "permissionsBoundary": "",
+          "uniqueId": "AROAY65FYVYPTB7R7FCJ7"
+        },
+        "parent": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:pulumi:Stack::aws-cascading-deps-test-d67e0b53",
+        "provider": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:providers:aws::default_6_83_2::18b67791-bea0-47e1-b7d1-d10100da0396",
+        "propertyDependencies": {
+          "assumeRolePolicy": [],
+          "name": []
+        },
+        "created": "2026-03-28T17:53:13.910094Z",
+        "modified": "2026-03-28T17:53:13.910094Z",
+        "sourcePosition": "project:///index.ts#27,20",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#27,20"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:iam/rolePolicyAttachment:RolePolicyAttachment::lambda-basic-policy",
+        "custom": true,
+        "id": "drift-adopter-lambda-role-20260328175314542400000001",
+        "type": "aws:iam/rolePolicyAttachment:RolePolicyAttachment",
+        "inputs": {
+          "__defaults": [],
+          "policyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "role": "drift-adopter-lambda-role"
+        },
+        "outputs": {
+          "id": "drift-adopter-lambda-role-20260328175314542400000001",
+          "policyArn": "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+          "role": "drift-adopter-lambda-role"
+        },
+        "parent": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:pulumi:Stack::aws-cascading-deps-test-d67e0b53",
+        "dependencies": [
+          "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:iam/role:Role::lambda-role"
+        ],
+        "provider": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:providers:aws::default_6_83_2::18b67791-bea0-47e1-b7d1-d10100da0396",
+        "propertyDependencies": {
+          "policyArn": [],
+          "role": [
+            "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:iam/role:Role::lambda-role"
+          ]
+        },
+        "created": "2026-03-28T17:53:14.609636Z",
+        "modified": "2026-03-28T17:53:14.609636Z",
+        "sourcePosition": "project:///index.ts#41,22",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#41,22"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key",
+        "custom": true,
+        "id": "71cafa2c-cc01-491f-a908-af4b92e3b96b",
+        "type": "aws:kms/key:Key",
+        "inputs": {
+          "__defaults": [
+            "bypassPolicyLockoutSafetyCheck",
+            "customerMasterKeySpec",
+            "isEnabled",
+            "keyUsage"
+          ],
+          "bypassPolicyLockoutSafetyCheck": false,
+          "customerMasterKeySpec": "SYMMETRIC_DEFAULT",
+          "description": "KMS key for app secrets - rotated",
+          "enableKeyRotation": false,
+          "isEnabled": true,
+          "keyUsage": "ENCRYPT_DECRYPT",
+          "tags": {
+            "Purpose": "drift-testing"
+          },
+          "tagsAll": {
+            "Purpose": "drift-testing"
+          }
+        },
+        "outputs": {
+          "__meta": "{\"e2bfb730-ecaa-11e6-8f88-34363bc7c4c0\":{\"create\":120000000000}}",
+          "arn": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "bypassPolicyLockoutSafetyCheck": false,
+          "customKeyStoreId": "",
+          "customerMasterKeySpec": "SYMMETRIC_DEFAULT",
+          "deletionWindowInDays": null,
+          "description": "KMS key for app secrets - rotated",
+          "enableKeyRotation": false,
+          "id": "71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "isEnabled": true,
+          "keyId": "71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "keyUsage": "ENCRYPT_DECRYPT",
+          "multiRegion": false,
+          "policy": "{\"Id\":\"key-default-1\",\"Statement\":[{\"Action\":\"kms:*\",\"Effect\":\"Allow\",\"Principal\":{\"AWS\":\"arn:aws:iam::616138583583:root\"},\"Resource\":\"*\",\"Sid\":\"Enable IAM User Permissions\"}],\"Version\":\"2012-10-17\"}",
+          "rotationPeriodInDays": 0,
+          "tags": {
+            "Purpose": "drift-testing"
+          },
+          "tagsAll": {
+            "Purpose": "drift-testing"
+          },
+          "xksKeyId": ""
+        },
+        "parent": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:pulumi:Stack::aws-cascading-deps-test-d67e0b53",
+        "provider": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:providers:aws::default_6_83_2::18b67791-bea0-47e1-b7d1-d10100da0396",
+        "propertyDependencies": {
+          "description": [],
+          "enableKeyRotation": [],
+          "tags": []
+        },
+        "created": "2026-03-28T17:53:23.470418Z",
+        "modified": "2026-03-28T17:53:55.589053Z",
+        "sourcePosition": "project:///index.ts#13,16",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#13,16"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/alias:Alias::app-key-alias",
+        "custom": true,
+        "id": "alias/drift-adopter-app-key",
+        "type": "aws:kms/alias:Alias",
+        "inputs": {
+          "__defaults": [],
+          "name": "alias/drift-adopter-app-key",
+          "targetKeyId": "71cafa2c-cc01-491f-a908-af4b92e3b96b"
+        },
+        "outputs": {
+          "arn": "arn:aws:kms:us-west-2:616138583583:alias/drift-adopter-app-key",
+          "id": "alias/drift-adopter-app-key",
+          "name": "alias/drift-adopter-app-key",
+          "namePrefix": "",
+          "targetKeyArn": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "targetKeyId": "71cafa2c-cc01-491f-a908-af4b92e3b96b"
+        },
+        "parent": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:pulumi:Stack::aws-cascading-deps-test-d67e0b53",
+        "dependencies": [
+          "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key"
+        ],
+        "provider": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:providers:aws::default_6_83_2::18b67791-bea0-47e1-b7d1-d10100da0396",
+        "propertyDependencies": {
+          "name": [],
+          "targetKeyId": [
+            "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key"
+          ]
+        },
+        "created": "2026-03-28T17:53:24.052698Z",
+        "modified": "2026-03-28T17:53:24.052698Z",
+        "sourcePosition": "project:///index.ts#21,18",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#21,18"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:ssm/parameter:Parameter::api-key",
+        "custom": true,
+        "id": "/drift-adopter/api-key",
+        "type": "aws:ssm/parameter:Parameter",
+        "inputs": {
+          "__defaults": [
+            "tier"
+          ],
+          "keyId": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "name": "/drift-adopter/api-key",
+          "tags": {
+            "ManagedBy": "pulumi"
+          },
+          "tagsAll": {
+            "ManagedBy": "pulumi"
+          },
+          "tier": "Standard",
+          "type": "SecureString",
+          "value": {
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            "plaintext": "\"api-key-67890-updated\""
+          }
+        },
+        "outputs": {
+          "allowedPattern": "",
+          "arn": "arn:aws:ssm:us-west-2:616138583583:parameter/drift-adopter/api-key",
+          "dataType": "text",
+          "description": "",
+          "hasValueWo": null,
+          "id": "/drift-adopter/api-key",
+          "insecureValue": null,
+          "keyId": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "name": "/drift-adopter/api-key",
+          "overwrite": null,
+          "tags": {
+            "ManagedBy": "pulumi"
+          },
+          "tagsAll": {
+            "ManagedBy": "pulumi"
+          },
+          "tier": "Standard",
+          "type": "SecureString",
+          "value": {
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            "plaintext": "\"api-key-67890-updated\""
+          },
+          "valueWo": {
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            "plaintext": "null"
+          },
+          "valueWoVersion": null,
+          "version": 2
+        },
+        "parent": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:pulumi:Stack::aws-cascading-deps-test-d67e0b53",
+        "dependencies": [
+          "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key"
+        ],
+        "provider": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:providers:aws::default_6_83_2::18b67791-bea0-47e1-b7d1-d10100da0396",
+        "propertyDependencies": {
+          "keyId": [
+            "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key"
+          ],
+          "name": [],
+          "tags": [],
+          "type": [],
+          "value": []
+        },
+        "additionalSecretOutputs": [
+          "value"
+        ],
+        "created": "2026-03-28T17:53:25.219631Z",
+        "modified": "2026-03-28T17:53:57.155805Z",
+        "sourcePosition": "project:///index.ts#57,16",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#57,16"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:ssm/parameter:Parameter::db-password",
+        "custom": true,
+        "id": "/drift-adopter/db-password",
+        "type": "aws:ssm/parameter:Parameter",
+        "inputs": {
+          "__defaults": [
+            "tier"
+          ],
+          "keyId": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "name": "/drift-adopter/db-password",
+          "tags": {
+            "ManagedBy": "pulumi"
+          },
+          "tagsAll": {
+            "ManagedBy": "pulumi"
+          },
+          "tier": "Standard",
+          "type": "SecureString",
+          "value": {
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            "plaintext": "\"new-super-secret-password-v2\""
+          }
+        },
+        "outputs": {
+          "allowedPattern": "",
+          "arn": "arn:aws:ssm:us-west-2:616138583583:parameter/drift-adopter/db-password",
+          "dataType": "text",
+          "description": "",
+          "hasValueWo": null,
+          "id": "/drift-adopter/db-password",
+          "insecureValue": null,
+          "keyId": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+          "name": "/drift-adopter/db-password",
+          "overwrite": null,
+          "tags": {
+            "ManagedBy": "pulumi"
+          },
+          "tagsAll": {
+            "ManagedBy": "pulumi"
+          },
+          "tier": "Standard",
+          "type": "SecureString",
+          "value": {
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            "plaintext": "\"new-super-secret-password-v2\""
+          },
+          "valueWo": {
+            "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+            "plaintext": "null"
+          },
+          "valueWoVersion": null,
+          "version": 2
+        },
+        "parent": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:pulumi:Stack::aws-cascading-deps-test-d67e0b53",
+        "dependencies": [
+          "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key"
+        ],
+        "provider": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:providers:aws::default_6_83_2::18b67791-bea0-47e1-b7d1-d10100da0396",
+        "propertyDependencies": {
+          "keyId": [
+            "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key"
+          ],
+          "name": [],
+          "tags": [],
+          "type": [],
+          "value": []
+        },
+        "additionalSecretOutputs": [
+          "value"
+        ],
+        "created": "2026-03-28T17:53:25.103497Z",
+        "modified": "2026-03-28T17:53:57.166797Z",
+        "sourcePosition": "project:///index.ts#47,20",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#47,20"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      {
+        "urn": "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:lambda/function:Function::app-handler",
+        "custom": true,
+        "id": "drift-adopter-app-handler",
+        "type": "aws:lambda/function:Function",
+        "inputs": {
+          "__defaults": [
+            "packageType",
+            "publish",
+            "reservedConcurrentExecutions",
+            "skipDestroy"
+          ],
+          "code": {
+            "4dabf18193072939515e22adb298388d": "0def7320c3a5731c473e5ecbe6d01bc7",
+            "assets": {
+              "index.py": {
+                "4dabf18193072939515e22adb298388d": "c44067f5952c0a294b673a41bacd8c17",
+                "hash": "836c713de3345faca0508182219e40c4d7a3ba1818a848ff840cd2bc50667eae",
+                "text": "\ndef handler(event, context):\n    return {\"statusCode\": 200, \"body\": \"ok-v2\"}\n"
+              }
+            },
+            "hash": "7b49cf792768c0ccd3d2f1fa47f9256309f06198c6db77302ab7b74cf3a5d4e1"
+          },
+          "environment": {
+            "__defaults": [],
+            "variables": {
+              "API_KEY_PATH": "/drift-adopter/api-key",
+              "APP_ENV": "staging",
+              "DB_PASSWORD_PATH": "/drift-adopter/db-password",
+              "KMS_KEY_ARN": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+              "LOG_LEVEL": "debug"
+            }
+          },
+          "handler": "index.handler",
+          "memorySize": 256,
+          "name": "drift-adopter-app-handler",
+          "packageType": "Zip",
+          "publish": false,
+          "reservedConcurrentExecutions": -1,
+          "role": "arn:aws:iam::616138583583:role/drift-adopter-lambda-role",
+          "runtime": "python3.12",
+          "skipDestroy": false,
+          "tags": {
+            "Environment": "staging"
+          },
+          "tagsAll": {
+            "Environment": "staging"
+          },
+          "timeout": 60
+        },
+        "outputs": {
+          "__meta": "{\"e2bfb730-ecaa-11e6-8f88-34363bc7c4c0\":{\"create\":600000000000,\"delete\":600000000000,\"update\":600000000000}}",
+          "architectures": [
+            "x86_64"
+          ],
+          "arn": "arn:aws:lambda:us-west-2:616138583583:function:drift-adopter-app-handler",
+          "code": {
+            "4dabf18193072939515e22adb298388d": "0def7320c3a5731c473e5ecbe6d01bc7",
+            "assets": {
+              "index.py": {
+                "4dabf18193072939515e22adb298388d": "c44067f5952c0a294b673a41bacd8c17",
+                "hash": "836c713de3345faca0508182219e40c4d7a3ba1818a848ff840cd2bc50667eae",
+                "text": "\ndef handler(event, context):\n    return {\"statusCode\": 200, \"body\": \"ok-v2\"}\n"
+              }
+            },
+            "hash": "7b49cf792768c0ccd3d2f1fa47f9256309f06198c6db77302ab7b74cf3a5d4e1"
+          },
+          "codeSha256": "UbhF/tx0/9b8Bik4AjSv9pHfWUzV5OBKnPFdIQkBAEc=",
+          "codeSigningConfigArn": "",
+          "deadLetterConfig": null,
+          "description": "",
+          "environment": {
+            "variables": {
+              "API_KEY_PATH": "/drift-adopter/api-key",
+              "APP_ENV": "staging",
+              "DB_PASSWORD_PATH": "/drift-adopter/db-password",
+              "KMS_KEY_ARN": "arn:aws:kms:us-west-2:616138583583:key/71cafa2c-cc01-491f-a908-af4b92e3b96b",
+              "LOG_LEVEL": "debug"
+            }
+          },
+          "ephemeralStorage": {
+            "size": 512
+          },
+          "fileSystemConfig": null,
+          "handler": "index.handler",
+          "id": "drift-adopter-app-handler",
+          "imageConfig": null,
+          "imageUri": "",
+          "invokeArn": "arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/arn:aws:lambda:us-west-2:616138583583:function:drift-adopter-app-handler/invocations",
+          "kmsKeyArn": "",
+          "lastModified": "2026-03-28T17:54:04.000+0000",
+          "layers": null,
+          "loggingConfig": {
+            "applicationLogLevel": "",
+            "logFormat": "Text",
+            "logGroup": "/aws/lambda/drift-adopter-app-handler",
+            "systemLogLevel": ""
+          },
+          "memorySize": 256,
+          "name": "drift-adopter-app-handler",
+          "packageType": "Zip",
+          "publish": false,
+          "qualifiedArn": "arn:aws:lambda:us-west-2:616138583583:function:drift-adopter-app-handler:$LATEST",
+          "qualifiedInvokeArn": "arn:aws:apigateway:us-west-2:lambda:path/2015-03-31/functions/arn:aws:lambda:us-west-2:616138583583:function:drift-adopter-app-handler:$LATEST/invocations",
+          "replaceSecurityGroupsOnDestroy": null,
+          "replacementSecurityGroupIds": null,
+          "reservedConcurrentExecutions": -1,
+          "role": "arn:aws:iam::616138583583:role/drift-adopter-lambda-role",
+          "runtime": "python3.12",
+          "s3Bucket": null,
+          "s3Key": null,
+          "s3ObjectVersion": null,
+          "signingJobArn": "",
+          "signingProfileVersionArn": "",
+          "skipDestroy": false,
+          "snapStart": null,
+          "sourceCodeHash": "",
+          "sourceCodeSize": 231,
+          "tags": {
+            "Environment": "staging"
+          },
+          "tagsAll": {
+            "Environment": "staging"
+          },
+          "timeout": 60,
+          "tracingConfig": {
+            "mode": "PassThrough"
+          },
+          "version": "$LATEST",
+          "vpcConfig": null
+        },
+        "parent": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:pulumi:Stack::aws-cascading-deps-test-d67e0b53",
+        "dependencies": [
+          "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:ssm/parameter:Parameter::db-password",
+          "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:ssm/parameter:Parameter::api-key",
+          "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key",
+          "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:iam/role:Role::lambda-role"
+        ],
+        "provider": "urn:pulumi:test-d67e0b53::aws-cascading-deps::pulumi:providers:aws::default_6_83_2::18b67791-bea0-47e1-b7d1-d10100da0396",
+        "propertyDependencies": {
+          "code": [],
+          "environment": [
+            "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:kms/key:Key::app-key",
+            "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:ssm/parameter:Parameter::db-password",
+            "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:ssm/parameter:Parameter::api-key"
+          ],
+          "handler": [],
+          "memorySize": [],
+          "name": [],
+          "role": [
+            "urn:pulumi:test-d67e0b53::aws-cascading-deps::aws:iam/role:Role::lambda-role"
+          ],
+          "runtime": [],
+          "tags": [],
+          "timeout": []
+        },
+        "created": "2026-03-28T17:53:32.737354Z",
+        "modified": "2026-03-28T17:54:10.026318Z",
+        "sourcePosition": "project:///index.ts#68,18",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#68,18"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      }
+    ],
+    "metadata": {}
+  }
+}
