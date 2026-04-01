@@ -1,0 +1,337 @@
+{
+  "steps": [
+    {
+      "op": "replace",
+      "urn": "urn:pulumi:test-d569308b::large-scale-250::tls:index/privateKey:PrivateKey::tls-key-0",
+      "provider": "urn:pulumi:test-d569308b::large-scale-250::pulumi:providers:tls::default_5_3_0::e52c8534-d686-4fd1-93a7-da58c642ef39",
+      "oldState": {
+        "urn": "urn:pulumi:test-d569308b::large-scale-250::tls:index/privateKey:PrivateKey::tls-key-0",
+        "custom": true,
+        "delete": true,
+        "id": "4e643a5dcb5637f8bdf30444f377798c49ebcae0",
+        "type": "tls:index/privateKey:PrivateKey",
+        "inputs": {
+          "algorithm": "ECDSA",
+          "ecdsaCurve": "P256"
+        },
+        "outputs": {
+          "__meta": "{\"schema_version\":\"1\"}",
+          "__pulumi_raw_state_delta": {
+            "obj": {}
+          },
+          "algorithm": "ECDSA",
+          "ecdsaCurve": "P256",
+          "id": "4e643a5dcb5637f8bdf30444f377798c49ebcae0",
+          "privateKeyOpenssh": "[secret]",
+          "privateKeyPem": "[secret]",
+          "privateKeyPemPkcs8": "[secret]",
+          "publicKeyFingerprintMd5": "95:10:21:cb:43:6d:b6:41:f7:e3:b8:4b:34:bb:94:70",
+          "publicKeyFingerprintSha256": "SHA256:+5WO4Ki6p0Sh/TZLnoQu8gjmapRKuzbuv7QqcSuCA7o",
+          "publicKeyOpenssh": "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBH+FbkQ/x7K9V/v2BeHvijvGQoPkyfFWXBa00gkAAiRq6PX6VK0Hc6Mtj7OqnZnFCS7Z77pLnGWK/pvyVfKTXbo=\n",
+          "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEf4VuRD/Hsr1X+/YF4e+KO8ZCg+TJ\n8VZcFrTSCQACJGro9fpUrQdzoy2Ps6qdmcUJLtnvukucZYr+m/JV8pNdug==\n-----END PUBLIC KEY-----\n",
+          "rsaBits": 2048
+        },
+        "parent": "urn:pulumi:test-d569308b::large-scale-250::pulumi:pulumi:Stack::large-scale-250-test-d569308b",
+        "provider": "urn:pulumi:test-d569308b::large-scale-250::pulumi:providers:tls::default_5_3_0::e52c8534-d686-4fd1-93a7-da58c642ef39",
+        "propertyDependencies": {
+          "algorithm": [],
+          "ecdsaCurve": []
+        },
+        "additionalSecretOutputs": [
+          "privateKeyOpenssh",
+          "privateKeyPem",
+          "privateKeyPemPkcs8"
+        ],
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#839,17",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#839,17"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "newState": {
+        "urn": "urn:pulumi:test-d569308b::large-scale-250::tls:index/privateKey:PrivateKey::tls-key-0",
+        "custom": true,
+        "type": "tls:index/privateKey:PrivateKey",
+        "inputs": {
+          "algorithm": "RSA",
+          "rsaBits": 2048
+        },
+        "outputs": {
+          "algorithm": "RSA",
+          "ecdsaCurve": "P224",
+          "id": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+          "privateKeyOpenssh": "[secret]",
+          "privateKeyPem": "[secret]",
+          "privateKeyPemPkcs8": "[secret]",
+          "publicKeyFingerprintMd5": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+          "publicKeyFingerprintSha256": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+          "publicKeyOpenssh": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+          "publicKeyPem": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+          "rsaBits": 2048
+        },
+        "parent": "urn:pulumi:test-d569308b::large-scale-250::pulumi:pulumi:Stack::large-scale-250-test-d569308b",
+        "provider": "urn:pulumi:test-d569308b::large-scale-250::pulumi:providers:tls::default_5_3_0::e52c8534-d686-4fd1-93a7-da58c642ef39",
+        "propertyDependencies": {
+          "algorithm": [],
+          "rsaBits": []
+        },
+        "additionalSecretOutputs": [
+          "privateKeyOpenssh",
+          "privateKeyPem",
+          "privateKeyPemPkcs8"
+        ],
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#858,17",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#858,17"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "diffReasons": [
+        "algorithm",
+        "ecdsaCurve",
+        "id",
+        "privateKeyOpenssh",
+        "privateKeyPem",
+        "privateKeyPemPkcs8",
+        "publicKeyFingerprintMd5",
+        "publicKeyFingerprintSha256",
+        "publicKeyOpenssh",
+        "publicKeyPem"
+      ],
+      "replaceReasons": [
+        "algorithm",
+        "ecdsaCurve"
+      ],
+      "detailedDiff": null
+    },
+    {
+      "op": "update",
+      "urn": "urn:pulumi:test-d569308b::large-scale-250::command:local:Command::cmd-4",
+      "provider": "urn:pulumi:test-d569308b::large-scale-250::pulumi:providers:command::default_1_2_1::a4831e73-2c6f-4b38-9324-e1a1d38a15b0",
+      "oldState": {
+        "urn": "urn:pulumi:test-d569308b::large-scale-250::command:local:Command::cmd-4",
+        "custom": true,
+        "id": "cmd-453670031",
+        "type": "command:local:Command",
+        "inputs": {
+          "create": "echo resource-4-modified",
+          "environment": {
+            "DRIFT": "true"
+          }
+        },
+        "outputs": {
+          "create": "echo resource-4-modified",
+          "environment": {
+            "DRIFT": "true"
+          },
+          "stderr": "",
+          "stdout": "resource-4-modified"
+        },
+        "parent": "urn:pulumi:test-d569308b::large-scale-250::pulumi:pulumi:Stack::large-scale-250-test-d569308b",
+        "provider": "urn:pulumi:test-d569308b::large-scale-250::pulumi:providers:command::default_1_2_1::a4831e73-2c6f-4b38-9324-e1a1d38a15b0",
+        "propertyDependencies": {
+          "create": [],
+          "environment": []
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#511,14",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#511,14"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ],
+        "replaceOnChanges": [
+          "triggers[*]"
+        ]
+      },
+      "newState": {
+        "urn": "urn:pulumi:test-d569308b::large-scale-250::command:local:Command::cmd-4",
+        "custom": true,
+        "type": "command:local:Command",
+        "inputs": {
+          "create": "echo resource-4"
+        },
+        "parent": "urn:pulumi:test-d569308b::large-scale-250::pulumi:pulumi:Stack::large-scale-250-test-d569308b",
+        "provider": "urn:pulumi:test-d569308b::large-scale-250::pulumi:providers:command::default_1_2_1::a4831e73-2c6f-4b38-9324-e1a1d38a15b0",
+        "propertyDependencies": {
+          "create": []
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#522,14",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#522,14"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ],
+        "replaceOnChanges": [
+          "triggers[*]"
+        ]
+      },
+      "diffReasons": [
+        "create",
+        "environment"
+      ],
+      "detailedDiff": {
+        "create": {
+          "kind": "update",
+          "inputDiff": false
+        },
+        "environment": {
+          "kind": "delete",
+          "inputDiff": false
+        }
+      }
+    },
+    {
+      "op": "create",
+      "urn": "urn:pulumi:test-d569308b::large-scale-250::command:local:Command::cmd-38",
+      "provider": "urn:pulumi:test-d569308b::large-scale-250::pulumi:providers:command::default_1_2_1::a4831e73-2c6f-4b38-9324-e1a1d38a15b0",
+      "newState": {
+        "urn": "urn:pulumi:test-d569308b::large-scale-250::command:local:Command::cmd-38",
+        "custom": true,
+        "type": "command:local:Command",
+        "inputs": {
+          "create": "echo resource-38"
+        },
+        "parent": "urn:pulumi:test-d569308b::large-scale-250::pulumi:pulumi:Stack::large-scale-250-test-d569308b",
+        "provider": "urn:pulumi:test-d569308b::large-scale-250::pulumi:providers:command::default_1_2_1::a4831e73-2c6f-4b38-9324-e1a1d38a15b0",
+        "propertyDependencies": {
+          "create": []
+        },
+        "sourcePosition": "project:///index.ts#658,15",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#658,15"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ],
+        "replaceOnChanges": [
+          "triggers[*]"
+        ]
+      },
+      "detailedDiff": null
+    }
+  ]
+}
