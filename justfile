@@ -1,3 +1,6 @@
+# Next patch version after the latest git tag (e.g. v1.0.1 -> 1.0.2)
+next_version := `git describe --tags --abbrev=0 | sed 's/^v//' | awk -F. '{print $1"."$2"."$3+1}'`
+
 # Default recipe - show help
 default:
     @just --list
@@ -62,6 +65,12 @@ install-hooks:
     cp scripts/hooks/pre-push .git/hooks/pre-push
     chmod +x .git/hooks/pre-push
     @echo "✅ Git hooks installed"
+
+# Build and install as a Pulumi tool plugin (removes existing version first)
+install version=next_version: build
+    -pulumi plugin rm tool drift-adopter {{version}} --yes 2>/dev/null
+    pulumi plugin install tool drift-adopter {{version}} --file ./bin/pulumi-drift-adopt
+    @echo "✅ Installed as pulumi plugin drift-adopter@v{{version}}"
 
 # Clean build artifacts
 clean:
