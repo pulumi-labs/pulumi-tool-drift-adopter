@@ -422,6 +422,50 @@ func writeOutputFile(result NextOutput, outputFile string) (string, error) {
 	return f.Name(), nil
 }
 
+// loadMetadata reads a ResourceMetadata from a JSON file.
+func loadMetadata(path string) (*ResourceMetadata, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read metadata file: %w", err)
+	}
+	var meta ResourceMetadata
+	if err := json.Unmarshal(data, &meta); err != nil {
+		return nil, fmt.Errorf("failed to parse metadata file: %w", err)
+	}
+	return &meta, nil
+}
+
+// saveMetadata writes a ResourceMetadata to an auto-generated temp file.
+// Returns the path written to.
+func saveMetadata(meta *ResourceMetadata) (string, error) {
+	f, err := os.CreateTemp("", "drift-adopter-metadata-*.json")
+	if err != nil {
+		return "", fmt.Errorf("failed to create metadata file: %w", err)
+	}
+	encoder := json.NewEncoder(f)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(meta); err != nil {
+		_ = f.Close()
+		return "", fmt.Errorf("failed to write metadata: %w", err)
+	}
+	if err := f.Close(); err != nil {
+		return "", err
+	}
+	return f.Name(), nil
+}
+
+// depRefToDependsOn converts a DependencyRef to the dependsOn map format used in output.
+func depRefToDependsOn(ref DependencyRef) map[string]interface{} {
+	dep := map[string]interface{}{
+		"resourceName": ref.ResourceName,
+		"resourceType": ref.ResourceType,
+	}
+	if ref.OutputProperty != "" {
+		dep["outputProperty"] = ref.OutputProperty
+	}
+	return map[string]interface{}{"dependsOn": dep}
+}
+
 func outputError(errMsg string) error {
 	output := NextSummaryOutput{
 		Status: StatusError,
