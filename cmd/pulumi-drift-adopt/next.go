@@ -18,19 +18,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
-	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
-	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/spf13/cobra"
 )
 
-var nextCmd = &cobra.Command{
-	Use:   "next",
-	Short: "Run preview and show what code changes are needed",
-	Long: `Runs pulumi preview with --refresh to detect drift and analyzes the output.
+// newNextCmd creates a fresh "next" subcommand with all flags registered.
+func newNextCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "next",
+		Short: "Run preview and show what code changes are needed",
+		Long: `Runs pulumi preview with --refresh to detect drift and analyzes the output.
 
 The command automatically refreshes state to match actual infrastructure, then shows
 differences between code and state:
@@ -38,13 +37,14 @@ differences between code and state:
 - New values (code) = what currently exists in code (current/incorrect)
 
 The tool inverts the preview logic to tell you what to change in your code.`,
-	RunE: runNext,
-}
-
-func init() {
-	nextCmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
-	nextCmd.Flags().Int("max-resources", 10, "Maximum number of resources to return per batch (0 = unlimited, default = 10)")
-	nextCmd.Flags().String("events-file", "", "Path to engine events file (skips calling preview)")
+		RunE: runNext,
+	}
+	cmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
+	cmd.Flags().String("project", ".", "Pulumi project directory (default: current directory)")
+	cmd.Flags().String("events-file", "", "Read preview events from file instead of running pulumi preview")
+	cmd.Flags().StringSlice("exclude-urns", nil, "URNs to exclude from output")
+	cmd.Flags().Bool("skip-refresh", false, "Skip --refresh flag on pulumi preview (use existing state)")
+	return cmd
 }
 
 // NextOutput is the JSON structure returned by the next command
@@ -74,17 +74,18 @@ type PropertyChange struct {
 func runNext(cmd *cobra.Command, _ []string) error {
 	projectDir, _ := cmd.Flags().GetString("project")
 	stack, _ := cmd.Flags().GetString("stack")
-	maxResources, _ := cmd.Flags().GetInt("max-resources")
 	eventsFile, _ := cmd.Flags().GetString("events-file")
+	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
+	skipRefresh, _ := cmd.Flags().GetBool("skip-refresh")
 
 	// Get preview output from file or command
-	output, err := getPreviewOutput(eventsFile, projectDir, stack)
+	output, err := getPreviewOutput(eventsFile, projectDir, stack, skipRefresh)
 	if err != nil {
 		return err
 	}
 
 	// Parse preview output into steps
-	steps, err := parsePreviewOutput(output)
+	steps, _, err := parsePreviewOutput(output)
 	if err != nil {
 		return err
 	}
@@ -92,140 +93,8 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	// Convert steps to resource changes
 	resources := convertStepsToResources(steps)
 
-	// Output result with resource limit
-	return outputResult(resources, maxResources)
-}
-
-// getPreviewOutput retrieves preview output from either a file or by running pulumi preview
-func getPreviewOutput(eventsFile, projectDir, stack string) ([]byte, error) {
-	if eventsFile != "" {
-		// Read events file instead of calling preview
-		output, err := os.ReadFile(eventsFile)
-		if err != nil {
-			return nil, outputError(fmt.Sprintf("failed to read events file: %v", err))
-		}
-		return output, nil
-	}
-
-	// Build pulumi preview command with JSON output and refresh
-	cmdArgs := []string{"preview", "--json", "--non-interactive", "--refresh"}
-	if stack != "" {
-		cmdArgs = append(cmdArgs, "--stack", stack)
-	}
-
-	previewCmd := exec.Command("pulumi", cmdArgs...)
-	previewCmd.Dir = projectDir
-	previewCmd.Stderr = os.Stderr
-
-	output, err := previewCmd.Output()
-	if err != nil {
-		return nil, outputError(fmt.Sprintf("pulumi preview failed: %v", err))
-	}
-	return output, nil
-}
-
-// parsePreviewOutput parses preview output in either single JSON or NDJSON format
-func parsePreviewOutput(output []byte) ([]auto.PreviewStep, error) {
-	// Try parsing as single JSON object first
-	// Format: {"steps": [...]} (from pulumi preview --json)
-	var previewResult struct {
-		Steps []auto.PreviewStep `json:"steps"`
-	}
-
-	if err := json.Unmarshal(output, &previewResult); err == nil {
-		// Successfully parsed as single JSON object (even if steps is empty)
-		return previewResult.Steps, nil
-	}
-
-	// Try parsing as NDJSON (newline-delimited JSON)
-	// Format: {"resourcePreEvent": {...}}\n... (from pulumi_preview MCP tool)
-	return parseNDJSON(output)
-}
-
-// parseNDJSON parses NDJSON format with resourcePreEvent objects from pulumi-service MCP tool
-func parseNDJSON(output []byte) ([]auto.PreviewStep, error) {
-	var steps []auto.PreviewStep
-	lines := strings.Split(string(output), "\n")
-	validLinesFound := 0
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-
-		// Each line is a complete JSON object with a "type" field and corresponding event data
-		// Example: {"timestamp": 123, "type": "resourcePreEvent", "resourcePreEvent": {...}}
-		var event struct {
-			Type             string `json:"type"`
-			ResourcePreEvent *struct {
-				Metadata json.RawMessage `json:"metadata"`
-			} `json:"resourcePreEvent"`
-		}
-
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			// Not valid JSON, continue checking other lines
-			continue
-		}
-
-		validLinesFound++
-
-		// Only process resourcePreEvent lines; skip policy events, diagnostics, summaries, etc.
-		if event.Type == "resourcePreEvent" && event.ResourcePreEvent != nil {
-			// Parse metadata using pulumi-service format:
-			// - Uses "old"/"new" instead of "oldState"/"newState"
-			// - Uses "diffKind" instead of "kind"
-			// - Includes "type" field for resource type
-			var customStep struct {
-				Op           string                     `json:"op"`
-				URN          string                     `json:"urn"`
-				Type         string                     `json:"type"`
-				Provider     string                     `json:"provider,omitempty"`
-				Old          *apitype.ResourceV3        `json:"old,omitempty"`
-				New          *apitype.ResourceV3        `json:"new,omitempty"`
-				Diffs        []string                   `json:"diffs,omitempty"`
-				DetailedDiff map[string]json.RawMessage `json:"detailedDiff"`
-			}
-
-			if err := json.Unmarshal(event.ResourcePreEvent.Metadata, &customStep); err != nil {
-				continue
-			}
-
-			// Convert DetailedDiff from "diffKind" to standard "kind" format
-			standardDetailedDiff := make(map[string]auto.PropertyDiff)
-			for path, rawDiff := range customStep.DetailedDiff {
-				var customDiff struct {
-					DiffKind  string `json:"diffKind"`
-					InputDiff bool   `json:"inputDiff"`
-				}
-				if err := json.Unmarshal(rawDiff, &customDiff); err == nil {
-					standardDetailedDiff[path] = auto.PropertyDiff{
-						Kind:      customDiff.DiffKind,
-						InputDiff: customDiff.InputDiff,
-					}
-				}
-			}
-
-			// Convert to standard PreviewStep format
-			standardStep := auto.PreviewStep{
-				Op:           customStep.Op,
-				URN:          resource.URN(customStep.URN),
-				Provider:     customStep.Provider,
-				OldState:     customStep.Old, // Map "old" -> "OldState"
-				NewState:     customStep.New, // Map "new" -> "NewState"
-				DetailedDiff: standardDetailedDiff,
-			}
-
-			steps = append(steps, standardStep)
-		}
-	}
-
-	// If we found no valid JSON lines at all, the input is malformed
-	if validLinesFound == 0 && len(strings.TrimSpace(string(output))) > 0 {
-		return nil, outputError("failed to parse preview output: no valid JSON found")
-	}
-
-	return steps, nil
+	// Output result
+	return outputResult(resources, excludeURNs)
 }
 
 // convertStepsToResources converts preview steps to resource changes for drift adoption
@@ -370,12 +239,22 @@ func extractAllProperties(props map[string]interface{}, prefix string, propertie
 	}
 }
 
-// outputResult outputs the final JSON result with optional resource limiting
-func outputResult(resources []ResourceChange, maxResources int) error {
-	// Apply resource limit if specified
-	if maxResources > 0 && len(resources) > maxResources {
-		resources = resources[:maxResources]
+// outputResult outputs the final JSON result with optional URN exclusion
+func outputResult(resources []ResourceChange, excludeURNs []string) error {
+	// Build exclude set for O(1) lookup
+	excludeSet := make(map[string]bool, len(excludeURNs))
+	for _, urn := range excludeURNs {
+		excludeSet[urn] = true
 	}
+
+	// Filter excluded URNs
+	var filtered []ResourceChange
+	for _, res := range resources {
+		if !excludeSet[res.URN] {
+			filtered = append(filtered, res)
+		}
+	}
+	resources = filtered
 
 	// Determine status
 	result := NextOutput{}
