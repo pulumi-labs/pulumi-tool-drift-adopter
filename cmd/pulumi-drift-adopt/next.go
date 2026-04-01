@@ -42,6 +42,7 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 	cmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
 	cmd.Flags().String("events-file", "", "Read preview events from file instead of running pulumi preview")
 	cmd.Flags().StringSlice("exclude-urns", nil, "URNs to exclude from output")
+	cmd.Flags().String("dep-map-file", "", "Path to dependency map JSON file (reuse across runs to skip state export)")
 	cmd.Flags().Bool("skip-refresh", false, "Skip --refresh flag on pulumi preview (use existing state)")
 	cmd.Flags().String("output-file", "", "Path to write full output JSON (default: auto-generated temp file)")
 	return cmd
@@ -145,6 +146,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 	stack, _ := cmd.Flags().GetString("stack")
 	eventsFile, _ := cmd.Flags().GetString("events-file")
 	excludeURNs, _ := cmd.Flags().GetStringSlice("exclude-urns")
+	depMapFile, _ := cmd.Flags().GetString("dep-map-file")
 	skipRefresh, _ := cmd.Flags().GetBool("skip-refresh")
 	outputFile, _ := cmd.Flags().GetString("output-file")
 
@@ -160,27 +162,48 @@ func runNext(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 
-	// Load state for dependency resolution (in-memory only, no file written)
-	stateLookup, err := getStateExport(projectDir, stack)
-	if err != nil {
-		return err
+	var meta *ResourceMetadata
+
+	if depMapFile != "" {
+		// Load pre-computed metadata — skip state export and schema fetch entirely
+		meta, err = loadMetadata(depMapFile)
+		if err != nil {
+			return err
+		}
+	} else {
+		// Load state for dependency resolution (in-memory only, no file written)
+		stateLookup, err := getStateExport(projectDir, stack)
+		if err != nil {
+			return err
+		}
+
+		depMap := mergeStateLookupAndBuildDepMap(steps, stateLookup)
+
+		// Fetch provider schemas to determine input vs computed-only properties
+		inputProps, err := getInputPropertiesFromSchema(steps, projectDir)
+		if err != nil {
+			return err
+		}
+
+		meta = &ResourceMetadata{
+			Dependencies:    depMap,
+			InputProperties: inputProps,
+			StateLookup:     stateLookup,
+		}
 	}
 
-	depMap := mergeStateLookupAndBuildDepMap(steps, stateLookup)
-
-	// Fetch provider schemas to determine input vs computed-only properties
-	inputProps, err := getInputPropertiesFromSchema(steps, projectDir)
-	if err != nil {
-		return err
+	// Save metadata for reuse in subsequent calls (skip if loaded from file)
+	var metaPath string
+	if depMapFile != "" {
+		metaPath = depMapFile
+	} else {
+		metaPath, err = saveMetadata(meta)
+		if err != nil {
+			return err
+		}
 	}
 
-	meta := &ResourceMetadata{
-		Dependencies:    depMap,
-		InputProperties: inputProps,
-		StateLookup:     stateLookup,
-	}
-
-	return processNext(steps, parseErrors, meta, excludeURNs, "", outputFile)
+	return processNext(steps, parseErrors, meta, excludeURNs, metaPath, outputFile)
 }
 
 // mergeStateLookupAndBuildDepMap supplements a state lookup with OldState from preview steps,
@@ -199,17 +222,12 @@ func mergeStateLookupAndBuildDepMap(steps []auto.PreviewStep, stateLookup map[st
 	return buildDepMapFromState(stateLookup)
 }
 
-// buildDepMapFromState iterates ALL resources in the state lookup and produces a DependencyMap.
-// This is a placeholder until dependencies.go is introduced.
-func buildDepMapFromState(lookup map[string]*apitype.ResourceV3) DependencyMap {
-	return make(DependencyMap)
-}
-
 // processNext is the core pipeline: convert parsed steps to resources and output results.
 // It is separated from runNext so that tests can call it directly without needing CLI flags,
 // state export, or a live Pulumi stack.
 func processNext(steps []auto.PreviewStep, parseErrors int, meta *ResourceMetadata, excludeURNs []string, depMapPath, outputFile string) error {
 	resources := convertStepsToResources(steps, meta)
+	resources = sortResourcesByDependencies(resources)
 
 	return outputResult(resources, excludeURNs, depMapPath, outputFile, parseErrors)
 }
@@ -402,50 +420,6 @@ func writeOutputFile(result NextOutput, outputFile string) (string, error) {
 		return "", err
 	}
 	return f.Name(), nil
-}
-
-// loadMetadata reads a ResourceMetadata from a JSON file.
-func loadMetadata(path string) (*ResourceMetadata, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read metadata file: %w", err)
-	}
-	var meta ResourceMetadata
-	if err := json.Unmarshal(data, &meta); err != nil {
-		return nil, fmt.Errorf("failed to parse metadata file: %w", err)
-	}
-	return &meta, nil
-}
-
-// saveMetadata writes a ResourceMetadata to an auto-generated temp file.
-// Returns the path written to.
-func saveMetadata(meta *ResourceMetadata) (string, error) {
-	f, err := os.CreateTemp("", "drift-adopter-metadata-*.json")
-	if err != nil {
-		return "", fmt.Errorf("failed to create metadata file: %w", err)
-	}
-	encoder := json.NewEncoder(f)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(meta); err != nil {
-		_ = f.Close()
-		return "", fmt.Errorf("failed to write metadata: %w", err)
-	}
-	if err := f.Close(); err != nil {
-		return "", err
-	}
-	return f.Name(), nil
-}
-
-// depRefToDependsOn converts a DependencyRef to the dependsOn map format used in output.
-func depRefToDependsOn(ref DependencyRef) map[string]interface{} {
-	dep := map[string]interface{}{
-		"resourceName": ref.ResourceName,
-		"resourceType": ref.ResourceType,
-	}
-	if ref.OutputProperty != "" {
-		dep["outputProperty"] = ref.OutputProperty
-	}
-	return map[string]interface{}{"dependsOn": dep}
 }
 
 func outputError(errMsg string) error {
