@@ -1,0 +1,2592 @@
+{
+  "events": [
+    {
+      "timestamp": 1773160266,
+      "type": "policyLoadEvent",
+      "policyLoadEvent": {}
+    },
+    {
+      "timestamp": 1773160274,
+      "type": "preludeEvent",
+      "preludeEvent": {
+        "config": {}
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+          "type": "pulumi:pulumi:Stack",
+          "old": {
+            "type": "pulumi:pulumi:Stack",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "id": "",
+            "parent": "",
+            "inputs": {},
+            "outputs": {},
+            "provider": ""
+          },
+          "new": {
+            "type": "pulumi:pulumi:Stack",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "id": "",
+            "parent": "",
+            "inputs": {},
+            "outputs": {},
+            "provider": ""
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": ""
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+          "type": "pulumi:pulumi:Stack",
+          "old": {
+            "type": "pulumi:pulumi:Stack",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "id": "",
+            "parent": "",
+            "inputs": {},
+            "outputs": {},
+            "provider": ""
+          },
+          "new": {
+            "type": "pulumi:pulumi:Stack",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "id": "",
+            "parent": "",
+            "inputs": {},
+            "outputs": {},
+            "provider": ""
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": ""
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-2",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-2",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-2",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-2",
+            "custom": true,
+            "id": "4iOPlYIXmVcc9jQR",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "4iOPlYIXmVcc9jQR",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "4iOPlYIXmVcc9jQR",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-2",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-2",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-2",
+            "custom": true,
+            "id": "4iOPlYIXmVcc9jQR",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "4iOPlYIXmVcc9jQR",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "4iOPlYIXmVcc9jQR",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-2",
+            "custom": true,
+            "id": "4iOPlYIXmVcc9jQR",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "4iOPlYIXmVcc9jQR",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "4iOPlYIXmVcc9jQR",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-3",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-3",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-3",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-3",
+            "custom": true,
+            "id": "ds3O6ZhHcAwQ0KwL",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "ds3O6ZhHcAwQ0KwL",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "ds3O6ZhHcAwQ0KwL",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-3",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-3",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-3",
+            "custom": true,
+            "id": "ds3O6ZhHcAwQ0KwL",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "ds3O6ZhHcAwQ0KwL",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "ds3O6ZhHcAwQ0KwL",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-3",
+            "custom": true,
+            "id": "ds3O6ZhHcAwQ0KwL",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "ds3O6ZhHcAwQ0KwL",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "ds3O6ZhHcAwQ0KwL",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-2",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-2",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-2",
+          "type": "command:local:Command",
+          "old": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-2",
+            "custom": true,
+            "id": "cmd-29ac70439",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-2"
+            },
+            "outputs": {
+              "create": "echo resource-2",
+              "stderr": "",
+              "stdout": "resource-2"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "new": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-2",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-2"
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-2",
+          "type": "command:local:Command",
+          "old": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-2",
+            "custom": true,
+            "id": "cmd-29ac70439",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-2"
+            },
+            "outputs": {
+              "create": "echo resource-2",
+              "stderr": "",
+              "stdout": "resource-2"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "new": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-2",
+            "custom": true,
+            "id": "cmd-29ac70439",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-2"
+            },
+            "outputs": {
+              "create": "echo resource-2",
+              "stderr": "",
+              "stdout": "resource-2"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-0",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-0",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "update",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-0",
+          "type": "command:local:Command",
+          "old": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-0",
+            "custom": true,
+            "id": "cmd-0cb015ad7",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-0-modified",
+              "environment": {
+                "DRIFT": "true"
+              }
+            },
+            "outputs": {
+              "create": "echo resource-0-modified",
+              "environment": {
+                "DRIFT": "true"
+              },
+              "stderr": "",
+              "stdout": "resource-0-modified"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "new": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-0"
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "diffs": [
+            "create",
+            "environment"
+          ],
+          "detailedDiff": {
+            "create": {
+              "diffKind": "update",
+              "inputDiff": false
+            },
+            "environment": {
+              "diffKind": "delete",
+              "inputDiff": false
+            }
+          },
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "update",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-0",
+          "type": "command:local:Command",
+          "old": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-0",
+            "custom": true,
+            "id": "cmd-0cb015ad7",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-0-modified",
+              "environment": {
+                "DRIFT": "true"
+              }
+            },
+            "outputs": {
+              "create": "echo resource-0-modified",
+              "environment": {
+                "DRIFT": "true"
+              },
+              "stderr": "",
+              "stdout": "resource-0-modified"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "new": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-0",
+            "custom": true,
+            "id": "cmd-0cb015ad7",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-0"
+            },
+            "outputs": {
+              "create": "echo resource-0",
+              "stderr": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "stdout": "04da6b54-80e4-46f7-96ec-b56ff0331ba9"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "diffs": [
+            "create",
+            "environment"
+          ],
+          "detailedDiff": {
+            "create": {
+              "diffKind": "update",
+              "inputDiff": false
+            },
+            "environment": {
+              "diffKind": "delete",
+              "inputDiff": false
+            }
+          },
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-1",
+          "type": "command:local:Command",
+          "old": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-1",
+            "custom": true,
+            "id": "cmd-1e9f221c9",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-1"
+            },
+            "outputs": {
+              "create": "echo resource-1",
+              "stderr": "",
+              "stdout": "resource-1"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "new": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-1",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-1"
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-1",
+          "type": "command:local:Command",
+          "old": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-1",
+            "custom": true,
+            "id": "cmd-1e9f221c9",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-1"
+            },
+            "outputs": {
+              "create": "echo resource-1",
+              "stderr": "",
+              "stdout": "resource-1"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "new": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-1",
+            "custom": true,
+            "id": "cmd-1e9f221c9",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-1"
+            },
+            "outputs": {
+              "create": "echo resource-1",
+              "stderr": "",
+              "stdout": "resource-1"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-3",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-3",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "create",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-3",
+          "type": "command:local:Command",
+          "old": null,
+          "new": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-3",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-3"
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "create",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-3",
+          "type": "command:local:Command",
+          "old": null,
+          "new": {
+            "type": "command:local:Command",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::command:local:Command::cmd-3",
+            "custom": true,
+            "id": "cmd-3bcafcf25",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "create": "echo resource-3"
+            },
+            "outputs": {
+              "create": "echo resource-3",
+              "stderr": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "stdout": "04da6b54-80e4-46f7-96ec-b56ff0331ba9"
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:command::default_1_2_1::4135314e-e7ed-4a17-9788-102c8276fd5f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-1",
+          "type": "tls:index/privateKey:PrivateKey",
+          "old": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-1",
+            "custom": true,
+            "id": "aca558ee2b382cfc280af8f32fb49f2c7be1cf5b",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "RSA",
+              "rsaBits": 2048
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "RSA",
+              "ecdsaCurve": "P224",
+              "id": "aca558ee2b382cfc280af8f32fb49f2c7be1cf5b",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "d0:70:73:c5:04:82:e8:47:fe:ac:5f:de:25:44:f7:f9",
+              "publicKeyFingerprintSha256": "SHA256:O58CiFwg/DcNRYS1tFPn+MHykvxQmuGtRCM9F/35Mgc",
+              "publicKeyOpenssh": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCxJVt2AVzNqzXJXluNdenmJnrJez5kN7AmRRmLvGngRl8HFHkw0MZ4yIt6UflOPizFDt0v5rfTF9qUY6o1Z/t3m1dQub+xiJCjS8B8iXweq+FUeKM8vVmTCX/ccqYW1kn47zibGROPby4hTpONe88oG1PljCRDV50Y58ZTcRiXkCekkokV9FBgmsZx3n68X5w9DD8D1oolu3Yl6vOWKzWtvArm8JJdaatwBq344NRtgCemPbeSsGJK0DPJXOW5avT+YEjuK/7QTpunmr713QYp/Ts82YXwjf3hPCLYr6JPRP1DWExYz+vH3nBjkr1pAlSdzHSUGPCMQX8+aZoLwNyh\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsSVbdgFczas1yV5bjXXp\n5iZ6yXs+ZDewJkUZi7xp4EZfBxR5MNDGeMiLelH5Tj4sxQ7dL+a30xfalGOqNWf7\nd5tXULm/sYiQo0vAfIl8HqvhVHijPL1Zkwl/3HKmFtZJ+O84mxkTj28uIU6TjXvP\nKBtT5YwkQ1edGOfGU3EYl5AnpJKJFfRQYJrGcd5+vF+cPQw/A9aKJbt2Jerzlis1\nrbwK5vCSXWmrcAat+ODUbYAnpj23krBiStAzyVzluWr0/mBI7iv+0E6bp5q+9d0G\nKf07PNmF8I394Twi2K+iT0T9Q1hMWM/rx95wY5K9aQJUncx0lBjwjEF/PmmaC8Dc\noQIDAQAB\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "new": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-1",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "RSA",
+              "rsaBits": 2048
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-1",
+          "type": "tls:index/privateKey:PrivateKey",
+          "old": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-1",
+            "custom": true,
+            "id": "aca558ee2b382cfc280af8f32fb49f2c7be1cf5b",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "RSA",
+              "rsaBits": 2048
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "RSA",
+              "ecdsaCurve": "P224",
+              "id": "aca558ee2b382cfc280af8f32fb49f2c7be1cf5b",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "d0:70:73:c5:04:82:e8:47:fe:ac:5f:de:25:44:f7:f9",
+              "publicKeyFingerprintSha256": "SHA256:O58CiFwg/DcNRYS1tFPn+MHykvxQmuGtRCM9F/35Mgc",
+              "publicKeyOpenssh": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCxJVt2AVzNqzXJXluNdenmJnrJez5kN7AmRRmLvGngRl8HFHkw0MZ4yIt6UflOPizFDt0v5rfTF9qUY6o1Z/t3m1dQub+xiJCjS8B8iXweq+FUeKM8vVmTCX/ccqYW1kn47zibGROPby4hTpONe88oG1PljCRDV50Y58ZTcRiXkCekkokV9FBgmsZx3n68X5w9DD8D1oolu3Yl6vOWKzWtvArm8JJdaatwBq344NRtgCemPbeSsGJK0DPJXOW5avT+YEjuK/7QTpunmr713QYp/Ts82YXwjf3hPCLYr6JPRP1DWExYz+vH3nBjkr1pAlSdzHSUGPCMQX8+aZoLwNyh\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsSVbdgFczas1yV5bjXXp\n5iZ6yXs+ZDewJkUZi7xp4EZfBxR5MNDGeMiLelH5Tj4sxQ7dL+a30xfalGOqNWf7\nd5tXULm/sYiQo0vAfIl8HqvhVHijPL1Zkwl/3HKmFtZJ+O84mxkTj28uIU6TjXvP\nKBtT5YwkQ1edGOfGU3EYl5AnpJKJFfRQYJrGcd5+vF+cPQw/A9aKJbt2Jerzlis1\nrbwK5vCSXWmrcAat+ODUbYAnpj23krBiStAzyVzluWr0/mBI7iv+0E6bp5q+9d0G\nKf07PNmF8I394Twi2K+iT0T9Q1hMWM/rx95wY5K9aQJUncx0lBjwjEF/PmmaC8Dc\noQIDAQAB\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "new": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-1",
+            "custom": true,
+            "id": "aca558ee2b382cfc280af8f32fb49f2c7be1cf5b",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "RSA",
+              "rsaBits": 2048
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "RSA",
+              "ecdsaCurve": "P224",
+              "id": "aca558ee2b382cfc280af8f32fb49f2c7be1cf5b",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "d0:70:73:c5:04:82:e8:47:fe:ac:5f:de:25:44:f7:f9",
+              "publicKeyFingerprintSha256": "SHA256:O58CiFwg/DcNRYS1tFPn+MHykvxQmuGtRCM9F/35Mgc",
+              "publicKeyOpenssh": "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCxJVt2AVzNqzXJXluNdenmJnrJez5kN7AmRRmLvGngRl8HFHkw0MZ4yIt6UflOPizFDt0v5rfTF9qUY6o1Z/t3m1dQub+xiJCjS8B8iXweq+FUeKM8vVmTCX/ccqYW1kn47zibGROPby4hTpONe88oG1PljCRDV50Y58ZTcRiXkCekkokV9FBgmsZx3n68X5w9DD8D1oolu3Yl6vOWKzWtvArm8JJdaatwBq344NRtgCemPbeSsGJK0DPJXOW5avT+YEjuK/7QTpunmr713QYp/Ts82YXwjf3hPCLYr6JPRP1DWExYz+vH3nBjkr1pAlSdzHSUGPCMQX8+aZoLwNyh\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAsSVbdgFczas1yV5bjXXp\n5iZ6yXs+ZDewJkUZi7xp4EZfBxR5MNDGeMiLelH5Tj4sxQ7dL+a30xfalGOqNWf7\nd5tXULm/sYiQo0vAfIl8HqvhVHijPL1Zkwl/3HKmFtZJ+O84mxkTj28uIU6TjXvP\nKBtT5YwkQ1edGOfGU3EYl5AnpJKJFfRQYJrGcd5+vF+cPQw/A9aKJbt2Jerzlis1\nrbwK5vCSXWmrcAat+ODUbYAnpj23krBiStAzyVzluWr0/mBI7iv+0E6bp5q+9d0G\nKf07PNmF8I394Twi2K+iT0T9Q1hMWM/rx95wY5K9aQJUncx0lBjwjEF/PmmaC8Dc\noQIDAQAB\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "create-replacement",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+          "type": "tls:index/privateKey:PrivateKey",
+          "old": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256"
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256",
+              "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "6d:c0:02:70:e6:15:17:33:75:54:40:03:25:21:2c:eb",
+              "publicKeyFingerprintSha256": "SHA256:/36B/Hm1P5eu7Wc9T12qSQrjsuiv8zAvfW7GtLZO02I",
+              "publicKeyOpenssh": "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBCBX/z9EVJB4geatsW+riF2ipYgATRole8y/SxREj2RMDQW2ewp7LUGmk4EfJUYa/3ITxdBeF38C171zV1IZCLI=\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIFf/P0RUkHiB5q2xb6uIXaKliABN\nGiV7zL9LFESPZEwNBbZ7CnstQaaTgR8lRhr/chPF0F4XfwLXvXNXUhkIsg==\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "new": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "RSA",
+              "rsaBits": 2048
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "keys": [
+            "ecdsaCurve",
+            "algorithm"
+          ],
+          "diffs": [
+            "algorithm",
+            "ecdsaCurve",
+            "id",
+            "privateKeyOpenssh",
+            "privateKeyPem",
+            "privateKeyPemPkcs8",
+            "publicKeyFingerprintMd5",
+            "publicKeyFingerprintSha256",
+            "publicKeyOpenssh",
+            "publicKeyPem"
+          ],
+          "detailedDiff": null,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "create-replacement",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+          "type": "tls:index/privateKey:PrivateKey",
+          "old": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "delete": true,
+            "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256"
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256",
+              "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "6d:c0:02:70:e6:15:17:33:75:54:40:03:25:21:2c:eb",
+              "publicKeyFingerprintSha256": "SHA256:/36B/Hm1P5eu7Wc9T12qSQrjsuiv8zAvfW7GtLZO02I",
+              "publicKeyOpenssh": "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBCBX/z9EVJB4geatsW+riF2ipYgATRole8y/SxREj2RMDQW2ewp7LUGmk4EfJUYa/3ITxdBeF38C171zV1IZCLI=\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIFf/P0RUkHiB5q2xb6uIXaKliABN\nGiV7zL9LFESPZEwNBbZ7CnstQaaTgR8lRhr/chPF0F4XfwLXvXNXUhkIsg==\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "new": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "RSA",
+              "rsaBits": 2048
+            },
+            "outputs": {
+              "algorithm": "RSA",
+              "ecdsaCurve": "P224",
+              "id": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyFingerprintSha256": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyOpenssh": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyPem": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "keys": [
+            "ecdsaCurve",
+            "algorithm"
+          ],
+          "diffs": [
+            "algorithm",
+            "ecdsaCurve",
+            "id",
+            "privateKeyOpenssh",
+            "privateKeyPem",
+            "privateKeyPemPkcs8",
+            "publicKeyFingerprintMd5",
+            "publicKeyFingerprintSha256",
+            "publicKeyOpenssh",
+            "publicKeyPem"
+          ],
+          "detailedDiff": null,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "replace",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+          "type": "tls:index/privateKey:PrivateKey",
+          "old": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "delete": true,
+            "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256"
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256",
+              "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "6d:c0:02:70:e6:15:17:33:75:54:40:03:25:21:2c:eb",
+              "publicKeyFingerprintSha256": "SHA256:/36B/Hm1P5eu7Wc9T12qSQrjsuiv8zAvfW7GtLZO02I",
+              "publicKeyOpenssh": "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBCBX/z9EVJB4geatsW+riF2ipYgATRole8y/SxREj2RMDQW2ewp7LUGmk4EfJUYa/3ITxdBeF38C171zV1IZCLI=\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIFf/P0RUkHiB5q2xb6uIXaKliABN\nGiV7zL9LFESPZEwNBbZ7CnstQaaTgR8lRhr/chPF0F4XfwLXvXNXUhkIsg==\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "new": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "RSA",
+              "rsaBits": 2048
+            },
+            "outputs": {
+              "algorithm": "RSA",
+              "ecdsaCurve": "P224",
+              "id": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyFingerprintSha256": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyOpenssh": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyPem": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "keys": [
+            "ecdsaCurve",
+            "algorithm"
+          ],
+          "diffs": [
+            "algorithm",
+            "ecdsaCurve",
+            "id",
+            "privateKeyOpenssh",
+            "privateKeyPem",
+            "privateKeyPemPkcs8",
+            "publicKeyFingerprintMd5",
+            "publicKeyFingerprintSha256",
+            "publicKeyOpenssh",
+            "publicKeyPem"
+          ],
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "replace",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+          "type": "tls:index/privateKey:PrivateKey",
+          "old": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "delete": true,
+            "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256"
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256",
+              "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "6d:c0:02:70:e6:15:17:33:75:54:40:03:25:21:2c:eb",
+              "publicKeyFingerprintSha256": "SHA256:/36B/Hm1P5eu7Wc9T12qSQrjsuiv8zAvfW7GtLZO02I",
+              "publicKeyOpenssh": "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBCBX/z9EVJB4geatsW+riF2ipYgATRole8y/SxREj2RMDQW2ewp7LUGmk4EfJUYa/3ITxdBeF38C171zV1IZCLI=\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIFf/P0RUkHiB5q2xb6uIXaKliABN\nGiV7zL9LFESPZEwNBbZ7CnstQaaTgR8lRhr/chPF0F4XfwLXvXNXUhkIsg==\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "new": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "RSA",
+              "rsaBits": 2048
+            },
+            "outputs": {
+              "algorithm": "RSA",
+              "ecdsaCurve": "P224",
+              "id": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyFingerprintSha256": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyOpenssh": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "publicKeyPem": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "keys": [
+            "ecdsaCurve",
+            "algorithm"
+          ],
+          "diffs": [
+            "algorithm",
+            "ecdsaCurve",
+            "id",
+            "privateKeyOpenssh",
+            "privateKeyPem",
+            "privateKeyPemPkcs8",
+            "publicKeyFingerprintMd5",
+            "publicKeyFingerprintSha256",
+            "publicKeyOpenssh",
+            "publicKeyPem"
+          ],
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "create-replacement",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 32,
+              "special": true
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "length": 32,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "special": true,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "keys": [
+            "length",
+            "special"
+          ],
+          "diffs": [
+            "length",
+            "special"
+          ],
+          "detailedDiff": null,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyRemediateSummaryEvent",
+      "policyRemediateSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6",
+        "passed": [
+          "prohibited-public-internet",
+          "s3-bucket-replication-enabled",
+          "s3-no-public-read"
+        ]
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "create-replacement",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "delete": true,
+            "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 32,
+              "special": true
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "length": 32,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "special": true,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "id": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "keys": [
+            "length",
+            "special"
+          ],
+          "diffs": [
+            "length",
+            "special"
+          ],
+          "detailedDiff": null,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "replace",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "delete": true,
+            "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 32,
+              "special": true
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "length": 32,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "special": true,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "id": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "keys": [
+            "length",
+            "special"
+          ],
+          "diffs": [
+            "length",
+            "special"
+          ],
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "replace",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "delete": true,
+            "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 32,
+              "special": true
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "length": 32,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "special": true,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "id": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "04da6b54-80e4-46f7-96ec-b56ff0331ba9",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "keys": [
+            "length",
+            "special"
+          ],
+          "diffs": [
+            "length",
+            "special"
+          ],
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeSummaryEvent",
+      "policyAnalyzeSummaryEvent": {
+        "resourceUrn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-1",
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-1",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-1",
+            "custom": true,
+            "id": "WyFTLKCEHrcVyT5t",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "WyFTLKCEHrcVyT5t",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "WyFTLKCEHrcVyT5t",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-1",
+            "custom": true,
+            "id": "",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {},
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-1",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-1",
+            "custom": true,
+            "id": "WyFTLKCEHrcVyT5t",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "WyFTLKCEHrcVyT5t",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "WyFTLKCEHrcVyT5t",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-1",
+            "custom": true,
+            "id": "WyFTLKCEHrcVyT5t",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "WyFTLKCEHrcVyT5t",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "WyFTLKCEHrcVyT5t",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "delete-replaced",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+          "type": "tls:index/privateKey:PrivateKey",
+          "old": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "delete": true,
+            "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256"
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256",
+              "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "6d:c0:02:70:e6:15:17:33:75:54:40:03:25:21:2c:eb",
+              "publicKeyFingerprintSha256": "SHA256:/36B/Hm1P5eu7Wc9T12qSQrjsuiv8zAvfW7GtLZO02I",
+              "publicKeyOpenssh": "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBCBX/z9EVJB4geatsW+riF2ipYgATRole8y/SxREj2RMDQW2ewp7LUGmk4EfJUYa/3ITxdBeF38C171zV1IZCLI=\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIFf/P0RUkHiB5q2xb6uIXaKliABN\nGiV7zL9LFESPZEwNBbZ7CnstQaaTgR8lRhr/chPF0F4XfwLXvXNXUhkIsg==\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "new": null,
+          "detailedDiff": null,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "delete",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-extra-0",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-extra-0",
+            "custom": true,
+            "id": "3Evb5vBLN7UqAJBk",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "3Evb5vBLN7UqAJBk",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "3Evb5vBLN7UqAJBk",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": null,
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "delete-replaced",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+          "type": "tls:index/privateKey:PrivateKey",
+          "old": {
+            "type": "tls:index/privateKey:PrivateKey",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::tls:index/privateKey:PrivateKey::tls-key-0",
+            "custom": true,
+            "delete": true,
+            "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256"
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"1\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {}
+              },
+              "algorithm": "ECDSA",
+              "ecdsaCurve": "P256",
+              "id": "879063cefa7a61bd7e3f2a9980484a9981bf309d",
+              "privateKeyOpenssh": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPem": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "privateKeyPemPkcs8": {
+                "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                "ciphertext": "[secret]"
+              },
+              "publicKeyFingerprintMd5": "6d:c0:02:70:e6:15:17:33:75:54:40:03:25:21:2c:eb",
+              "publicKeyFingerprintSha256": "SHA256:/36B/Hm1P5eu7Wc9T12qSQrjsuiv8zAvfW7GtLZO02I",
+              "publicKeyOpenssh": "ecdsa-sha2-nistp256 AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTYAAABBBCBX/z9EVJB4geatsW+riF2ipYgATRole8y/SxREj2RMDQW2ewp7LUGmk4EfJUYa/3ITxdBeF38C171zV1IZCLI=\n",
+              "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEIFf/P0RUkHiB5q2xb6uIXaKliABN\nGiV7zL9LFESPZEwNBbZ7CnstQaaTgR8lRhr/chPF0F4XfwLXvXNXUhkIsg==\n-----END PUBLIC KEY-----\n",
+              "rsaBits": 2048
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+          },
+          "new": null,
+          "detailedDiff": null,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:tls::default_5_3_0::364986ff-c3cd-45c7-93c5-dcb8a3e4ed7f"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resourcePreEvent",
+      "resourcePreEvent": {
+        "metadata": {
+          "op": "delete-replaced",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "delete": true,
+            "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 32,
+              "special": true
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "length": 32,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "special": true,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": null,
+          "detailedDiff": null,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "delete",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-extra-0",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-extra-0",
+            "custom": true,
+            "id": "3Evb5vBLN7UqAJBk",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 16,
+              "special": false
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "3Evb5vBLN7UqAJBk",
+              "length": 16,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "3Evb5vBLN7UqAJBk",
+              "special": false,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": null,
+          "detailedDiff": null,
+          "logical": true,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "delete-replaced",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+          "type": "random:index/randomString:RandomString",
+          "old": {
+            "type": "random:index/randomString:RandomString",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::random:index/randomString:RandomString::random-str-0",
+            "custom": true,
+            "delete": true,
+            "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+            "parent": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "inputs": {
+              "length": 32,
+              "special": true
+            },
+            "outputs": {
+              "__meta": "{\"schema_version\":\"2\"}",
+              "__pulumi_raw_state_delta": {
+                "obj": {
+                  "ps": {
+                    "keepers": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    },
+                    "overrideSpecial": {
+                      "4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+                      "ciphertext": "[secret]"
+                    }
+                  }
+                }
+              },
+              "id": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "length": 32,
+              "lower": true,
+              "minLower": 0,
+              "minNumeric": 0,
+              "minSpecial": 0,
+              "minUpper": 0,
+              "number": true,
+              "numeric": true,
+              "result": "&GalW@[F?wj5H1[PA7>rYmTkg&H*s{c[",
+              "special": true,
+              "upper": true
+            },
+            "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+          },
+          "new": null,
+          "detailedDiff": null,
+          "provider": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:providers:random::default_4_19_1::c449be6c-a5aa-46e6-ab34-3fedd252c6bf"
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "resOutputsEvent",
+      "resOutputsEvent": {
+        "metadata": {
+          "op": "same",
+          "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+          "type": "pulumi:pulumi:Stack",
+          "old": {
+            "type": "pulumi:pulumi:Stack",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "id": "",
+            "parent": "",
+            "inputs": {},
+            "outputs": {},
+            "provider": ""
+          },
+          "new": {
+            "type": "pulumi:pulumi:Stack",
+            "urn": "urn:pulumi:test-fa644eb6::small-scale-10::pulumi:pulumi:Stack::small-scale-10-test-fa644eb6",
+            "id": "",
+            "parent": "",
+            "inputs": {},
+            "outputs": {},
+            "provider": ""
+          },
+          "detailedDiff": null,
+          "logical": true,
+          "provider": ""
+        },
+        "planning": true
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "policyAnalyzeStackSummaryEvent",
+      "policyAnalyzeStackSummaryEvent": {
+        "policyPackName": "pulumi-internal-policies",
+        "policyPackVersion": "0.0.6",
+        "policyPackVersionTag": "0.0.6"
+      }
+    },
+    {
+      "timestamp": 1773160277,
+      "type": "summaryEvent",
+      "summaryEvent": {
+        "maybeCorrupt": false,
+        "durationSeconds": 5,
+        "resourceChanges": {
+          "create": 1,
+          "delete": 1,
+          "replace": 2,
+          "same": 7,
+          "update": 1
+        },
+        "PolicyPacks": {
+          "pulumi-internal-policies": "0.0.6"
+        },
+        "isPreview": true
+      }
+    }
+  ]
+}
