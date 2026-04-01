@@ -45,6 +45,9 @@ drift-plan.json
 scripts/*
 !scripts/hooks/
 
+# Internal research/notes
+docs/
+
 # Local Claude Code config
 .claude/CLAUDE.local.md
 .claude/settings.local.json
