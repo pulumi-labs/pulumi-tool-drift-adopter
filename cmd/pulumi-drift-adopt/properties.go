@@ -307,7 +307,7 @@ func normalizeDetailedDiff(step *auto.PreviewStep) {
 	}
 	step.DetailedDiff = make(map[string]auto.PropertyDiff, len(diffKeys))
 	for _, key := range diffKeys {
-		step.DetailedDiff[string(key)] = auto.PropertyDiff{Kind: "update", InputDiff: true}
+		step.DetailedDiff[string(key)] = auto.PropertyDiff{InputDiff: true}
 	}
 }
 
