@@ -242,3 +242,58 @@ func parseNDJSON(output []byte) ([]auto.PreviewStep, int, error) {
 
 	return steps, jsonErrors, nil
 }
+
+// getStateExport runs pulumi stack export and returns the parsed lookup map in memory.
+// No file is written to disk.
+func getStateExport(projectDir, stack string) (map[string]*apitype.ResourceV3, error) {
+	// Run pulumi stack export to get full state (--show-secrets so secret
+	// outputs are plaintext, enabling value matching in findMatchingOutput)
+	cmdArgs := []string{"stack", "export", "--show-secrets"}
+	if stack != "" {
+		cmdArgs = append(cmdArgs, "--stack", stack)
+	}
+
+	exportCmd := exec.Command("pulumi", cmdArgs...)
+	exportCmd.Dir = projectDir
+	exportCmd.Stderr = os.Stderr
+
+	output, err := exportCmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("pulumi stack export failed: %w", err)
+	}
+
+	return parseStateExport(output)
+}
+
+// parseStateExport parses pulumi stack export JSON into a URN-to-resource lookup map.
+func parseStateExport(data []byte) (map[string]*apitype.ResourceV3, error) {
+	var export struct {
+		Version    int `json:"version"`
+		Deployment struct {
+			Resources []apitype.ResourceV3 `json:"resources"`
+		} `json:"deployment"`
+	}
+	if err := json.Unmarshal(data, &export); err != nil {
+		return nil, fmt.Errorf("failed to parse state export: %w", err)
+	}
+
+	lookup := make(map[string]*apitype.ResourceV3, len(export.Deployment.Resources))
+	for i := range export.Deployment.Resources {
+		res := &export.Deployment.Resources[i]
+		lookup[string(res.URN)] = res
+	}
+	return lookup, nil
+}
+
+// buildStateLookupFromSteps builds a URN-to-resource lookup from preview steps.
+// This allows dependency resolution even without a separate state file, using
+// OldState from delete operations (which contain full resource state).
+func buildStateLookupFromSteps(steps []auto.PreviewStep) map[string]*apitype.ResourceV3 {
+	lookup := make(map[string]*apitype.ResourceV3)
+	for i := range steps {
+		if steps[i].OldState != nil {
+			lookup[string(steps[i].URN)] = steps[i].OldState
+		}
+	}
+	return lookup
+}
