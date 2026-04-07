@@ -241,7 +241,7 @@ Both formats are parsed into `auto.PreviewStep` structs, then processed through 
 
 #### 1. DetailedDiff normalization
 
-For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `Kind: "update"` and `InputDiff: true`. The NDJSON parser performs equivalent normalization from its `diffs` field during format conversion.
+For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `InputDiff: true`. The NDJSON parser performs equivalent normalization from its `diffs` field during format conversion.
 
 #### 2. Schema-based output filtering
 

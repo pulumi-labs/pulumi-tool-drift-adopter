@@ -34,10 +34,14 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 		expectResources bool
 	}{
 		{
-			name:            "clean state - no changes",
-			eventsContent:   `{"steps": []}`,
-			expectedStatus:  "clean",
-			expectResources: false,
+			name:          "empty steps array",
+			eventsContent: `{"steps": []}`,
+			expectedError: "preview output contains no steps",
+		},
+		{
+			name:          "empty events array",
+			eventsContent: `{"events": []}`,
+			expectedError: "preview output contains no events",
 		},
 		{
 			name: "update operation - drift detected",
@@ -134,6 +138,14 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Cases that should fail at parse time (before processNext)
+			if tt.expectedStatus == "" && tt.expectedError != "" {
+				_, _, err := parsePreviewOutput([]byte(tt.eventsContent))
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.expectedError)
+				return
+			}
+
 			summary, full := runProcessTest(t, []byte(tt.eventsContent))
 
 			// Verify status
