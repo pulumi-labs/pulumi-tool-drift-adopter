@@ -337,6 +337,35 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 	assert.Equal(t, true, versioningProp.DesiredValue)
 }
 
+// TestNextCommandEngineEventsJSON tests the {"events": [...]} format end-to-end via --events-file
+func TestNextCommandEngineEventsJSON(t *testing.T) {
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+	cmd.SetArgs([]string{"next", "--events-file", "testdata/engine_events_update.json"})
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	output, err := io.ReadAll(r)
+	require.NoError(t, err)
+
+	var result NextOutput
+	err = json.Unmarshal(output, &result)
+	require.NoError(t, err, "Failed to parse output: %s", string(output))
+
+	assert.Equal(t, "changes_needed", result.Status)
+	require.Len(t, result.Resources, 1)
+
+	resource := result.Resources[0]
+	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, "my-bucket", resource.Name)
+	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
+	assert.NotEmpty(t, resource.Properties, "Expected property changes from engine events")
+}
+
 // TestNextCommandFileNotFound tests error handling when events file doesn't exist
 func TestNextCommandFileNotFound(t *testing.T) {
 	oldStdout := os.Stdout
