@@ -64,14 +64,15 @@ func parsePreviewOutput(output []byte) ([]auto.PreviewStep, int, error) {
 	var probe map[string]json.RawMessage
 	if err := json.Unmarshal(output, &probe); err == nil {
 		// Format 1: {"steps": [...]} (from pulumi preview --json)
-		if _, hasSteps := probe["steps"]; hasSteps {
-			var rawSteps struct {
-				Steps []json.RawMessage `json:"steps"`
-			}
-			if err := json.Unmarshal(output, &rawSteps); err == nil {
+		if rawStepsJSON, hasSteps := probe["steps"]; hasSteps {
+			var rawSteps []json.RawMessage
+			if err := json.Unmarshal(rawStepsJSON, &rawSteps); err == nil {
+				if len(rawSteps) == 0 {
+					return nil, 0, outputError("preview output contains no steps")
+				}
 				var steps []auto.PreviewStep
 				parseErrors := 0
-				for _, raw := range rawSteps.Steps {
+				for _, raw := range rawSteps {
 					var step auto.PreviewStep
 					if err := json.Unmarshal(raw, &step); err != nil {
 						parseErrors++
@@ -89,7 +90,10 @@ func parsePreviewOutput(output []byte) ([]auto.PreviewStep, int, error) {
 		// Format 2: {"events": [...]} (from Pulumi Cloud GetEngineEvents API)
 		if rawEvents, hasEvents := probe["events"]; hasEvents {
 			var events []json.RawMessage
-			if err := json.Unmarshal(rawEvents, &events); err == nil && len(events) > 0 {
+			if err := json.Unmarshal(rawEvents, &events); err == nil {
+				if len(events) == 0 {
+					return nil, 0, outputError("preview output contains no events")
+				}
 				return parseEngineEvents(events)
 			}
 		}
@@ -158,16 +162,16 @@ func parseEngineEvent(data []byte) (auto.PreviewStep, bool, error) {
 		return auto.PreviewStep{}, false, fmt.Errorf("failed to unmarshal resource event metadata: %w", err)
 	}
 
-	// Convert DetailedDiff from "diffKind" to standard "kind" format
+	// Convert DetailedDiff from engine event format to standard format.
+	// Only InputDiff is preserved — Kind is not used downstream (change
+	// semantics are determined by comparing old/new property values).
 	standardDetailedDiff := make(map[string]auto.PropertyDiff)
 	for path, rawDiff := range customStep.DetailedDiff {
 		var customDiff struct {
-			DiffKind  string `json:"diffKind"`
-			InputDiff bool   `json:"inputDiff"`
+			InputDiff bool `json:"inputDiff"`
 		}
 		if err := json.Unmarshal(rawDiff, &customDiff); err == nil {
 			standardDetailedDiff[path] = auto.PropertyDiff{
-				Kind:      customDiff.DiffKind,
 				InputDiff: customDiff.InputDiff,
 			}
 		}
@@ -179,7 +183,6 @@ func parseEngineEvent(data []byte) (auto.PreviewStep, bool, error) {
 	if len(standardDetailedDiff) == 0 && len(customStep.Diffs) > 0 {
 		for _, key := range customStep.Diffs {
 			standardDetailedDiff[key] = auto.PropertyDiff{
-				Kind:      "update",
 				InputDiff: true,
 			}
 		}

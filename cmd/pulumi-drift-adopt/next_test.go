@@ -35,10 +35,16 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 		expectResources bool
 	}{
 		{
-			name:            "clean state - no changes",
-			eventsContent:   `{"steps": []}`,
-			expectedStatus:  "clean",
-			expectResources: false,
+			name:           "empty steps array",
+			eventsContent:  `{"steps": []}`,
+			expectedStatus: "error",
+			expectedError:  "preview output contains no steps",
+		},
+		{
+			name:           "empty events array",
+			eventsContent:  `{"events": []}`,
+			expectedStatus: "error",
+			expectedError:  "preview output contains no events",
 		},
 		{
 			name: "update operation - drift detected",
@@ -325,12 +331,10 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 	require.NotNil(t, envProp, "Environment property not found")
 	assert.Equal(t, "dev", envProp.CurrentValue)
 	assert.Equal(t, "production", envProp.DesiredValue)
-	assert.Equal(t, "update", envProp.Kind)
 
 	require.NotNil(t, versioningProp, "Versioning property not found")
 	assert.Equal(t, false, versioningProp.CurrentValue)
 	assert.Equal(t, true, versioningProp.DesiredValue)
-	assert.Equal(t, "update", versioningProp.Kind)
 }
 
 // TestNextCommandFileNotFound tests error handling when events file doesn't exist
@@ -398,12 +402,10 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 	require.NotNil(t, envProp, "tags.Environment property not found")
 	assert.Equal(t, "dev", envProp.CurrentValue)
 	assert.Equal(t, "production", envProp.DesiredValue)
-	assert.Equal(t, "update", envProp.Kind)
 
 	require.NotNil(t, managedByProp, "tags.ManagedBy property not found")
-	assert.Equal(t, nil, managedByProp.CurrentValue)
+	assert.Nil(t, managedByProp.CurrentValue)
 	assert.Equal(t, "pulumi", managedByProp.DesiredValue)
-	assert.Equal(t, "add", managedByProp.Kind)
 }
 
 // TestNextCommandNDJSONMixedEvents tests that non-resourcePreEvent lines are properly skipped
@@ -437,7 +439,6 @@ func TestNextCommandNDJSONMixedEvents(t *testing.T) {
 	assert.Equal(t, "versioning.enabled", prop.Path)
 	assert.Equal(t, false, prop.CurrentValue)
 	assert.Equal(t, true, prop.DesiredValue)
-	assert.Equal(t, "update", prop.Kind)
 }
 
 // TestNextCommandNDJSONEmptyFile tests NDJSON with no resource events returns clean
@@ -598,7 +599,6 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 	assert.Equal(t, "versioning.enabled", prop.Path)
 	assert.Equal(t, true, prop.CurrentValue)
 	assert.Equal(t, false, prop.DesiredValue)
-	assert.Equal(t, "update", prop.Kind)
 }
 
 // TestNextCommandRealPulumiServiceNDJSON tests parsing of real NDJSON from pulumi-service
