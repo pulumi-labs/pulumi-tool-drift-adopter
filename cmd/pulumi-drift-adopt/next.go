@@ -40,7 +40,6 @@ The tool inverts the preview logic to tell you what to change in your code.`,
 		RunE: runNext,
 	}
 	cmd.Flags().String("stack", "", "Pulumi stack name (optional, uses current stack if not specified)")
-	cmd.Flags().String("project", ".", "Pulumi project directory (default: current directory)")
 	cmd.Flags().String("events-file", "", "Read preview events from file instead of running pulumi preview")
 	cmd.Flags().StringSlice("exclude-urns", nil, "URNs to exclude from output")
 	cmd.Flags().Bool("skip-refresh", false, "Skip --refresh flag on pulumi preview (use existing state)")
@@ -63,12 +62,15 @@ type ResourceChange struct {
 	Properties []PropertyChange `json:"properties,omitempty"`
 }
 
-// PropertyChange describes a property that needs to be changed
+// PropertyChange describes a property that needs to be changed.
+// The intent is conveyed by currentValue and desiredValue:
+//   - currentValue=X, desiredValue=Y → update property
+//   - currentValue=nil, desiredValue=Y → add property to code
+//   - currentValue=X, desiredValue=nil → remove property from code
 type PropertyChange struct {
 	Path         string      `json:"path"`
-	CurrentValue interface{} `json:"currentValue"` // What's in code now (RHS from preview)
-	DesiredValue interface{} `json:"desiredValue"` // What it should be (LHS from preview/state)
-	Kind         string      `json:"kind"`         // add, delete, update
+	CurrentValue interface{} `json:"currentValue,omitempty"` // What's in code now (RHS from preview)
+	DesiredValue interface{} `json:"desiredValue,omitempty"` // What it should be (LHS from preview/state)
 }
 
 func runNext(cmd *cobra.Command, _ []string) error {
@@ -148,26 +150,6 @@ func getActionForOperation(op string) string {
 	}
 }
 
-// invertPropertyKind inverts the property change kind from preview perspective to code change perspective
-func invertPropertyKind(previewKind string) string {
-	switch previewKind {
-	case "add":
-		// Preview wants to ADD to infrastructure = property in code but not in state
-		// Action: DELETE from code
-		return "delete"
-	case "delete":
-		// Preview wants to DELETE from infrastructure = property in state but not in code
-		// Action: ADD to code
-		return "add"
-	case "update", "update-replace":
-		// Update is symmetric - need to update code to match state
-		return "update"
-	default:
-		// Pass through other kinds unchanged
-		return previewKind
-	}
-}
-
 // extractResourceType extracts the resource type from old or new state
 func extractResourceType(step auto.PreviewStep) string {
 	if step.OldState != nil {
@@ -191,7 +173,7 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 	}
 
 	// For other operations, use DetailedDiff
-	for path, diff := range step.DetailedDiff {
+	for path := range step.DetailedDiff {
 		// Get actual values from old/new states
 		var currentValue, desiredValue interface{}
 
@@ -209,7 +191,6 @@ func extractPropertyChanges(step auto.PreviewStep) []PropertyChange {
 			Path:         path,
 			CurrentValue: currentValue,
 			DesiredValue: desiredValue,
-			Kind:         invertPropertyKind(diff.Kind),
 		})
 	}
 
@@ -228,12 +209,10 @@ func extractAllProperties(props map[string]interface{}, prefix string, propertie
 		if nestedMap, ok := value.(map[string]interface{}); ok {
 			extractAllProperties(nestedMap, path, properties)
 		} else {
-			// Leaf property - add it
+			// Leaf property - add it (currentValue=nil means it needs to be added to code)
 			*properties = append(*properties, PropertyChange{
 				Path:         path,
-				CurrentValue: nil,   // Not in code
-				DesiredValue: value, // From state
-				Kind:         "add", // Need to add to code
+				DesiredValue: value,
 			})
 		}
 	}
