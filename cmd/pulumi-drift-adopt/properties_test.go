@@ -32,22 +32,22 @@ func TestNextCommandActionMapping(t *testing.T) {
 		{
 			name:           "create -> delete_from_code",
 			operation:      "create",
-			expectedAction: "delete_from_code",
+			expectedAction: ActionDeleteFromCode,
 		},
 		{
 			name:           "delete -> add_to_code",
 			operation:      "delete",
-			expectedAction: "add_to_code",
+			expectedAction: ActionAddToCode,
 		},
 		{
 			name:           "update -> update_code",
 			operation:      "update",
-			expectedAction: "update_code",
+			expectedAction: ActionUpdateCode,
 		},
 		{
 			name:           "replace -> update_code",
 			operation:      "replace",
-			expectedAction: "update_code",
+			expectedAction: ActionUpdateCode,
 		},
 	}
 
@@ -71,7 +71,7 @@ func TestNextCommandActionMapping(t *testing.T) {
 
 			summary, full := runProcessTest(t, []byte(eventsContent))
 
-			assert.Equal(t, "changes_needed", summary.Status)
+			assert.Equal(t, StatusChangesNeeded, summary.Status)
 			require.NotEmpty(t, full.Resources)
 			assert.Equal(t, tt.expectedAction, full.Resources[0].Action)
 		})
@@ -139,11 +139,11 @@ func TestNextCommandPropertyChanges(t *testing.T) {
 
 	summary, full := runProcessTest(t, []byte(eventsContent))
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	resource := full.Resources[0]
-	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, ActionUpdateCode, resource.Action)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	assert.Equal(t, "my-bucket", resource.Name)
 
@@ -195,11 +195,11 @@ func TestNextCommandReplaceWithStandardJSON(t *testing.T) {
 
 	summary, full := runProcessTest(t, []byte(eventsContent))
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	resource := full.Resources[0]
-	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, ActionUpdateCode, resource.Action)
 	require.NotEmpty(t, resource.Properties, "Replace resource should have properties")
 
 	var lengthProp *PropertyChange
@@ -218,7 +218,7 @@ func TestNextCommandReplaceWithStandardJSON(t *testing.T) {
 func TestNextCommandReplaceWithNullDetailedDiff(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/standard_json_replace.json")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 3)
 
 	var replaceRes, updateRes, createRes *ResourceChange
@@ -235,7 +235,7 @@ func TestNextCommandReplaceWithNullDetailedDiff(t *testing.T) {
 
 	// Replace resource (tls-key-0) should have properties from replaceReasons
 	require.NotNil(t, replaceRes, "tls-key-0 not found")
-	assert.Equal(t, "update_code", replaceRes.Action)
+	assert.Equal(t, ActionUpdateCode, replaceRes.Action)
 	assert.Equal(t, "tls:index/privateKey:PrivateKey", replaceRes.Type)
 	require.NotEmpty(t, replaceRes.Properties, "Replace resource should have properties synthesized from replaceReasons")
 
@@ -268,12 +268,12 @@ func TestNextCommandReplaceWithNullDetailedDiff(t *testing.T) {
 
 	// Update resource (cmd-4) should still work with populated detailedDiff
 	require.NotNil(t, updateRes, "cmd-4 not found")
-	assert.Equal(t, "update_code", updateRes.Action)
+	assert.Equal(t, ActionUpdateCode, updateRes.Action)
 	require.NotEmpty(t, updateRes.Properties, "Update resource should have properties from detailedDiff")
 
 	// Create resource maps to delete_from_code
 	require.NotNil(t, createRes, "cmd-38 not found")
-	assert.Equal(t, "delete_from_code", createRes.Action)
+	assert.Equal(t, ActionDeleteFromCode, createRes.Action)
 }
 
 // TestNextCommandReplaceInputDiffOnly tests that replace ops with null detailedDiff produce
@@ -301,11 +301,11 @@ func TestNextCommandReplaceInputDiffOnly(t *testing.T) {
 
 	summary, full := runProcessTest(t, []byte(eventsContent))
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	resource := full.Resources[0]
-	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, ActionUpdateCode, resource.Action)
 
 	propertyPaths := make(map[string]bool)
 	for _, prop := range resource.Properties {
@@ -356,11 +356,11 @@ func TestNextCommandDeletePrefersInputs(t *testing.T) {
 
 	summary, full := runProcessTest(t, []byte(eventsContent))
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	res := full.Resources[0]
-	assert.Equal(t, "add_to_code", res.Action)
+	assert.Equal(t, ActionAddToCode, res.Action)
 
 	assert.NotNil(t, res.InputProperties, "should have InputProperties map")
 	assert.Nil(t, res.Properties, "should NOT have Properties array for add_to_code")
@@ -391,11 +391,11 @@ func TestNextCommandDeleteFallsBackToOutputs(t *testing.T) {
 
 	summary, full := runProcessTest(t, []byte(eventsContent))
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	res := full.Resources[0]
-	assert.Equal(t, "add_to_code", res.Action)
+	assert.Equal(t, ActionAddToCode, res.Action)
 	assert.NotNil(t, res.InputProperties, "should have InputProperties map from outputs fallback")
 	assert.Nil(t, res.Properties, "should NOT have Properties array for add_to_code")
 	assert.Len(t, res.InputProperties, 2, "should have 2 output properties as fallback")
@@ -436,15 +436,15 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 
 	summary, full := runProcessTest(t, []byte(eventsContent))
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 2)
 
 	var addResource, updateResource *ResourceChange
 	for i := range full.Resources {
 		switch full.Resources[i].Action {
-		case "add_to_code":
+		case ActionAddToCode:
 			addResource = &full.Resources[i]
-		case "update_code":
+		case ActionUpdateCode:
 			updateResource = &full.Resources[i]
 		}
 	}
@@ -468,11 +468,11 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 func TestNextCommandEngineEventsJSON(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/engine_events_update.json")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	resource := full.Resources[0]
-	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, ActionUpdateCode, resource.Action)
 	assert.Equal(t, "my-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	assert.NotEmpty(t, resource.Properties, "Expected property changes from engine events")
@@ -529,7 +529,7 @@ func TestCommandWithTriggersNotSkipped(t *testing.T) {
 	// resolve array indices, causing both currentValue and desiredValue to be nil.
 	summary, full := runProcessTestFile(t, "testdata/command_with_triggers.json")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 
 	// All 3 resources should be actionable (not skipped)
 	require.Len(t, full.Resources, 3)
@@ -543,7 +543,7 @@ func TestCommandWithTriggersNotSkipped(t *testing.T) {
 		}
 	}
 	require.NotNil(t, cacheCmd, "cache-cmd should be in resources, not skipped")
-	assert.Equal(t, "update_code", cacheCmd.Action)
+	assert.Equal(t, ActionUpdateCode, cacheCmd.Action)
 
 	// Should have properties for both environment.DRIFT and triggers[0]
 	paths := make(map[string]bool)
@@ -718,7 +718,7 @@ func TestAWSTagsAndSets_S3BucketProperties(t *testing.T) {
 		"testdata/aws_tags_and_sets.json",
 		"testdata/aws_tags_and_sets_state.json")
 
-	assert.Equal(t, "changes_needed", full.Status)
+	assert.Equal(t, StatusChangesNeeded, full.Status)
 
 	var bucket *ResourceChange
 	for i := range full.Resources {
@@ -727,7 +727,7 @@ func TestAWSTagsAndSets_S3BucketProperties(t *testing.T) {
 		}
 	}
 	require.NotNil(t, bucket, "test-bucket not found in resources")
-	assert.Equal(t, "update_code", bucket.Action)
+	assert.Equal(t, ActionUpdateCode, bucket.Action)
 	assert.Equal(t, "aws:s3/bucket:Bucket", bucket.Type)
 
 	props := make(map[string]PropertyChange)
@@ -817,7 +817,7 @@ func TestAWSCascadingDeps_KMSKeyProperties(t *testing.T) {
 		}
 	}
 	require.NotNil(t, kmsKey, "app-key not found")
-	assert.Equal(t, "update_code", kmsKey.Action)
+	assert.Equal(t, ActionUpdateCode, kmsKey.Action)
 
 	props := make(map[string]PropertyChange)
 	for _, p := range kmsKey.Properties {
@@ -896,7 +896,7 @@ func TestAWSTagsAndSets_SecurityGroupReplace(t *testing.T) {
 		}
 	}
 	require.NotNil(t, sg, "test-sg not found")
-	assert.Equal(t, "update_code", sg.Action)
+	assert.Equal(t, ActionUpdateCode, sg.Action)
 
 	props := make(map[string]PropertyChange)
 	for _, p := range sg.Properties {
@@ -1177,7 +1177,7 @@ func TestAWSTagsAndSets_IAMInlinePolicyArrayPath(t *testing.T) {
 		}
 	}
 	require.NotNil(t, role, "test-role not found")
-	assert.Equal(t, "update_code", role.Action)
+	assert.Equal(t, ActionUpdateCode, role.Action)
 
 	// Should have inlinePolicies[0].policy path
 	props := make(map[string]PropertyChange)
@@ -1374,16 +1374,16 @@ func TestAWSFullPipelineWithSchema(t *testing.T) {
 		t.Run(sc.name, func(t *testing.T) {
 			_, full := runAWSProcessTestWithSchema(t, sc.previewFile, sc.stateFile)
 
-			assert.Equal(t, "changes_needed", full.Status, "all scenarios should have changes")
+			assert.Equal(t, StatusChangesNeeded, full.Status, "all scenarios should have changes")
 			assert.NotEmpty(t, full.Resources, "should have at least one resource")
 
 			for _, res := range full.Resources {
 				// Every resource should have a valid action
-				assert.Contains(t, []string{"update_code", "add_to_code", "delete_from_code"}, res.Action,
+				assert.Contains(t, []string{ActionUpdateCode, ActionAddToCode, ActionDeleteFromCode}, res.Action,
 					"invalid action for %s", res.Name)
 
 				// update_code resources should have properties
-				if res.Action == "update_code" {
+				if res.Action == ActionUpdateCode {
 					assert.NotEmpty(t, res.Properties,
 						"%s: update_code should have properties", res.Name)
 				}

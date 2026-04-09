@@ -121,6 +121,21 @@ type PropertyChange struct {
 	DesiredValue interface{} `json:"desiredValue,omitempty"`
 }
 
+// Action constants for drift-adoption operations.
+const (
+	ActionAddToCode      = "add_to_code"
+	ActionDeleteFromCode = "delete_from_code"
+	ActionUpdateCode     = "update_code"
+)
+
+// Status constants for drift-adoption results.
+const (
+	StatusChangesNeeded   = "changes_needed"
+	StatusClean           = "clean"
+	StatusStopWithSkipped = "stop_with_skipped"
+	StatusError           = "error"
+)
+
 // maxStringValueLen is the maximum length of a string property value before truncation.
 // Values longer than this are replaced with a placeholder to keep output compact.
 const maxStringValueLen = 200
@@ -233,10 +248,10 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) [
 		}
 
 		switch action {
-		case "add_to_code":
+		case ActionAddToCode:
 			// For resources that need to be added, extract all input properties from state
 			res.InputProperties = extractInputProperties(*step, depMap)
-		case "remove_from_code":
+		case ActionDeleteFromCode:
 			// No properties needed for removal
 		default:
 			// For update/replace, extract changed properties with schema-based filtering
@@ -258,19 +273,19 @@ func getActionForOperation(op string) string {
 	case "delete":
 		// Preview wants to DELETE from infrastructure = resource exists in state but not in code
 		// Action: ADD resource to code
-		return "add_to_code"
+		return ActionAddToCode
 	case "create":
 		// Preview wants to CREATE in infrastructure = resource exists in code but not in state
 		// Action: REMOVE resource from code (or it's intentionally new)
-		return "delete_from_code"
+		return ActionDeleteFromCode
 	case "update":
 		// Preview wants to UPDATE infrastructure = code differs from state
 		// Action: UPDATE code to match state
-		return "update_code"
+		return ActionUpdateCode
 	case "replace":
 		// Preview wants to REPLACE infrastructure = code change requires replacement
 		// Action: UPDATE code to match state (replace implies update)
-		return "update_code"
+		return ActionUpdateCode
 	default:
 		// same, read, refresh, etc. — no code changes needed
 		return ""
@@ -292,10 +307,10 @@ func outputResult(resources []ResourceChange, excludeURNs []string, depMapFile, 
 		if excludeSet[res.URN] {
 			res.Reason = "excluded"
 			skipped = append(skipped, res)
-		} else if res.Action == "add_to_code" && len(res.InputProperties) == 0 {
+		} else if res.Action == ActionAddToCode && len(res.InputProperties) == 0 {
 			res.Reason = "missing_properties"
 			skipped = append(skipped, res)
-		} else if res.Action == "update_code" && len(res.Properties) == 0 {
+		} else if res.Action == ActionUpdateCode && len(res.Properties) == 0 {
 			res.Reason = "missing_properties"
 			skipped = append(skipped, res)
 		} else {
@@ -328,13 +343,13 @@ func outputResult(resources []ResourceChange, excludeURNs []string, depMapFile, 
 	}
 	switch {
 	case len(actionable) > 0:
-		result.Status = "changes_needed"
+		result.Status = StatusChangesNeeded
 		result.Summary = summary
 		result.Resources = actionable
 	case len(skipped) > 0:
-		result.Status = "stop_with_skipped"
+		result.Status = StatusStopWithSkipped
 	default:
-		result.Status = "clean"
+		result.Status = StatusClean
 	}
 	if len(skipped) > 0 {
 		result.Skipped = skipped
@@ -435,7 +450,7 @@ func depRefToDependsOn(ref DependencyRef) map[string]interface{} {
 
 func outputError(errMsg string) error {
 	output := NextSummaryOutput{
-		Status: "error",
+		Status: StatusError,
 		Error:  errMsg,
 	}
 	encoder := json.NewEncoder(os.Stdout)
