@@ -464,20 +464,6 @@ func TestNextCommandInputPropertiesFormat(t *testing.T) {
 	assert.Equal(t, "tags.Environment", updateResource.Properties[0].Path)
 }
 
-// TestNextCommandEngineEventsJSON tests the {"events": [...]} format end-to-end
-func TestNextCommandEngineEventsJSON(t *testing.T) {
-	summary, full := runProcessTestFile(t, "testdata/engine_events_update.json")
-
-	assert.Equal(t, StatusChangesNeeded, summary.Status)
-	require.Len(t, full.Resources, 1)
-
-	resource := full.Resources[0]
-	assert.Equal(t, ActionUpdateCode, resource.Action)
-	assert.Equal(t, "my-bucket", resource.Name)
-	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
-	assert.NotEmpty(t, resource.Properties, "Expected property changes from engine events")
-}
-
 func TestGetNestedPropertyArrayIndex(t *testing.T) {
 	props := map[string]interface{}{
 		"triggers": []interface{}{"val-0", "val-1", "val-2"},

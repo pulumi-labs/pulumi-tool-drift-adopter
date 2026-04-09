@@ -72,7 +72,7 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 					}
 				}]
 			}`,
-			expectedStatus:  "changes_needed",
+			expectedStatus:  StatusChangesNeeded,
 			expectResources: true,
 		},
 		{
@@ -90,7 +90,7 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 					"detailedDiff": {}
 				}]
 			}`,
-			expectedStatus:  "changes_needed",
+			expectedStatus:  StatusChangesNeeded,
 			expectResources: true,
 		},
 		{
@@ -113,7 +113,7 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 					"detailedDiff": {}
 				}]
 			}`,
-			expectedStatus:  "changes_needed",
+			expectedStatus:  StatusChangesNeeded,
 			expectResources: true,
 		},
 		{
@@ -131,7 +131,7 @@ func TestNextCommandWithEventsFile(t *testing.T) {
 					"detailedDiff": {}
 				}]
 			}`,
-			expectedStatus:  "changes_needed",
+			expectedStatus:  StatusChangesNeeded,
 			expectResources: true,
 		},
 	}
@@ -177,11 +177,11 @@ func TestNextCommandInvalidJSON(t *testing.T) {
 func TestNextCommandNDJSONRealFormat(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/ndjson_update.ndjson")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	resource := full.Resources[0]
-	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, ActionUpdateCode, resource.Action)
 	assert.Equal(t, "my-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	assert.Contains(t, resource.URN, "my-bucket")
@@ -211,11 +211,11 @@ func TestNextCommandNDJSONRealFormat(t *testing.T) {
 func TestNextCommandNDJSONMixedEvents(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/ndjson_with_diagnostics.ndjson")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	resource := full.Resources[0]
-	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, ActionUpdateCode, resource.Action)
 	assert.Equal(t, "test-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 
@@ -230,7 +230,7 @@ func TestNextCommandNDJSONMixedEvents(t *testing.T) {
 func TestNextCommandNDJSONEmptyFile(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/ndjson_empty.ndjson")
 
-	assert.Equal(t, "clean", summary.Status)
+	assert.Equal(t, StatusClean, summary.Status)
 	assert.Empty(t, full.Resources)
 }
 
@@ -238,12 +238,12 @@ func TestNextCommandNDJSONEmptyFile(t *testing.T) {
 func TestNextCommandNDJSONMultipleResources(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/ndjson_multiple_resources.ndjson")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	assert.Len(t, full.Resources, 3)
 
 	if len(full.Resources) > 0 {
 		resource := full.Resources[0]
-		assert.Equal(t, "update_code", resource.Action)
+		assert.Equal(t, ActionUpdateCode, resource.Action)
 		assert.Equal(t, "bucket-1", resource.Name)
 		assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	}
@@ -253,7 +253,7 @@ func TestNextCommandNDJSONMultipleResources(t *testing.T) {
 func TestNextCommandNDJSONCreateDelete(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/ndjson_create_delete.ndjson")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 2)
 
 	var createResource, deleteResource *ResourceChange
@@ -267,11 +267,11 @@ func TestNextCommandNDJSONCreateDelete(t *testing.T) {
 	}
 
 	require.NotNil(t, createResource, "extra-bucket not found")
-	assert.Equal(t, "delete_from_code", createResource.Action)
+	assert.Equal(t, ActionDeleteFromCode, createResource.Action)
 	assert.Equal(t, "aws:s3/bucket:Bucket", createResource.Type)
 
 	require.NotNil(t, deleteResource, "missing-bucket not found")
-	assert.Equal(t, "add_to_code", deleteResource.Action)
+	assert.Equal(t, ActionAddToCode, deleteResource.Action)
 	assert.Equal(t, "aws:s3/bucket:Bucket", deleteResource.Type)
 }
 
@@ -279,7 +279,7 @@ func TestNextCommandNDJSONCreateDelete(t *testing.T) {
 func TestNextCommandNDJSONReplace(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/ndjson_replace.ndjson")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 2)
 
 	// Find resources by name
@@ -295,7 +295,7 @@ func TestNextCommandNDJSONReplace(t *testing.T) {
 
 	// Verify RandomString replace has properties from Diffs
 	require.NotNil(t, randomString, "RandomString resource not found")
-	assert.Equal(t, "update_code", randomString.Action)
+	assert.Equal(t, ActionUpdateCode, randomString.Action)
 	assert.Equal(t, "random:index/randomString:RandomString", randomString.Type)
 	require.NotEmpty(t, randomString.Properties, "RandomString should have properties extracted from Diffs")
 
@@ -313,7 +313,7 @@ func TestNextCommandNDJSONReplace(t *testing.T) {
 
 	// Verify PrivateKey replace has properties from Diffs
 	require.NotNil(t, privateKey, "PrivateKey resource not found")
-	assert.Equal(t, "update_code", privateKey.Action)
+	assert.Equal(t, ActionUpdateCode, privateKey.Action)
 	assert.Equal(t, "tls:index/privateKey:PrivateKey", privateKey.Type)
 	require.NotEmpty(t, privateKey.Properties, "PrivateKey should have properties extracted from Diffs")
 
@@ -334,11 +334,11 @@ func TestNextCommandNDJSONReplace(t *testing.T) {
 func TestNextCommandEngineEventsJSON(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/engine_events_update.json")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	resource := full.Resources[0]
-	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, ActionUpdateCode, resource.Action)
 	assert.Equal(t, "my-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 	assert.Contains(t, resource.URN, "my-bucket")
@@ -370,7 +370,7 @@ func TestNextCommandEngineEventsJSON(t *testing.T) {
 func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/simple-s3-drift.ndjson")
 
-	assert.Equal(t, "changes_needed", summary.Status, "Expected drift to be detected")
+	assert.Equal(t, StatusChangesNeeded, summary.Status, "Expected drift to be detected")
 	require.NotEmpty(t, full.Resources, "Expected at least one resource with drift")
 
 	var bucketResource *ResourceChange
@@ -382,7 +382,7 @@ func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
 	}
 
 	require.NotNil(t, bucketResource, "Expected to find S3 bucket resource")
-	assert.Equal(t, "update_code", bucketResource.Action)
+	assert.Equal(t, ActionUpdateCode, bucketResource.Action)
 	assert.Equal(t, "test-bucket", bucketResource.Name)
 	assert.Contains(t, bucketResource.URN, "aws:s3/bucket:Bucket")
 
@@ -402,7 +402,7 @@ func TestNextCommandRealPulumiServiceNDJSON(t *testing.T) {
 func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/small_scale_10_replace.json")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 5, "Expected 5 drifted resources")
 
 	resourceMap := make(map[string]*ResourceChange)
@@ -410,14 +410,14 @@ func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 		resourceMap[full.Resources[i].Name] = &full.Resources[i]
 	}
 
-	assert.Equal(t, "delete_from_code", resourceMap["cmd-3"].Action, "create -> delete_from_code")
-	assert.Equal(t, "add_to_code", resourceMap["random-str-extra-0"].Action, "delete -> add_to_code")
-	assert.Equal(t, "update_code", resourceMap["cmd-0"].Action, "update -> update_code")
-	assert.Equal(t, "update_code", resourceMap["random-str-0"].Action, "replace -> update_code")
-	assert.Equal(t, "update_code", resourceMap["tls-key-0"].Action, "replace -> update_code")
+	assert.Equal(t, ActionDeleteFromCode, resourceMap["cmd-3"].Action, "create -> delete_from_code")
+	assert.Equal(t, ActionAddToCode, resourceMap["random-str-extra-0"].Action, "delete -> add_to_code")
+	assert.Equal(t, ActionUpdateCode, resourceMap["cmd-0"].Action, "update -> update_code")
+	assert.Equal(t, ActionUpdateCode, resourceMap["random-str-0"].Action, "replace -> update_code")
+	assert.Equal(t, ActionUpdateCode, resourceMap["tls-key-0"].Action, "replace -> update_code")
 
 	for _, res := range full.Resources {
-		if res.Action == "update_code" {
+		if res.Action == ActionUpdateCode {
 			require.NotEmpty(t, res.Properties,
 				"Resource %s (%s) with action update_code must have non-empty Properties", res.Name, res.Type)
 		}
@@ -466,7 +466,7 @@ func TestNextCommandSmallScaleRealPreview(t *testing.T) {
 func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
 	summary, full := runProcessTestFile(t, "testdata/small_scale_10_deployments.json")
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 5, "Expected 5 drifted resources")
 
 	resourceMap := make(map[string]*ResourceChange)
@@ -474,14 +474,14 @@ func TestNextCommandSmallScaleDeploymentsPreview(t *testing.T) {
 		resourceMap[full.Resources[i].Name] = &full.Resources[i]
 	}
 
-	assert.Equal(t, "delete_from_code", resourceMap["cmd-3"].Action, "create -> delete_from_code")
-	assert.Equal(t, "add_to_code", resourceMap["random-str-extra-0"].Action, "delete -> add_to_code")
-	assert.Equal(t, "update_code", resourceMap["cmd-0"].Action, "update -> update_code")
-	assert.Equal(t, "update_code", resourceMap["random-str-0"].Action, "replace -> update_code")
-	assert.Equal(t, "update_code", resourceMap["tls-key-0"].Action, "replace -> update_code")
+	assert.Equal(t, ActionDeleteFromCode, resourceMap["cmd-3"].Action, "create -> delete_from_code")
+	assert.Equal(t, ActionAddToCode, resourceMap["random-str-extra-0"].Action, "delete -> add_to_code")
+	assert.Equal(t, ActionUpdateCode, resourceMap["cmd-0"].Action, "update -> update_code")
+	assert.Equal(t, ActionUpdateCode, resourceMap["random-str-0"].Action, "replace -> update_code")
+	assert.Equal(t, ActionUpdateCode, resourceMap["tls-key-0"].Action, "replace -> update_code")
 
 	for _, res := range full.Resources {
-		if res.Action == "update_code" {
+		if res.Action == ActionUpdateCode {
 			require.NotEmpty(t, res.Properties,
 				"Resource %s (%s) with action update_code must have non-empty Properties", res.Name, res.Type)
 		}
@@ -549,11 +549,11 @@ func TestNextCommandBackwardCompatibility(t *testing.T) {
 
 	summary, full := runProcessTest(t, []byte(eventsContent))
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	require.Len(t, full.Resources, 1)
 
 	resource := full.Resources[0]
-	assert.Equal(t, "update_code", resource.Action)
+	assert.Equal(t, ActionUpdateCode, resource.Action)
 	assert.Equal(t, "legacy-bucket", resource.Name)
 	assert.Equal(t, "aws:s3/bucket:Bucket", resource.Type)
 
@@ -584,6 +584,6 @@ func TestNextCommandFileNotFound(t *testing.T) {
 	err = json.Unmarshal(output, &result)
 	require.NoError(t, err)
 
-	assert.Equal(t, "error", result.Status)
+	assert.Equal(t, StatusError, result.Status)
 	assert.Contains(t, result.Error, "failed to read events file")
 }
