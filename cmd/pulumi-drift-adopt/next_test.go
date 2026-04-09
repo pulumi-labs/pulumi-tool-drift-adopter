@@ -79,6 +79,46 @@ func runProcessTestFile(t *testing.T, path string) (NextSummaryOutput, NextOutpu
 	return runProcessTest(t, data)
 }
 
+// runNextTest executes the next command with the given args and returns both the
+// stdout summary and the full output parsed from the output file.
+// It automatically adds --output-file pointing to a temp file in the test's temp dir.
+func runNextTest(t *testing.T, args []string) (NextSummaryOutput, NextOutput) {
+	t.Helper()
+	tmpDir := t.TempDir()
+	outputFile := filepath.Join(tmpDir, "output.json")
+	args = append(args, "--output-file", outputFile)
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd := newRootCmd()
+	cmd.SetArgs(args)
+	_ = cmd.Execute()
+
+	_ = w.Close()
+	os.Stdout = oldStdout
+	stdoutBytes, err := io.ReadAll(r)
+	require.NoError(t, err, "Failed to read captured stdout")
+
+	// Parse stdout as NextSummaryOutput
+	var summary NextSummaryOutput
+	err = json.Unmarshal(stdoutBytes, &summary)
+	require.NoError(t, err, "Failed to parse stdout as NextSummaryOutput: %s", string(stdoutBytes))
+
+	// Parse output file as NextOutput (may not exist for errors)
+	var full NextOutput
+	if summary.OutputFile != "" {
+		data, err := os.ReadFile(summary.OutputFile)
+		require.NoError(t, err, "Failed to read output file: %s", summary.OutputFile)
+		err = json.Unmarshal(data, &full)
+		require.NoError(t, err, "Failed to parse output file: %s", string(data))
+	}
+
+	return summary, full
+}
+
 // loadInputProperties loads testdata/aws_input_properties.json for use in tests.
 func loadInputProperties(t *testing.T) map[string][]string {
 	t.Helper()
