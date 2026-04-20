@@ -1,0 +1,893 @@
+{
+  "steps": [
+    {
+      "op": "same",
+      "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+      "oldState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "custom": false,
+        "type": "pulumi:pulumi:Stack",
+        "outputs": {
+          "bucketArn": "arn:aws:s3:::drift-adopter-testdata-tags",
+          "bucketName": "drift-adopter-testdata-tags",
+          "roleArn": "arn:aws:iam::616138583583:role/drift-adopter-test-role",
+          "sgArn": "arn:aws:ec2:us-west-2:616138583583:security-group/sg-01a3ce9f40c900a14",
+          "sgId": "sg-01a3ce9f40c900a14",
+          "vpcId": "vpc-0c3746ba6421a6e21"
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#37,19",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#37,19"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#603,38"
+          }
+        ]
+      },
+      "newState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "custom": false,
+        "type": "pulumi:pulumi:Stack",
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#37,19",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#37,19"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#603,38"
+          }
+        ]
+      },
+      "detailedDiff": null
+    },
+    {
+      "op": "update",
+      "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucket:Bucket::test-bucket",
+      "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+      "oldState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucket:Bucket::test-bucket",
+        "custom": true,
+        "id": "drift-adopter-testdata-tags",
+        "type": "aws:s3/bucket:Bucket",
+        "inputs": {
+          "__defaults": [
+            "acl"
+          ],
+          "acl": "private",
+          "bucket": "drift-adopter-testdata-tags",
+          "forceDestroy": true,
+          "tags": {
+            "Environment": "staging",
+            "Owner": "team-b",
+            "Project": "drift-adopter-tests",
+            "Team": "platform"
+          },
+          "tagsAll": {
+            "Environment": "staging",
+            "Owner": "team-b",
+            "Project": "drift-adopter-tests",
+            "Team": "platform"
+          }
+        },
+        "outputs": {
+          "accelerationStatus": "",
+          "acl": "private",
+          "arn": "arn:aws:s3:::drift-adopter-testdata-tags",
+          "bucket": "drift-adopter-testdata-tags",
+          "bucketDomainName": "drift-adopter-testdata-tags.s3.amazonaws.com",
+          "bucketPrefix": null,
+          "bucketRegionalDomainName": "drift-adopter-testdata-tags.s3.us-west-2.amazonaws.com",
+          "corsRules": [],
+          "forceDestroy": true,
+          "grants": [],
+          "hostedZoneId": "Z3BJ6K6RIION7M",
+          "id": "drift-adopter-testdata-tags",
+          "lifecycleRules": [],
+          "loggings": [],
+          "objectLockConfiguration": null,
+          "policy": null,
+          "region": "us-west-2",
+          "replicationConfiguration": null,
+          "requestPayer": "BucketOwner",
+          "serverSideEncryptionConfiguration": {
+            "rule": {
+              "applyServerSideEncryptionByDefault": {
+                "kmsMasterKeyId": "",
+                "sseAlgorithm": "AES256"
+              },
+              "bucketKeyEnabled": false
+            }
+          },
+          "tags": {
+            "Environment": "staging",
+            "Owner": "team-b",
+            "Project": "drift-adopter-tests",
+            "Team": "platform"
+          },
+          "tagsAll": {
+            "Environment": "staging",
+            "Owner": "team-b",
+            "Project": "drift-adopter-tests",
+            "Team": "platform"
+          },
+          "versioning": {
+            "enabled": true,
+            "mfaDelete": false
+          },
+          "website": null,
+          "websiteDomain": null,
+          "websiteEndpoint": null
+        },
+        "parent": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+        "propertyDependencies": {
+          "bucket": [],
+          "forceDestroy": [],
+          "tags": []
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#13,16",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#13,16"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "newState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucket:Bucket::test-bucket",
+        "custom": true,
+        "type": "aws:s3/bucket:Bucket",
+        "inputs": {
+          "__defaults": [
+            "acl"
+          ],
+          "acl": "private",
+          "bucket": "drift-adopter-testdata-tags",
+          "forceDestroy": true,
+          "tags": {
+            "CostCenter": "cc-100",
+            "Environment": "production",
+            "Owner": "team-a",
+            "Project": "drift-adopter-tests"
+          },
+          "tagsAll": {
+            "CostCenter": "cc-100",
+            "Environment": "production",
+            "Owner": "team-a",
+            "Project": "drift-adopter-tests"
+          }
+        },
+        "parent": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+        "propertyDependencies": {
+          "bucket": [],
+          "forceDestroy": [],
+          "tags": []
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#8,16",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#8,16"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "diffReasons": [
+        "tags",
+        "tagsAll"
+      ],
+      "detailedDiff": {
+        "tags.CostCenter": {
+          "kind": "add",
+          "inputDiff": false
+        },
+        "tags.Environment": {
+          "kind": "update",
+          "inputDiff": false
+        },
+        "tags.Owner": {
+          "kind": "update",
+          "inputDiff": false
+        },
+        "tags.Team": {
+          "kind": "delete",
+          "inputDiff": false
+        },
+        "tagsAll.CostCenter": {
+          "kind": "add",
+          "inputDiff": false
+        },
+        "tagsAll.Environment": {
+          "kind": "update",
+          "inputDiff": false
+        },
+        "tagsAll.Owner": {
+          "kind": "update",
+          "inputDiff": false
+        },
+        "tagsAll.Team": {
+          "kind": "delete",
+          "inputDiff": false
+        }
+      }
+    },
+    {
+      "op": "update",
+      "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:iam/role:Role::test-role",
+      "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+      "oldState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:iam/role:Role::test-role",
+        "custom": true,
+        "id": "drift-adopter-test-role",
+        "type": "aws:iam/role:Role",
+        "inputs": {
+          "__defaults": [
+            "forceDetachPolicies",
+            "maxSessionDuration",
+            "path"
+          ],
+          "assumeRolePolicy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":\"sts:AssumeRole\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}]}",
+          "forceDetachPolicies": false,
+          "inlinePolicies": [
+            {
+              "__defaults": [],
+              "name": "log-access",
+              "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"logs:CreateLogGroup\",\"logs:CreateLogStream\",\"logs:PutLogEvents\",\"logs:DescribeLogGroups\",\"logs:DescribeLogStreams\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:logs:*:*:*\"}]}"
+            }
+          ],
+          "maxSessionDuration": 3600,
+          "name": "drift-adopter-test-role",
+          "path": "/",
+          "tags": {
+            "Purpose": "drift-testing"
+          },
+          "tagsAll": {
+            "Purpose": "drift-testing"
+          }
+        },
+        "outputs": {
+          "arn": "arn:aws:iam::616138583583:role/drift-adopter-test-role",
+          "assumeRolePolicy": "{\"Statement\":[{\"Action\":\"sts:AssumeRole\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}],\"Version\":\"2012-10-17\"}",
+          "createDate": "2026-03-28T17:50:15Z",
+          "description": "",
+          "forceDetachPolicies": false,
+          "id": "drift-adopter-test-role",
+          "inlinePolicies": [
+            {
+              "name": "log-access",
+              "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"logs:CreateLogGroup\",\"logs:CreateLogStream\",\"logs:PutLogEvents\",\"logs:DescribeLogGroups\",\"logs:DescribeLogStreams\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:logs:*:*:*\"}]}"
+            }
+          ],
+          "managedPolicyArns": [],
+          "maxSessionDuration": 3600,
+          "name": "drift-adopter-test-role",
+          "namePrefix": "",
+          "path": "/",
+          "permissionsBoundary": "",
+          "tags": {
+            "Purpose": "drift-testing"
+          },
+          "tagsAll": {
+            "Purpose": "drift-testing"
+          },
+          "uniqueId": "AROAY65FYVYPVB3XPL2RH"
+        },
+        "parent": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+        "propertyDependencies": {
+          "assumeRolePolicy": [],
+          "inlinePolicies": [],
+          "name": [],
+          "tags": []
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#76,14",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#76,14"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "newState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:iam/role:Role::test-role",
+        "custom": true,
+        "type": "aws:iam/role:Role",
+        "inputs": {
+          "__defaults": [
+            "forceDetachPolicies",
+            "maxSessionDuration",
+            "path"
+          ],
+          "assumeRolePolicy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":\"sts:AssumeRole\",\"Effect\":\"Allow\",\"Principal\":{\"Service\":\"lambda.amazonaws.com\"}}]}",
+          "forceDetachPolicies": false,
+          "inlinePolicies": [
+            {
+              "__defaults": [],
+              "name": "log-access",
+              "policy": "{\"Version\":\"2012-10-17\",\"Statement\":[{\"Action\":[\"logs:CreateLogGroup\",\"logs:CreateLogStream\",\"logs:PutLogEvents\"],\"Effect\":\"Allow\",\"Resource\":\"arn:aws:logs:*:*:*\"}]}"
+            }
+          ],
+          "maxSessionDuration": 3600,
+          "name": "drift-adopter-test-role",
+          "path": "/",
+          "tags": {
+            "Purpose": "drift-testing"
+          },
+          "tagsAll": {
+            "Purpose": "drift-testing"
+          }
+        },
+        "parent": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+        "propertyDependencies": {
+          "assumeRolePolicy": [],
+          "inlinePolicies": [],
+          "name": [],
+          "tags": []
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#69,14",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#69,14"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "diffReasons": [
+        "inlinePolicies"
+      ],
+      "detailedDiff": {
+        "inlinePolicies[0].policy": {
+          "kind": "update",
+          "inputDiff": false
+        }
+      }
+    },
+    {
+      "op": "replace",
+      "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:ec2/securityGroup:SecurityGroup::test-sg",
+      "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+      "oldState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:ec2/securityGroup:SecurityGroup::test-sg",
+        "custom": true,
+        "id": "sg-01a3ce9f40c900a14",
+        "type": "aws:ec2/securityGroup:SecurityGroup",
+        "inputs": {
+          "__defaults": [
+            "revokeRulesOnDelete"
+          ],
+          "description": "Updated security group for testing",
+          "egress": [
+            {
+              "__defaults": [
+                "self"
+              ],
+              "cidrBlocks": [
+                "0.0.0.0/0"
+              ],
+              "fromPort": 0,
+              "protocol": "-1",
+              "self": false,
+              "toPort": 0
+            }
+          ],
+          "ingress": [
+            {
+              "__defaults": [
+                "self"
+              ],
+              "cidrBlocks": [
+                "0.0.0.0/0"
+              ],
+              "description": "HTTPS from anywhere",
+              "fromPort": 443,
+              "protocol": "tcp",
+              "self": false,
+              "toPort": 443
+            },
+            {
+              "__defaults": [
+                "self"
+              ],
+              "cidrBlocks": [
+                "10.0.0.0/8"
+              ],
+              "description": "Custom app port",
+              "fromPort": 8080,
+              "protocol": "tcp",
+              "self": false,
+              "toPort": 8080
+            }
+          ],
+          "name": "drift-adopter-test-sg",
+          "revokeRulesOnDelete": false,
+          "tags": {
+            "Name": "drift-adopter-test-sg"
+          },
+          "tagsAll": {
+            "Name": "drift-adopter-test-sg"
+          },
+          "vpcId": "vpc-0c3746ba6421a6e21"
+        },
+        "outputs": {
+          "__meta": "{\"e2bfb730-ecaa-11e6-8f88-34363bc7c4c0\":{\"create\":600000000000,\"delete\":900000000000},\"schema_version\":\"1\"}",
+          "arn": "arn:aws:ec2:us-west-2:616138583583:security-group/sg-01a3ce9f40c900a14",
+          "description": "Updated security group for testing",
+          "egress": [
+            {
+              "cidrBlocks": [
+                "0.0.0.0/0"
+              ],
+              "description": "",
+              "fromPort": 0,
+              "ipv6CidrBlocks": [],
+              "prefixListIds": [],
+              "protocol": "-1",
+              "securityGroups": [],
+              "self": false,
+              "toPort": 0
+            }
+          ],
+          "id": "sg-01a3ce9f40c900a14",
+          "ingress": [
+            {
+              "cidrBlocks": [
+                "0.0.0.0/0"
+              ],
+              "description": "HTTPS from anywhere",
+              "fromPort": 443,
+              "ipv6CidrBlocks": [],
+              "prefixListIds": [],
+              "protocol": "tcp",
+              "securityGroups": [],
+              "self": false,
+              "toPort": 443
+            },
+            {
+              "cidrBlocks": [
+                "10.0.0.0/8"
+              ],
+              "description": "Custom app port",
+              "fromPort": 8080,
+              "ipv6CidrBlocks": [],
+              "prefixListIds": [],
+              "protocol": "tcp",
+              "securityGroups": [],
+              "self": false,
+              "toPort": 8080
+            }
+          ],
+          "name": "drift-adopter-test-sg",
+          "namePrefix": "",
+          "ownerId": "616138583583",
+          "revokeRulesOnDelete": false,
+          "tags": {
+            "Name": "drift-adopter-test-sg"
+          },
+          "tagsAll": {
+            "Name": "drift-adopter-test-sg"
+          },
+          "vpcId": "vpc-0c3746ba6421a6e21"
+        },
+        "parent": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "dependencies": [
+          "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:ec2/vpc:Vpc::test-vpc"
+        ],
+        "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+        "propertyDependencies": {
+          "description": [],
+          "egress": [],
+          "ingress": [],
+          "name": [],
+          "tags": [],
+          "vpcId": [
+            "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:ec2/vpc:Vpc::test-vpc"
+          ]
+        },
+        "pendingReplacement": true,
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#41,12",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#41,12"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "newState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:ec2/securityGroup:SecurityGroup::test-sg",
+        "custom": true,
+        "type": "aws:ec2/securityGroup:SecurityGroup",
+        "inputs": {
+          "__defaults": [
+            "revokeRulesOnDelete"
+          ],
+          "description": "Security group for drift-adopter testing",
+          "egress": [
+            {
+              "__defaults": [
+                "self"
+              ],
+              "cidrBlocks": [
+                "0.0.0.0/0"
+              ],
+              "fromPort": 0,
+              "protocol": "-1",
+              "self": false,
+              "toPort": 0
+            }
+          ],
+          "ingress": [
+            {
+              "__defaults": [
+                "self"
+              ],
+              "cidrBlocks": [
+                "10.0.0.0/8"
+              ],
+              "description": "HTTP from internal",
+              "fromPort": 80,
+              "protocol": "tcp",
+              "self": false,
+              "toPort": 80
+            },
+            {
+              "__defaults": [
+                "self"
+              ],
+              "cidrBlocks": [
+                "0.0.0.0/0"
+              ],
+              "description": "HTTPS from anywhere",
+              "fromPort": 443,
+              "protocol": "tcp",
+              "self": false,
+              "toPort": 443
+            }
+          ],
+          "name": "drift-adopter-test-sg",
+          "revokeRulesOnDelete": false,
+          "tags": {
+            "Name": "drift-adopter-test-sg"
+          },
+          "tagsAll": {
+            "Name": "drift-adopter-test-sg"
+          },
+          "vpcId": "vpc-0c3746ba6421a6e21"
+        },
+        "parent": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "dependencies": [
+          "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:ec2/vpc:Vpc::test-vpc"
+        ],
+        "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+        "propertyDependencies": {
+          "description": [],
+          "egress": [],
+          "ingress": [],
+          "name": [],
+          "tags": [],
+          "vpcId": [
+            "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:ec2/vpc:Vpc::test-vpc"
+          ]
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#35,12",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#35,12"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "diffReasons": [
+        "description",
+        "ingress"
+      ],
+      "replaceReasons": [
+        "description"
+      ],
+      "detailedDiff": {
+        "description": {
+          "kind": "update-replace",
+          "inputDiff": false
+        },
+        "ingress[0]": {
+          "kind": "add",
+          "inputDiff": false
+        },
+        "ingress[1]": {
+          "kind": "delete",
+          "inputDiff": false
+        }
+      }
+    },
+    {
+      "op": "update",
+      "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucketVersioningV2:BucketVersioningV2::test-bucket-versioning",
+      "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+      "oldState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucketVersioningV2:BucketVersioningV2::test-bucket-versioning",
+        "custom": true,
+        "id": "drift-adopter-testdata-tags",
+        "type": "aws:s3/bucketVersioningV2:BucketVersioningV2",
+        "inputs": {
+          "__defaults": [],
+          "bucket": "drift-adopter-testdata-tags",
+          "versioningConfiguration": {
+            "__defaults": [],
+            "status": "Suspended"
+          }
+        },
+        "outputs": {
+          "bucket": "drift-adopter-testdata-tags",
+          "expectedBucketOwner": "",
+          "id": "drift-adopter-testdata-tags",
+          "mfa": null,
+          "versioningConfiguration": {
+            "mfaDelete": "",
+            "status": "Suspended"
+          }
+        },
+        "parent": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "dependencies": [
+          "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucket:Bucket::test-bucket"
+        ],
+        "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+        "propertyDependencies": {
+          "bucket": [
+            "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucket:Bucket::test-bucket"
+          ],
+          "versioningConfiguration": []
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#26,26",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#26,26"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "newState": {
+        "urn": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucketVersioningV2:BucketVersioningV2::test-bucket-versioning",
+        "custom": true,
+        "type": "aws:s3/bucketVersioningV2:BucketVersioningV2",
+        "inputs": {
+          "__defaults": [],
+          "bucket": "drift-adopter-testdata-tags",
+          "versioningConfiguration": {
+            "__defaults": [],
+            "status": "Enabled"
+          }
+        },
+        "parent": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:pulumi:Stack::aws-tags-and-sets-test-b5f8ac54",
+        "dependencies": [
+          "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucket:Bucket::test-bucket"
+        ],
+        "provider": "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::pulumi:providers:aws::default_6_83_2::23fd4d4d-b18f-4389-9d10-db245f357c5e",
+        "propertyDependencies": {
+          "bucket": [
+            "urn:pulumi:test-b5f8ac54::aws-tags-and-sets::aws:s3/bucket:Bucket::test-bucket"
+          ],
+          "versioningConfiguration": []
+        },
+        "created": "0001-01-01T00:00:00Z",
+        "modified": "0001-01-01T00:00:00Z",
+        "sourcePosition": "project:///index.ts#20,26",
+        "stackTrace": [
+          {
+            "sourcePosition": "project:///index.ts#20,26"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3009,23"
+          },
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/pulumi/vendor/ts-node@7.0.1/index.js#3011,12"
+          },
+          {},
+          {},
+          {},
+          {},
+          {},
+          {},
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/cmd/run/run.ts#543,33"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/runtime/stack.ts#78,28"
+          },
+          {
+            "sourcePosition": "project:///node_modules/@pulumi/resource.ts#1579,22"
+          }
+        ]
+      },
+      "diffReasons": [
+        "versioningConfiguration"
+      ],
+      "detailedDiff": {
+        "versioningConfiguration.status": {
+          "kind": "update",
+          "inputDiff": false
+        }
+      }
+    }
+  ],
+  "duration": 2232928625,
+  "changeSummary": {
+    "replace": 1,
+    "same": 2,
+    "update": 3
+  }
+}
