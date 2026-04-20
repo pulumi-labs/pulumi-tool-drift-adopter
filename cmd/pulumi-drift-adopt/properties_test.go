@@ -1398,5 +1398,46 @@ func TestAWSFullPipelineWithSchema(t *testing.T) {
 	}
 }
 
-// TestAWSCascadingDeps_DependencyMapFromState is deferred to PR 4 (dependencies.go)
-// where buildDepMapFromState is fully implemented.
+// TestAWSCascadingDeps_DependencyMapFromState verifies that the dep map built from
+// the real state export correctly resolves cross-resource dependencies.
+func TestAWSCascadingDeps_DependencyMapFromState(t *testing.T) {
+	stateData, err := os.ReadFile("testdata/aws_cascading_deps_state.json")
+	require.NoError(t, err)
+
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+
+	depMap := buildDepMapFromState(stateLookup)
+
+	// Find Lambda URN — its role should reference lambda-role
+	var lambdaURN string
+	for urn, res := range stateLookup {
+		if string(res.Type) == "aws:lambda/function:Function" {
+			lambdaURN = urn
+		}
+	}
+	require.NotEmpty(t, lambdaURN, "Lambda URN not found in state")
+
+	lambdaDeps := depMap[lambdaURN]
+	require.NotNil(t, lambdaDeps, "Lambda should have dependency entries")
+
+	if roleRef, ok := lambdaDeps["role"]; ok {
+		assert.Equal(t, "lambda-role", roleRef.ResourceName)
+		assert.Equal(t, "aws:iam/role:Role", roleRef.ResourceType)
+	}
+
+	// SSM parameter keyId should depend on KMS key
+	for urn, res := range stateLookup {
+		if string(res.Type) != "aws:ssm/parameter:Parameter" {
+			continue
+		}
+		ssmDeps := depMap[urn]
+		if ssmDeps == nil {
+			continue
+		}
+		if keyRef, ok := ssmDeps["keyId"]; ok {
+			assert.Equal(t, "app-key", keyRef.ResourceName)
+			assert.Equal(t, "aws:kms/key:Key", keyRef.ResourceType)
+		}
+	}
+}

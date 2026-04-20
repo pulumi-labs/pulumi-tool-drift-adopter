@@ -1,0 +1,74 @@
+{
+  "version": 3,
+  "deployment": {
+    "manifest": {"time": "2026-01-01T00:00:00Z", "magic": "test", "version": "v3.0.0"},
+    "resources": [
+      {
+        "urn": "urn:pulumi:dev::test::pulumi:pulumi:Stack::test-dev",
+        "type": "pulumi:pulumi:Stack",
+        "inputs": {},
+        "outputs": {}
+      },
+      {
+        "urn": "urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ca-key",
+        "type": "tls:index/privateKey:PrivateKey",
+        "inputs": {"algorithm": "RSA", "rsaBits": 4096},
+        "outputs": {
+          "algorithm": "RSA",
+          "rsaBits": 4096,
+          "privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n",
+          "privateKeyPemPkcs8": "-----BEGIN PRIVATE KEY-----\nfake-ca-key-pkcs8\n-----END PRIVATE KEY-----\n",
+          "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nfake-ca-pub\n-----END PUBLIC KEY-----\n"
+        }
+      },
+      {
+        "urn": "urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert",
+        "type": "tls:index/selfSignedCert:SelfSignedCert",
+        "inputs": {
+          "privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n",
+          "validityPeriodHours": 87600,
+          "allowedUses": ["cert_signing", "crl_signing"],
+          "isCaCertificate": true
+        },
+        "outputs": {
+          "certPem": "-----BEGIN CERTIFICATE-----\nfake-ca-cert\n-----END CERTIFICATE-----\n",
+          "privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n",
+          "validityPeriodHours": 87600
+        },
+        "propertyDependencies": {
+          "privateKeyPem": ["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ca-key"]
+        }
+      },
+      {
+        "urn": "urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::server-key",
+        "type": "tls:index/privateKey:PrivateKey",
+        "inputs": {"algorithm": "RSA", "rsaBits": 2048},
+        "outputs": {
+          "algorithm": "RSA",
+          "rsaBits": 2048,
+          "privateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-server-key\n-----END RSA PRIVATE KEY-----\n"
+        }
+      },
+      {
+        "urn": "urn:pulumi:dev::test::tls:index/locallySignedCert:LocallySignedCert::server-cert",
+        "type": "tls:index/locallySignedCert:LocallySignedCert",
+        "inputs": {
+          "caPrivateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n",
+          "caCertPem": "-----BEGIN CERTIFICATE-----\nfake-ca-cert\n-----END CERTIFICATE-----\n",
+          "certRequestPem": "-----BEGIN CERTIFICATE REQUEST-----\nfake-csr\n-----END CERTIFICATE REQUEST-----\n",
+          "validityPeriodHours": 8760
+        },
+        "outputs": {
+          "certPem": "-----BEGIN CERTIFICATE-----\nfake-server-cert\n-----END CERTIFICATE-----\n",
+          "caPrivateKeyPem": "-----BEGIN RSA PRIVATE KEY-----\nfake-ca-key\n-----END RSA PRIVATE KEY-----\n",
+          "caCertPem": "-----BEGIN CERTIFICATE-----\nfake-ca-cert\n-----END CERTIFICATE-----\n"
+        },
+        "propertyDependencies": {
+          "caPrivateKeyPem": ["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::ca-key"],
+          "caCertPem": ["urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert"],
+          "certRequestPem": []
+        }
+      }
+    ]
+  }
+}
