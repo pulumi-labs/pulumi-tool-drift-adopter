@@ -106,7 +106,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		require.NotEmpty(t, resources)
 
 		for _, res := range resources {
-			if res.Action != "add_to_code" {
+			if res.Action != ActionAddToCode {
 				continue
 			}
 			for key, val := range res.InputProperties {
@@ -418,7 +418,7 @@ func TestRunNextDepMapFileFlag(t *testing.T) {
 
 	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--dep-map-file", depMapPath})
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 
 	var caCert *ResourceChange
 	for i := range full.Resources {
@@ -696,7 +696,7 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 func TestSortResourcesByDependencies(t *testing.T) {
 	makeRes := func(name string, inputProps map[string]interface{}) ResourceChange {
 		return ResourceChange{
-			Action:          "add_to_code",
+			Action:          ActionAddToCode,
 			URN:             "urn:pulumi:dev::test::pkg:Res::" + name,
 			Type:            "pkg:Res",
 			Name:            name,
@@ -930,7 +930,7 @@ func TestDepMapSkipsStateExport(t *testing.T) {
 	// Run with --dep-map-file only (NO --state-file) — state export should not be needed
 	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--dep-map-file", depMapPath})
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 
 	// Verify dependency resolution still works via dep map
 	var caCert *ResourceChange
@@ -970,7 +970,7 @@ func TestDepMapReusedOnSubsequentCalls(t *testing.T) {
 	// "Subsequent run" with --dep-map-file
 	summary, full := runNextTest(t, []string{"next", "--events-file", eventsFile, "--dep-map-file", depMapPath})
 
-	assert.Equal(t, "changes_needed", summary.Status)
+	assert.Equal(t, StatusChangesNeeded, summary.Status)
 	assert.NotEmpty(t, summary.DepMapFile, "depMapFile should be populated")
 	assert.NotEmpty(t, full.DepMapFile, "depMapFile should be in output file")
 
