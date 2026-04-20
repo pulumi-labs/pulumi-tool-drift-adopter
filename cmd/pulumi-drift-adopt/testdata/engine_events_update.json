@@ -1,0 +1,8 @@
+{
+  "events": [
+    {"timestamp": 1737551234, "type": "preludeEvent", "preludeEvent": {"config": {"aws:region": "us-west-2"}}},
+    {"timestamp": 1737551235, "type": "resourcePreEvent", "resourcePreEvent": {"metadata": {"op": "update", "urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket", "type": "aws:s3/bucket:Bucket", "old": {"type": "aws:s3/bucket:Bucket", "urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket", "custom": true, "id": "my-bucket-123", "inputs": {"bucket": "my-bucket-123", "tags": {"Environment": "production", "ManagedBy": "pulumi"}}, "outputs": {"bucket": "my-bucket-123", "tags": {"Environment": "production", "ManagedBy": "pulumi"}}}, "new": {"type": "aws:s3/bucket:Bucket", "urn": "urn:pulumi:dev::test::aws:s3/bucket:Bucket::my-bucket", "custom": true, "id": "my-bucket-123", "inputs": {"bucket": "my-bucket-123", "tags": {"Environment": "dev"}}, "outputs": {"bucket": "my-bucket-123", "tags": {"Environment": "dev"}}}, "detailedDiff": {"tags.Environment": {"diffKind": "update", "inputDiff": true}, "tags.ManagedBy": {"diffKind": "delete", "inputDiff": true}}}}},
+    {"timestamp": 1737551236, "type": "summaryEvent", "summaryEvent": {"maybeCorrupt": false, "durationSeconds": 2, "resourceChanges": {"update": 1}, "isPreview": true}}
+  ],
+  "continuationToken": null
+}
