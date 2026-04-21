@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-04-21
+
 ### Added
 - **Two-phase output model**: compact summary JSON to stdout, full resource details written to output file
 - **`--output-file` flag** to specify path for full output file (defaults to auto-generated temp file)
@@ -97,4 +99,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [1.0.0]: https://github.com/pulumi-labs/pulumi-tool-drift-adopter/releases/tag/v1.0.0
 [1.0.1]: https://github.com/pulumi-labs/pulumi-tool-drift-adopter/releases/tag/v1.0.1
-[Unreleased]: https://github.com/pulumi-labs/pulumi-tool-drift-adopter/compare/v1.0.1...HEAD
+[1.1.0]: https://github.com/pulumi-labs/pulumi-tool-drift-adopter/releases/tag/v1.1.0
+[Unreleased]: https://github.com/pulumi-labs/pulumi-tool-drift-adopter/compare/v1.1.0...HEAD
