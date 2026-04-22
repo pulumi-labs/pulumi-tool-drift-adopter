@@ -113,9 +113,10 @@ type ResourceChange struct {
 //   - currentValue=nil, desiredValue=Y → add property to code
 //   - currentValue=X, desiredValue=nil → remove property from code
 type PropertyChange struct {
-	Path         string      `json:"path"`
-	CurrentValue interface{} `json:"currentValue,omitempty"`
-	DesiredValue interface{} `json:"desiredValue,omitempty"`
+	Path         string         `json:"path"`
+	CurrentValue interface{}    `json:"currentValue,omitempty"`
+	DesiredValue interface{}    `json:"desiredValue,omitempty"`
+	DependsOn    *DependencyRef `json:"dependsOn,omitempty"`
 }
 
 // Action constants for drift-adoption operations.
@@ -270,6 +271,10 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) [
 		default:
 			// For update/replace, extract changed properties with schema-based filtering
 			res.Properties = extractPropertyChanges(*step, inputPropSet)
+			// Enrich properties with dependency metadata from depMap
+			if depMap != nil {
+				enrichPropertyDependencies(res.Properties, string(step.URN), depMap)
+			}
 			// Supplement "[secret]" values with real values from state export
 			if stateLookup != nil {
 				supplementSecretValues(res.Properties, string(step.URN), stateLookup)

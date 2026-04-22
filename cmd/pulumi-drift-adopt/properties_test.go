@@ -1384,6 +1384,49 @@ func TestAWSFullPipelineWithSchema(t *testing.T) {
 	}
 }
 
+// TestEnrichPropertyDependencies verifies that update_code properties get DependsOn
+// populated when the depMap has a matching entry, and left nil otherwise.
+func TestEnrichPropertyDependencies(t *testing.T) {
+	urn := "urn:pulumi:dev::proj::tls:index/selfSignedCert:SelfSignedCert::my-cert"
+	depMap := DependencyMap{
+		urn: {
+			"privateKeyPem": DependencyRef{
+				ResourceName:   "ca-key",
+				ResourceType:   "tls:index/privateKey:PrivateKey",
+				OutputProperty: "privateKeyPem",
+			},
+		},
+	}
+
+	properties := []PropertyChange{
+		{Path: "privateKeyPem", CurrentValue: "old-literal", DesiredValue: "matched-value"},
+		{Path: "subject", CurrentValue: "CN=old", DesiredValue: "CN=new"},
+	}
+
+	enrichPropertyDependencies(properties, urn, depMap)
+
+	// Property with matching dep should have DependsOn set
+	require.NotNil(t, properties[0].DependsOn, "privateKeyPem should have DependsOn")
+	assert.Equal(t, "ca-key", properties[0].DependsOn.ResourceName)
+	assert.Equal(t, "tls:index/privateKey:PrivateKey", properties[0].DependsOn.ResourceType)
+	assert.Equal(t, "privateKeyPem", properties[0].DependsOn.OutputProperty)
+
+	// Property without dep should have nil DependsOn
+	assert.Nil(t, properties[1].DependsOn, "subject should not have DependsOn")
+}
+
+// TestEnrichPropertyDependencies_NoDeps verifies enrichment is a no-op when the URN
+// has no entries in depMap.
+func TestEnrichPropertyDependencies_NoDeps(t *testing.T) {
+	properties := []PropertyChange{
+		{Path: "name", CurrentValue: "old", DesiredValue: "new"},
+	}
+
+	enrichPropertyDependencies(properties, "urn:pulumi:dev::proj::pkg:mod:Res::my-res", DependencyMap{})
+
+	assert.Nil(t, properties[0].DependsOn)
+}
+
 // TestAWSCascadingDeps_DependencyMapFromState verifies that the dep map built from
 // the real state export correctly resolves cross-resource dependencies.
 func TestAWSCascadingDeps_DependencyMapFromState(t *testing.T) {

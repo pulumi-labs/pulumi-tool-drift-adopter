@@ -98,6 +98,21 @@ func extractInputProperties(step auto.PreviewStep, depMap DependencyMap) map[str
 	return result
 }
 
+// enrichPropertyDependencies sets DependsOn on update_code properties whose
+// desiredValue matches a dependency in depMap. This gives the agent a hint to
+// use a resource reference instead of a literal value.
+func enrichPropertyDependencies(properties []PropertyChange, urn string, depMap DependencyMap) {
+	urnDeps := depMap[urn]
+	if len(urnDeps) == 0 {
+		return
+	}
+	for i := range properties {
+		if ref, ok := urnDeps[properties[i].Path]; ok {
+			properties[i].DependsOn = &ref
+		}
+	}
+}
+
 // extractPropertyChanges extracts property changes from a preview step.
 // For update/replace ops, normalizeDetailedDiff must be called first so that
 // DetailedDiff is always populated when diff information is available.
