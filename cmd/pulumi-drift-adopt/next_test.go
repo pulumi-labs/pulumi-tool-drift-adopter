@@ -47,7 +47,7 @@ func runProcessTestWithOptions(t *testing.T, input []byte, meta *ResourceMetadat
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	outErr := processNext(steps, parseErrors, meta, excludeURNs, depMapPath, outputFile)
+	outErr := processNext(steps, parseErrors, meta, excludeURNs, depMapPath, outputFile, "", "")
 
 	_ = w.Close()
 	os.Stdout = oldStdout

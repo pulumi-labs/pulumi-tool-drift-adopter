@@ -19,6 +19,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -953,12 +954,94 @@ func TestAWSSecretInput_SecretValueSupplementation(t *testing.T) {
 	require.Contains(t, props, "value")
 	valProp := props["value"]
 
-	// desiredValue (what infra has) should be the REAL secret, not "[secret]".
-	// The state export contains the actual plaintext via --show-secrets.
+	// desiredValue should be a configRef, not the raw secret or "[secret]".
+	// The real secret value is written to stack config under this key.
 	assert.NotEqual(t, "[secret]", valProp.DesiredValue,
-		"desiredValue should be supplemented with real secret from state export")
-	assert.Equal(t, "new-db-password-def456", valProp.DesiredValue,
-		"desiredValue should be the actual secret value from state export")
+		"desiredValue should be supplemented, not left as [secret]")
+	refMap, ok := valProp.DesiredValue.(map[string]interface{})
+	require.True(t, ok, "desiredValue should be a configRef map, got %T", valProp.DesiredValue)
+	assert.Equal(t, "drift-adopt:db-password.value", refMap["configRef"],
+		"configRef should use drift-adopt:<resourceName>.<path> format")
+}
+
+// TestSupplementSecretValues_ReturnsConfigMap verifies that supplementSecretValues
+// returns a map of config keys to plaintext values for stack config writing.
+func TestSupplementSecretValues_ReturnsConfigMap(t *testing.T) {
+	urn := "urn:pulumi:dev::proj::aws:ssm/parameter:Parameter::db-password"
+	stateLookup := map[string]*apitype.ResourceV3{
+		urn: {
+			Inputs: map[string]interface{}{
+				"value": map[string]interface{}{
+					pulumiSecretSigKey: "secret",
+					"plaintext":        `"my-secret-value"`,
+				},
+			},
+		},
+	}
+
+	properties := []PropertyChange{
+		{Path: "value", CurrentValue: "[secret]", DesiredValue: "[secret]"},
+		{Path: "name", CurrentValue: "old-name", DesiredValue: "new-name"},
+	}
+
+	secrets := supplementSecretValues(properties, urn, stateLookup, "db-password")
+
+	// Should return one secret entry
+	require.Len(t, secrets, 1)
+	assert.Equal(t, "my-secret-value", secrets["drift-adopt:db-password.value"])
+
+	// Secret property should have configRef as desiredValue
+	refMap, ok := properties[0].DesiredValue.(map[string]interface{})
+	require.True(t, ok)
+	assert.Equal(t, "drift-adopt:db-password.value", refMap["configRef"])
+
+	// Non-secret property should be unchanged
+	assert.Equal(t, "new-name", properties[1].DesiredValue)
+}
+
+// TestSupplementSecretValues_NoSecrets verifies no config map is returned when
+// there are no secret values.
+func TestSupplementSecretValues_NoSecrets(t *testing.T) {
+	urn := "urn:pulumi:dev::proj::aws:s3/bucket:Bucket::my-bucket"
+	stateLookup := map[string]*apitype.ResourceV3{
+		urn: {
+			Inputs: map[string]interface{}{
+				"bucket": "my-bucket",
+			},
+		},
+	}
+
+	properties := []PropertyChange{
+		{Path: "bucket", CurrentValue: "old", DesiredValue: "my-bucket"},
+	}
+
+	secrets := supplementSecretValues(properties, urn, stateLookup, "my-bucket")
+	assert.Nil(t, secrets)
+	assert.Equal(t, "my-bucket", properties[0].DesiredValue)
+}
+
+// TestSupplementSecretValues_ConfigKeyFormat verifies the config key format is
+// drift-adopt:<resourceName>.<propertyPath>.
+func TestSupplementSecretValues_ConfigKeyFormat(t *testing.T) {
+	urn := "urn:pulumi:dev::proj::aws:rds/cluster:Cluster::my-db"
+	stateLookup := map[string]*apitype.ResourceV3{
+		urn: {
+			Inputs: map[string]interface{}{
+				"masterPassword": map[string]interface{}{
+					pulumiSecretSigKey: "secret",
+					"plaintext":        `"hunter2"`,
+				},
+			},
+		},
+	}
+
+	properties := []PropertyChange{
+		{Path: "masterPassword", DesiredValue: "[secret]"},
+	}
+
+	secrets := supplementSecretValues(properties, urn, stateLookup, "my-db")
+	require.Contains(t, secrets, "drift-adopt:my-db.masterPassword")
+	assert.Equal(t, "hunter2", secrets["drift-adopt:my-db.masterPassword"])
 }
 
 // TestAddToCode_SecretValueSupplementation verifies that [secret] values in
@@ -1018,8 +1101,10 @@ func TestAddToCode_SecretValueSupplementation(t *testing.T) {
 	}
 
 	require.Contains(t, props, "password")
-	assert.Equal(t, "super-secret-pw", props["password"].DesiredValue,
-		"add_to_code secret should be supplemented from state export")
+	// With the secrets-to-stack-config feature, secret values are replaced with configRef objects.
+	expectedRef := map[string]interface{}{"configRef": "drift-adopt:my-db.password"}
+	assert.Equal(t, expectedRef, props["password"].DesiredValue,
+		"add_to_code secret should be replaced with configRef")
 
 	require.Contains(t, props, "name")
 	assert.Equal(t, "my-database", props["name"].DesiredValue,

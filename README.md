@@ -126,9 +126,18 @@ Preview data may contain Pulumi's unknown sentinel UUIDs as placeholder values (
 
 #### 6. Secret value supplementation
 
-When the tool detects `"[secret]"` as a property value, it supplements the real plaintext value from the state export (which is run with `--show-secrets`). The state export stores secrets in Pulumi's envelope format (`{sig.Key: sig.Secret, "plaintext": "..."}`) which the tool unwraps automatically. This ensures the agent receives actual values it can use to write working code, rather than opaque `[secret]` placeholders.
+When the tool detects `"[secret]"` as a property value, it resolves the real value from the state export (run with `--show-secrets`) and stores it as encrypted stack config under the `drift-adopt:` namespace via the Pulumi Automation API (`SetAllConfig`). The `desiredValue` is replaced with a config reference:
 
-Secret supplementation only applies to `desiredValue` on `update_code` resources (from infrastructure state). `currentValue` retains `[secret]` since the agent can read the actual code value directly from the source file. For `add_to_code` resources, property values come directly from `OldState` and are not supplemented. When reusing `--dep-map-file` from a prior run, the state export is not fetched and `[secret]` values remain unsupplemented.
+```json
+{
+  "path": "masterPassword",
+  "desiredValue": {"configRef": "drift-adopt:my-db.masterPassword"}
+}
+```
+
+The agent should use `config.requireSecret("<key>")` (TypeScript), `config.require_secret("<key>")` (Python), etc. to reference these values in generated code. The `desiredValue` is always replaced with a `configRef` when the secret can be resolved. If `--stack` is omitted, the config keys are not written to `Pulumi.<stack>.yaml` — a stderr warning is emitted, and the `configRef` keys will reference values that are not set in config.
+
+Secret supplementation only applies to `desiredValue` on `update_code` resources. `currentValue` retains `[secret]` since the agent can read the actual code value directly from the source file. When reusing `--dep-map-file` from a prior run, the state export is not fetched and `[secret]` values remain unsupplemented.
 
 #### 7. Property path parsing
 
