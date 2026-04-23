@@ -97,14 +97,13 @@ type DependencyRef struct {
 
 // ResourceChange represents a single resource that needs code changes.
 type ResourceChange struct {
-	URN             string                 `json:"urn"`
-	Name            string                 `json:"name"`
-	Type            string                 `json:"type"`
-	Action          string                 `json:"action"`
-	Properties      []PropertyChange       `json:"properties,omitempty"`
-	InputProperties map[string]interface{} `json:"inputProperties,omitempty"`
-	DependencyLevel int                    `json:"dependencyLevel,omitempty"`
-	Reason          string                 `json:"reason,omitempty"`
+	URN             string           `json:"urn"`
+	Name            string           `json:"name"`
+	Type            string           `json:"type"`
+	Action          string           `json:"action"`
+	Properties      []PropertyChange `json:"properties,omitempty"`
+	DependencyLevel int              `json:"dependencyLevel,omitempty"`
+	Reason          string           `json:"reason,omitempty"`
 }
 
 // PropertyChange represents a single property change within a resource.
@@ -264,38 +263,21 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) [
 
 		switch action {
 		case ActionAddToCode:
-			// For resources that need to be added, extract all input properties from state
-			// Temporary adapter: convert []PropertyChange back to map for InputProperties
-			// until Task 2 removes InputProperties field entirely.
-			addProps := extractInputProperties(*step, depMap)
-			if len(addProps) > 0 {
-				m := make(map[string]interface{}, len(addProps))
-				for _, pc := range addProps {
-					if pc.DependsOn != nil {
-						dep := map[string]interface{}{
-							"resourceName": pc.DependsOn.ResourceName,
-							"resourceType": pc.DependsOn.ResourceType,
-						}
-						if pc.DependsOn.OutputProperty != "" {
-							dep["outputProperty"] = pc.DependsOn.OutputProperty
-						}
-						m[pc.Path] = map[string]interface{}{"dependsOn": dep}
-					} else {
-						m[pc.Path] = pc.DesiredValue
-					}
-				}
-				res.InputProperties = m
-			}
+			res.Properties = extractInputProperties(*step, depMap)
 		case ActionDeleteFromCode:
 			// No properties needed for removal
 		default:
-			// For update/replace, extract changed properties with schema-based filtering
 			res.Properties = extractPropertyChanges(*step, inputPropSet)
-			// Enrich properties with dependency metadata from depMap
 			if depMap != nil {
-				enrichPropertyDependencies(res.Properties, string(step.URN), depMap)
+				urnDeps := depMap[string(step.URN)]
+				if len(urnDeps) > 0 {
+					for i := range res.Properties {
+						if ref, ok := urnDeps[res.Properties[i].Path]; ok {
+							res.Properties[i].DependsOn = &ref
+						}
+					}
+				}
 			}
-			// Supplement "[secret]" values with real values from state export
 			if stateLookup != nil {
 				supplementSecretValues(res.Properties, string(step.URN), stateLookup)
 			}

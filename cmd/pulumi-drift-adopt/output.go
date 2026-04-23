@@ -35,7 +35,7 @@ func outputResult(resources []ResourceChange, excludeURNs []string, depMapFile, 
 		if excludeSet[res.URN] {
 			res.Reason = "excluded"
 			skipped = append(skipped, res)
-		} else if res.Action == ActionAddToCode && len(res.InputProperties) == 0 {
+		} else if res.Action == ActionAddToCode && len(res.Properties) == 0 {
 			res.Reason = "missing_properties"
 			skipped = append(skipped, res)
 		} else if res.Action == ActionUpdateCode && len(res.Properties) == 0 {

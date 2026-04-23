@@ -181,51 +181,20 @@ func findMatchingOutput(inputValue interface{}, outputs map[string]interface{}) 
 	return ""
 }
 
-// depRefToDependsOn converts a DependencyRef to the dependsOn map format used in output.
-func depRefToDependsOn(ref DependencyRef) map[string]interface{} {
-	dep := map[string]interface{}{
-		"resourceName": ref.ResourceName,
-		"resourceType": ref.ResourceType,
-	}
-	if ref.OutputProperty != "" {
-		dep["outputProperty"] = ref.OutputProperty
-	}
-	return map[string]interface{}{"dependsOn": dep}
-}
-
-// collectDependencyNames recursively scans a value for dependsOn entries, appending
-// any referenced resourceName values that exist in nameSet to deps (deduped via seen).
-func collectDependencyNames(value interface{}, nameSet map[string]bool, seen map[string]bool, deps *[]string) {
-	switch v := value.(type) {
-	case map[string]interface{}:
-		// If this map is itself a dependsOn wrapper, extract the resourceName and stop
-		if dep, ok := v["dependsOn"]; ok {
-			if depMap, ok := dep.(map[string]interface{}); ok {
-				if name, ok := depMap["resourceName"].(string); ok && nameSet[name] && !seen[name] {
-					seen[name] = true
-					*deps = append(*deps, name)
-				}
-			}
-			return // don't recurse further into the dependsOn structure
-		}
-		// Otherwise recurse into map values (handles map properties after element-level resolution)
-		for _, mv := range v {
-			collectDependencyNames(mv, nameSet, seen, deps)
-		}
-	case []interface{}:
-		for _, elem := range v {
-			collectDependencyNames(elem, nameSet, seen, deps)
-		}
-	}
-}
-
 // extractDependencyNames returns the names of resources (within nameSet) that res depends on,
-// by scanning inputProperties for dependsOn entries at any nesting depth.
+// by scanning Properties for DependsOn entries.
 func extractDependencyNames(res ResourceChange, nameSet map[string]bool) []string {
 	var deps []string
 	seen := make(map[string]bool)
-	for _, value := range res.InputProperties {
-		collectDependencyNames(value, nameSet, seen, &deps)
+	for _, prop := range res.Properties {
+		if prop.DependsOn == nil {
+			continue
+		}
+		name := prop.DependsOn.ResourceName
+		if nameSet[name] && !seen[name] {
+			seen[name] = true
+			deps = append(deps, name)
+		}
 	}
 	return deps
 }

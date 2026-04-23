@@ -91,21 +91,6 @@ func flattenValue(value interface{}, path string, urnDeps map[string]DependencyR
 	}
 }
 
-// enrichPropertyDependencies sets DependsOn on update_code properties whose
-// desiredValue matches a dependency in depMap. This gives the agent a hint to
-// use a resource reference instead of a literal value.
-func enrichPropertyDependencies(properties []PropertyChange, urn string, depMap DependencyMap) {
-	urnDeps := depMap[urn]
-	if len(urnDeps) == 0 {
-		return
-	}
-	for i := range properties {
-		if ref, ok := urnDeps[properties[i].Path]; ok {
-			properties[i].DependsOn = &ref
-		}
-	}
-}
-
 // extractPropertyChanges extracts property changes from a preview step.
 // For update/replace ops, normalizeDetailedDiff must be called first so that
 // DetailedDiff is always populated when diff information is available.
@@ -113,19 +98,6 @@ func enrichPropertyDependencies(properties []PropertyChange, urn string, depMap 
 // a known input property for this resource type, it's a computed-only output and is skipped.
 func extractPropertyChanges(step auto.PreviewStep, inputPropSet map[string]map[string]bool) []PropertyChange {
 	var properties []PropertyChange
-
-	// For delete operations (add_to_code), DetailedDiff is empty but we need all properties from state.
-	// Prefer Inputs (what the user originally wrote) over Outputs (which include computed values).
-	if step.Op == "delete" && len(step.DetailedDiff) == 0 && step.OldState != nil {
-		source := step.OldState.Inputs
-		if len(source) == 0 {
-			source = step.OldState.Outputs
-		}
-		if source != nil {
-			flattenProperties(source, "", nil, &properties)
-		}
-		return properties
-	}
 
 	// Get the set of known input properties for this resource type (from provider schema)
 	resourceType := extractResourceType(step)
@@ -322,25 +294,6 @@ func resolvePropertyValue(state *apitype.ResourceV3, path string, inputsOnly boo
 		return getNestedProperty(state.Inputs, path)
 	}
 	return nil
-}
-
-// truncateStringValues returns a shallow copy of props with long string values truncated.
-func truncateStringValues(props map[string]interface{}) map[string]interface{} {
-	needsTruncation := false
-	for _, v := range props {
-		if s, ok := v.(string); ok && len(s) > maxStringValueLen {
-			needsTruncation = true
-			break
-		}
-	}
-	if !needsTruncation {
-		return props
-	}
-	result := make(map[string]interface{}, len(props))
-	for k, v := range props {
-		result[k] = truncateValue(v)
-	}
-	return result
 }
 
 // truncateValue truncates a string value if it exceeds maxStringValueLen.
