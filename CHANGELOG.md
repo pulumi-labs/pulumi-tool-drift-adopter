@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Unified property format**: `add_to_code` resources now use the same `properties` array as `update_code` instead of `inputProperties` map. Properties are flattened to leaf-level dot-paths with `dependsOn` as a structured field.
+- **Dependency sorting expanded**: `update_code` resources with cross-resource `dependsOn` now participate in topological sorting alongside `add_to_code` resources.
+
+### Removed
+- `inputProperties` field from resource output (replaced by `properties` array)
+
 ## [1.1.0] - 2026-04-21
 
 ### Added
