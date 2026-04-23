@@ -26,14 +26,10 @@ import (
 	"github.com/pulumi/pulumi/sdk/v3/go/common/resource/sig"
 )
 
-// extractInputProperties returns a flat key-value map of input properties for add_to_code resources.
-// When a depMap is available, properties are enriched with dependsOn metadata from pre-computed
-// dependency references. When no depMap is available, falls back to stateLookup-based resolution.
-//
-// Properties without dependencies remain plain values (backward-compatible), with long
-// strings truncated to maxStringValueLen characters.
-// Properties with dependencies become: {"dependsOn": {"resourceName": ..., "resourceType": ..., "outputProperty": ...}}
-func extractInputProperties(step auto.PreviewStep, depMap DependencyMap) map[string]interface{} {
+// extractInputProperties returns a flattened []PropertyChange for add_to_code resources.
+// Nested maps and arrays are recursively flattened to leaf-level dot-path/bracket-index entries.
+// When depMap has a matching entry for a leaf path, DependsOn is set and DesiredValue is nil.
+func extractInputProperties(step auto.PreviewStep, depMap DependencyMap) []PropertyChange {
 	if step.OldState == nil {
 		return nil
 	}
@@ -46,56 +42,53 @@ func extractInputProperties(step auto.PreviewStep, depMap DependencyMap) map[str
 	}
 
 	urn := string(step.URN)
-
-	// Check for dep map entries for this resource
 	urnDeps := depMap[urn]
 
-	// If no dep map entries, return with truncation only
-	if len(urnDeps) == 0 {
-		return truncateStringValues(source)
+	var properties []PropertyChange
+	flattenProperties(source, "", urnDeps, &properties)
+	return properties
+}
+
+// flattenProperties recursively flattens a property map into leaf-level PropertyChange entries.
+func flattenProperties(props map[string]interface{}, prefix string, urnDeps map[string]DependencyRef, out *[]PropertyChange) {
+	for key, value := range props {
+		path := key
+		if prefix != "" {
+			path = prefix + "." + key
+		}
+		flattenValue(value, path, urnDeps, out)
+	}
+}
+
+// flattenValue handles a single value during recursive flattening.
+func flattenValue(value interface{}, path string, urnDeps map[string]DependencyRef, out *[]PropertyChange) {
+	// Check depMap first — if matched, emit DependsOn with no value
+	if ref, ok := urnDeps[path]; ok {
+		*out = append(*out, PropertyChange{
+			Path: path,
+			DependsOn: &DependencyRef{
+				ResourceName:   ref.ResourceName,
+				ResourceType:   ref.ResourceType,
+				OutputProperty: ref.OutputProperty,
+			},
+		})
+		return
 	}
 
-	// Enrich properties that have dependencies
-	result := make(map[string]interface{}, len(source))
-	for key, value := range source {
-		// For map values: resolve each map entry individually
-		if m, ok := value.(map[string]interface{}); ok {
-			resolvedMap := make(map[string]interface{}, len(m))
-			for mk, mv := range m {
-				path := key + "." + mk
-				if ref, ok := urnDeps[path]; ok {
-					resolvedMap[mk] = depRefToDependsOn(ref)
-				} else {
-					resolvedMap[mk] = truncateValue(mv)
-				}
-			}
-			result[key] = resolvedMap
-			continue
+	switch v := value.(type) {
+	case map[string]interface{}:
+		flattenProperties(v, path, urnDeps, out)
+	case []interface{}:
+		for i, elem := range v {
+			elemPath := fmt.Sprintf("%s[%d]", path, i)
+			flattenValue(elem, elemPath, urnDeps, out)
 		}
-
-		// For array values: resolve each element individually
-		if arr, ok := value.([]interface{}); ok {
-			resolvedArr := make([]interface{}, len(arr))
-			for i, elem := range arr {
-				path := fmt.Sprintf("%s[%d]", key, i)
-				if ref, ok := urnDeps[path]; ok {
-					resolvedArr[i] = depRefToDependsOn(ref)
-				} else {
-					resolvedArr[i] = truncateValue(elem)
-				}
-			}
-			result[key] = resolvedArr
-			continue
-		}
-
-		// Scalar: check dep map
-		if ref, ok := urnDeps[key]; ok {
-			result[key] = depRefToDependsOn(ref)
-		} else {
-			result[key] = truncateValue(value)
-		}
+	default:
+		*out = append(*out, PropertyChange{
+			Path:         path,
+			DesiredValue: truncateValue(value),
+		})
 	}
-	return result
 }
 
 // enrichPropertyDependencies sets DependsOn on update_code properties whose
@@ -129,7 +122,7 @@ func extractPropertyChanges(step auto.PreviewStep, inputPropSet map[string]map[s
 			source = step.OldState.Outputs
 		}
 		if source != nil {
-			extractAllProperties(source, "", &properties)
+			flattenProperties(source, "", nil, &properties)
 		}
 		return properties
 	}
@@ -283,27 +276,6 @@ func topLevelKey(path string) string {
 		path = path[:i]
 	}
 	return path
-}
-
-// extractAllProperties recursively extracts all properties from a map for add_to_code operations
-func extractAllProperties(props map[string]interface{}, prefix string, properties *[]PropertyChange) {
-	for key, value := range props {
-		path := key
-		if prefix != "" {
-			path = prefix + "." + key
-		}
-
-		// If value is a nested map, recurse
-		if nestedMap, ok := value.(map[string]interface{}); ok {
-			extractAllProperties(nestedMap, path, properties)
-		} else {
-			// Leaf property — not in code, needs to be added
-			*properties = append(*properties, PropertyChange{
-				Path:         path,
-				DesiredValue: value,
-			})
-		}
-	}
 }
 
 // normalizeDetailedDiff synthesizes DetailedDiff entries from ReplaceReasons/DiffReasons

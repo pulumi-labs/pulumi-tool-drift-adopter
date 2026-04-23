@@ -19,6 +19,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -987,4 +990,107 @@ func TestDepMapReusedOnSubsequentCalls(t *testing.T) {
 	dep, ok := pkPem["dependsOn"].(map[string]interface{})
 	require.True(t, ok)
 	assert.Equal(t, "ca-key", dep["resourceName"])
+}
+
+func TestExtractInputPropertiesUnified(t *testing.T) {
+	step := auto.PreviewStep{
+		Op:  "delete",
+		URN: resource.URN("urn:pulumi:dev::proj::aws:s3/bucket:Bucket::my-bucket"),
+		OldState: &apitype.ResourceV3{
+			Type: "aws:s3/bucket:Bucket",
+			Inputs: map[string]interface{}{
+				"bucket": "my-bucket",
+				"tags":   map[string]interface{}{"Environment": "prod", "Team": "platform"},
+				"corsRules": []interface{}{
+					map[string]interface{}{"allowedMethods": []interface{}{"GET"}},
+				},
+			},
+		},
+	}
+
+	result := extractInputProperties(step, nil)
+
+	pathMap := make(map[string]interface{})
+	for _, pc := range result {
+		assert.Nil(t, pc.CurrentValue, "add_to_code properties should have nil CurrentValue")
+		pathMap[pc.Path] = pc.DesiredValue
+	}
+
+	assert.Equal(t, "my-bucket", pathMap["bucket"])
+	assert.Equal(t, "prod", pathMap["tags.Environment"])
+	assert.Equal(t, "platform", pathMap["tags.Team"])
+	assert.Equal(t, "GET", pathMap["corsRules[0].allowedMethods[0]"])
+}
+
+func TestExtractInputPropertiesDeepNesting(t *testing.T) {
+	step := auto.PreviewStep{
+		Op:  "delete",
+		URN: resource.URN("urn:pulumi:dev::proj::pkg:mod:Res::deep"),
+		OldState: &apitype.ResourceV3{
+			Type: "pkg:mod:Res",
+			Inputs: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"labels": map[string]interface{}{"app": "nginx"},
+					"ports":  []interface{}{80, 443},
+				},
+			},
+		},
+	}
+
+	result := extractInputProperties(step, nil)
+
+	pathMap := make(map[string]interface{})
+	for _, pc := range result {
+		pathMap[pc.Path] = pc.DesiredValue
+	}
+
+	assert.Equal(t, "nginx", pathMap["metadata.labels.app"])
+	assert.Equal(t, 80, pathMap["metadata.ports[0]"])
+	assert.Equal(t, 443, pathMap["metadata.ports[1]"])
+}
+
+func TestExtractInputPropertiesWithDeps(t *testing.T) {
+	urn := "urn:pulumi:dev::proj::tls:index/selfSignedCert:SelfSignedCert::my-cert"
+	step := auto.PreviewStep{
+		Op:  "delete",
+		URN: resource.URN(urn),
+		OldState: &apitype.ResourceV3{
+			Type: "tls:index/selfSignedCert:SelfSignedCert",
+			Inputs: map[string]interface{}{
+				"privateKeyPem": "some-pem-value",
+				"subject":       "CN=test",
+			},
+		},
+	}
+	depMap := DependencyMap{
+		urn: {
+			"privateKeyPem": DependencyRef{
+				ResourceName:   "ca-key",
+				ResourceType:   "tls:index/privateKey:PrivateKey",
+				OutputProperty: "privateKeyPem",
+			},
+		},
+	}
+
+	result := extractInputProperties(step, depMap)
+
+	var pkPem, subject *PropertyChange
+	for i := range result {
+		switch result[i].Path {
+		case "privateKeyPem":
+			pkPem = &result[i]
+		case "subject":
+			subject = &result[i]
+		}
+	}
+
+	require.NotNil(t, pkPem)
+	require.NotNil(t, pkPem.DependsOn)
+	assert.Equal(t, "ca-key", pkPem.DependsOn.ResourceName)
+	assert.Equal(t, "privateKeyPem", pkPem.DependsOn.OutputProperty)
+	assert.Nil(t, pkPem.DesiredValue, "dependsOn properties should not have DesiredValue")
+
+	require.NotNil(t, subject)
+	assert.Nil(t, subject.DependsOn)
+	assert.Equal(t, "CN=test", subject.DesiredValue)
 }

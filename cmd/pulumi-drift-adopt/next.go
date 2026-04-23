@@ -265,7 +265,19 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) [
 		switch action {
 		case ActionAddToCode:
 			// For resources that need to be added, extract all input properties from state
-			res.InputProperties = extractInputProperties(*step, depMap)
+			// TODO(task2): remove InputProperties field; use Properties directly
+			addProps := extractInputProperties(*step, depMap)
+			if len(addProps) > 0 {
+				m := make(map[string]interface{}, len(addProps))
+				for _, pc := range addProps {
+					if pc.DependsOn != nil {
+						m[pc.Path] = depRefToDependsOn(*pc.DependsOn)
+					} else {
+						m[pc.Path] = pc.DesiredValue
+					}
+				}
+				res.InputProperties = m
+			}
 		case ActionDeleteFromCode:
 			// No properties needed for removal
 		default:
