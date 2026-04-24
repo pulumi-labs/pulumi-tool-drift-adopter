@@ -263,6 +263,57 @@ A JSON object with an `events` array, returned by the Pulumi Cloud API endpoint 
 
 ### Processing Pipeline
 
+```mermaid
+flowchart TD
+    subgraph Input
+        A1["pulumi preview --json<br/>(Standard JSON)"]
+        A2["NDJSON<br/>(MCP tool)"]
+        A3["Engine Events JSON<br/>(Pulumi Cloud API)"]
+    end
+
+    subgraph "Metadata (first run)"
+        S1["pulumi stack export<br/>--show-secrets"]
+        S2["pulumi package<br/>get-schema"]
+    end
+
+    A1 & A2 & A3 --> P0["Parse → PreviewStep[]"]
+
+    S1 --> DEP["Build dependency map"]
+    S1 --> SEC["State lookup<br/>(secret resolution)"]
+    S2 --> SCH["Input property sets<br/>(schema filtering)"]
+
+    P0 --> P1["1. Normalize DetailedDiff"]
+    P1 --> INV["Invert preview ops → code actions"]
+
+    INV --> |"update_code"| P2["2. Schema-based<br/>output filtering"]
+    P2 --> P3["3. Value resolution<br/>currentValue / desiredValue"]
+    P3 --> P4["4. Unknown sentinel<br/>filtering"]
+    P4 --> P5["5. Secret<br/>supplementation"]
+    P5 --> P6["6. Property path<br/>parsing"]
+
+    INV --> |"add_to_code"| EX["Extract input properties<br/>from OldState"]
+    EX --> P7["7. Dependency<br/>enrichment"]
+    P7 --> P5b["5. Secret<br/>supplementation"]
+
+    INV --> |"delete_from_code"| DEL["No properties needed"]
+
+    SCH -.-> P2
+    DEP -.-> P7
+    SEC -.-> P5
+    SEC -.-> P5b
+
+    P6 & P5b & DEL --> P8["8. Dependency sorting<br/>(topological / Kahn's)"]
+    P8 --> OUT["Output"]
+
+    subgraph Output
+        O1["stdout: summary JSON"]
+        O2["file: full resource JSON"]
+        O3["file: metadata<br/>(reuse via --dep-map-file)"]
+    end
+
+    OUT --> O1 & O2 & O3
+```
+
 Both formats are parsed into `auto.PreviewStep` structs, then processed through the following stages:
 
 #### 1. DetailedDiff normalization
