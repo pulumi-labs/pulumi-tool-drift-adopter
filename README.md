@@ -150,7 +150,23 @@ Note: `StateLookup` (the state export used for secret resolution) is not seriali
 - `delete_from_code` — Remove resource from code (exists in code but not infrastructure)
 - `add_to_code` — Add resource to code (exists in infrastructure but not code). Uses `inputProperties` map with the full input structure from state. Values that reference other resources are wrapped in `{"dependsOn": {"resourceName": "...", "resourceType": "..."}}`.
 
-**Resource ordering:** Resources are topologically sorted by dependency level (leaf nodes first). The `dependencyLevel` field indicates depth in the dependency graph — 0 means no cross-batch dependencies.
+**Property-level intent** is conveyed by presence/absence of `currentValue` and `desiredValue`:
+- `currentValue=X, desiredValue=Y` → update the property
+- `currentValue=nil, desiredValue=Y` → add the property to code
+- `currentValue=X, desiredValue=nil` → remove the property from code
+
+**Resource ordering:** Resources are topologically sorted so that resources with no dependencies (`dependencyLevel: 0`) come first, followed by resources that depend on them (`dependencyLevel: 1`), and so on. The agent should update code in dependency-level order so that referenced variables are already declared. For example, if a `Subnet` depends on a `Vpc`, the `Vpc` will have `dependencyLevel: 0` and the `Subnet` will have `dependencyLevel: 1`:
+
+```typescript
+// dependencyLevel: 0 — no dependencies, update first
+const vpc = new aws.ec2.Vpc("my-vpc", { cidrBlock: "10.0.0.0/16" });
+
+// dependencyLevel: 1 — references vpc, update second
+const subnet = new aws.ec2.Subnet("my-subnet", {
+    vpcId: vpc.id,  // ← dependsOn: my-vpc
+    cidrBlock: "10.0.1.0/24",
+});
+```
 
 **Skipped resources:** Resources in the `skipped` array include a `reason` field: `"excluded"` (matched `--exclude-urns`) or `"missing_properties"` (no actionable property changes after filtering).
 
@@ -170,110 +186,17 @@ Note: `StateLookup` (the state export used for secret resolution) is not seriali
 
 ## Parsing Logic
 
-The `next` command accepts two input formats and normalizes both into a unified pipeline.
+The `next` command accepts three input formats and normalizes all into a unified pipeline.
 
 ### Input Formats
 
-#### Standard JSON (`pulumi preview --json`)
+| Format | Source | Wrapper |
+|--------|--------|---------|
+| **Standard JSON** | `pulumi preview --json` | `{"steps": [...]}` with `oldState`/`newState`, `kind`, `replaceReasons`/`diffReasons` |
+| **NDJSON** | Pulumi service MCP tool | One JSON object per line, uses `old`/`new`, `diffKind`, `diffs` |
+| **Engine Events JSON** | Pulumi Cloud API (`GET .../preview/{updateID}/events`) | `{"events": [...]}`, same field names as NDJSON |
 
-A single JSON object with a `steps` array. Each step may include `detailedDiff`, `replaceReasons`, and `diffReasons`. For replace operations, `detailedDiff` is often `null` and diff information lives in `replaceReasons`/`diffReasons` instead.
-
-```json
-{
-  "steps": [
-    {
-      "op": "replace",
-      "urn": "urn:pulumi:dev::proj::tls:index/privateKey:PrivateKey::my-key",
-      "provider": "urn:pulumi:dev::proj::pulumi:providers:tls::default::uuid",
-      "oldState": {
-        "type": "tls:index/privateKey:PrivateKey",
-        "inputs": { "algorithm": "ECDSA", "ecdsaCurve": "P256" },
-        "outputs": { "algorithm": "ECDSA", "ecdsaCurve": "P256", "id": "..." }
-      },
-      "newState": {
-        "type": "tls:index/privateKey:PrivateKey",
-        "inputs": { "algorithm": "RSA", "rsaBits": 2048 },
-        "outputs": { "algorithm": "RSA", "ecdsaCurve": "P224", "rsaBits": 2048 }
-      },
-      "diffReasons": ["algorithm", "ecdsaCurve"],
-      "replaceReasons": ["algorithm", "ecdsaCurve"],
-      "detailedDiff": null
-    },
-    {
-      "op": "update",
-      "urn": "urn:pulumi:dev::proj::command:local:Command::cmd-4",
-      "oldState": { "inputs": { "create": "echo modified" }, "outputs": { "create": "echo modified" } },
-      "newState": { "inputs": { "create": "echo original" } },
-      "diffReasons": ["create", "environment"],
-      "detailedDiff": {
-        "create": { "kind": "update", "inputDiff": false },
-        "environment": { "kind": "delete", "inputDiff": false }
-      }
-    }
-  ]
-}
-```
-
-#### NDJSON (pulumi-service MCP tool)
-
-Newline-delimited JSON where each line is an engine event. Only `resourcePreEvent` lines are processed; `preludeEvent`, `summaryEvent`, `diagnosticEvent`, and `cancelEvent` are skipped. Key field-name differences from standard JSON: `old`/`new` instead of `oldState`/`newState`, `diffKind` instead of `kind`, and `diffs` instead of `diffReasons`/`replaceReasons`.
-
-```json
-{"type":"preludeEvent","preludeEvent":{"config":{"aws:region":"us-west-2"}}}
-{"type":"resourcePreEvent","resourcePreEvent":{"metadata":{
-  "op": "update",
-  "urn": "urn:pulumi:dev::proj::aws:s3/bucket:Bucket::my-bucket",
-  "type": "aws:s3/bucket:Bucket",
-  "old": {
-    "type": "aws:s3/bucket:Bucket",
-    "inputs": { "tags": { "Environment": "production", "ManagedBy": "pulumi" } },
-    "outputs": { "tags": { "Environment": "production", "ManagedBy": "pulumi" } }
-  },
-  "new": {
-    "type": "aws:s3/bucket:Bucket",
-    "inputs": { "tags": { "Environment": "dev" } },
-    "outputs": { "tags": { "Environment": "dev" } }
-  },
-  "diffs": ["tags"],
-  "detailedDiff": {
-    "tags.Environment": { "diffKind": "update", "inputDiff": true },
-    "tags.ManagedBy": { "diffKind": "delete", "inputDiff": true }
-  }
-}}}
-{"type":"summaryEvent","summaryEvent":{"resourceChanges":{"update":1}}}
-```
-
-#### Engine Events JSON (Pulumi Cloud API)
-
-A JSON object with an `events` array, returned by the Pulumi Cloud API endpoint `GET /api/stacks/{org}/{project}/{stack}/preview/{updateID}/events`. This is the format produced by Pulumi Deployments previews. Each event has a `type` field; only `resourcePreEvent` and `resOutputsEvent` entries contain resource metadata. Uses the same field names as NDJSON (`old`/`new`, `diffKind`, `diffs`) but wrapped in an `{"events": [...]}` array instead of newline-delimited.
-
-```json
-{
-  "events": [
-    {"type": "preludeEvent", "preludeEvent": {"config": {}}},
-    {"type": "resourcePreEvent", "resourcePreEvent": {"metadata": {
-      "op": "update",
-      "urn": "urn:pulumi:dev::proj::command:local:Command::cmd-0",
-      "type": "command:local:Command",
-      "old": {
-        "type": "command:local:Command",
-        "inputs": { "create": "echo modified" },
-        "outputs": { "create": "echo modified" }
-      },
-      "new": {
-        "type": "command:local:Command",
-        "inputs": { "create": "echo original" }
-      },
-      "diffs": ["create", "environment"],
-      "detailedDiff": {
-        "create": { "diffKind": "update", "inputDiff": true },
-        "environment": { "diffKind": "delete", "inputDiff": true }
-      }
-    }, "planning": true}},
-    {"type": "summaryEvent", "summaryEvent": {"resourceChanges": {"update": 1}}}
-  ]
-}
-```
+Only `resourcePreEvent` entries are processed; `preludeEvent`, `summaryEvent`, `diagnosticEvent`, and `cancelEvent` are skipped.
 
 ### Field Mapping
 
@@ -374,12 +297,7 @@ For map and array-valued properties (e.g., `subnetIds`, `tags`), individual elem
 
 #### 9. Dependency sorting
 
-Resources are topologically sorted using Kahn's algorithm so leaf nodes (no cross-batch dependencies) come first. Each resource is assigned a `DependencyLevel` indicating its depth in the dependency graph.
-
-At the property level, the intent is conveyed entirely by `currentValue` and `desiredValue`:
-- `currentValue=X, desiredValue=Y` → update the property
-- `currentValue=nil, desiredValue=Y` → add the property to code
-- `currentValue=X, desiredValue=nil` → remove the property from code
+Resources are topologically sorted using Kahn's algorithm so that resources with no dependencies are emitted first (`dependencyLevel: 0`), followed by resources that depend on them (`dependencyLevel: 1`), and so on. This allows the agent to update code in dependency-level order, ensuring referenced resource variables are already declared before they are used.
 
 ## Limitations
 
