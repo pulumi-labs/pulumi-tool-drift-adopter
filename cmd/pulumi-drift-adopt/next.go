@@ -278,9 +278,12 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) [
 					}
 				}
 			}
-			if stateLookup != nil {
-				supplementSecretValues(res.Properties, string(step.URN), stateLookup)
-			}
+		}
+
+		// Supplement "[secret]" values with real values from state export.
+		// Applies to both update_code and add_to_code properties.
+		if stateLookup != nil && action != ActionDeleteFromCode {
+			supplementSecretValues(res.Properties, string(step.URN), stateLookup)
 		}
 
 		resources = append(resources, res)

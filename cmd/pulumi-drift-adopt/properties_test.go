@@ -961,6 +961,71 @@ func TestAWSSecretInput_SecretValueSupplementation(t *testing.T) {
 		"desiredValue should be the actual secret value from state export")
 }
 
+// TestAddToCode_SecretValueSupplementation verifies that [secret] values in
+// add_to_code properties are supplemented with real values from the state export.
+func TestAddToCode_SecretValueSupplementation(t *testing.T) {
+	// A "delete" preview op maps to add_to_code action.
+	// OldState.Inputs has [secret] for the password field.
+	eventsContent := `{
+		"steps": [{
+			"op": "delete",
+			"urn": "urn:pulumi:dev::test::some:provider:Resource::my-db",
+			"oldState": {
+				"type": "some:provider:Resource",
+				"inputs": {
+					"name": "my-database",
+					"password": "[secret]"
+				},
+				"outputs": {
+					"name": "my-database",
+					"password": "[secret]"
+				}
+			}
+		}]
+	}`
+
+	// Build a state export with the real secret value in envelope format.
+	stateData := []byte(`{
+		"version": 3,
+		"deployment": {
+			"resources": [{
+				"urn": "urn:pulumi:dev::test::some:provider:Resource::my-db",
+				"type": "some:provider:Resource",
+				"inputs": {
+					"name": "my-database",
+					"password": {
+						"4dabf18193072939515e22adb298388d": "1b47061264138c4ac30d75fd1eb44270",
+						"plaintext": "\"super-secret-pw\""
+					}
+				}
+			}]
+		}
+	}`)
+
+	stateLookup, err := parseStateExport(stateData)
+	require.NoError(t, err)
+
+	meta := &ResourceMetadata{
+		StateLookup: stateLookup,
+	}
+	_, full := runProcessTestWithOptions(t, []byte(eventsContent), meta, nil, "")
+	require.Len(t, full.Resources, 1)
+	assert.Equal(t, "add_to_code", full.Resources[0].Action)
+
+	props := make(map[string]PropertyChange)
+	for _, p := range full.Resources[0].Properties {
+		props[p.Path] = p
+	}
+
+	require.Contains(t, props, "password")
+	assert.Equal(t, "super-secret-pw", props["password"].DesiredValue,
+		"add_to_code secret should be supplemented from state export")
+
+	require.Contains(t, props, "name")
+	assert.Equal(t, "my-database", props["name"].DesiredValue,
+		"non-secret value should be unchanged")
+}
+
 // TestValueResolution_CurrentValueFromInputsNotOutputs verifies that currentValue
 // (from NewState) always uses Inputs, not stale Outputs. This matches the engine's
 // TranslateDetailedDiff semantics: NEW values always come from Inputs.

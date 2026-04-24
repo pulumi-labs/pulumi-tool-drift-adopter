@@ -11,6 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Unified property format**: `add_to_code` resources now use the same `properties` array as `update_code` instead of `inputProperties` map. Properties are flattened to leaf-level dot-paths with `dependsOn` as a structured field.
 - **Dependency sorting expanded**: `update_code` resources with cross-resource `dependsOn` now participate in topological sorting alongside `add_to_code` resources.
 
+### Fixed
+- Secret values in `add_to_code` properties are now supplemented from the state export (previously only `update_code` properties were supplemented, leaving `[secret]` placeholders unresolved)
+
 ### Removed
 - `inputProperties` field from resource output (replaced by `properties` array)
 
