@@ -54,30 +54,6 @@ Use this mode when integrating with deployment systems that run preview separate
 
 ## Processing Pipeline
 
-The `next` command accepts three input formats and normalizes all into a unified pipeline.
-
-### Input Formats
-
-| Format | Source | Wrapper |
-|--------|--------|---------|
-| **Standard JSON** | `pulumi preview --json` | `{"steps": [...]}` with `oldState`/`newState`, `kind`, `replaceReasons`/`diffReasons` |
-| **NDJSON** | Pulumi service MCP tool | One JSON object per line, uses `old`/`new`, `diffKind`, `diffs` |
-| **Engine Events JSON** | Pulumi Cloud API (`GET .../preview/{updateID}/events`) | `{"events": [...]}`, same field names as NDJSON |
-
-Only `resourcePreEvent` entries are processed; `preludeEvent`, `summaryEvent`, `diagnosticEvent`, and `cancelEvent` are skipped.
-
-### Field Mapping
-
-| Concept | Standard JSON | NDJSON / Engine Events JSON |
-|---------|--------------|--------|
-| Wrapper | `{"steps": [...]}` | One JSON object per line / `{"events": [...]}` |
-| Old state | `oldState` | `old` |
-| New state | `newState` | `new` |
-| Diff kind | `detailedDiff[key].kind` | `detailedDiff[key].diffKind` |
-| Diff keys (fallback) | `replaceReasons`, `diffReasons` | `diffs` |
-
-### Steps
-
 ```mermaid
 flowchart TD
     subgraph Input
@@ -110,8 +86,6 @@ flowchart TD
     P10 --> O2["file: full resource JSON"]
     P10 --> O3["file: metadata ↩ --dep-map-file"]
 ```
-
-Both formats are parsed into `auto.PreviewStep` structs, then processed through the following stages:
 
 #### 1. Parse + normalize DetailedDiff
 
