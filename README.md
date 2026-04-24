@@ -115,6 +115,30 @@ The agent reads the full resource details from `outputFile` using its Read tool.
 }
 ```
 
+### Metadata file
+
+The metadata file caches provider schemas and dependency maps so subsequent calls skip expensive operations. Pass it back via `--dep-map-file`.
+
+```json
+{
+  "dependencies": {
+    "urn:pulumi:dev::app::aws:ec2/instance:Instance::web-server": {
+      "subnetId": {
+        "resourceName": "my-subnet",
+        "resourceType": "aws:ec2/subnet:Subnet",
+        "outputProperty": "id"
+      }
+    }
+  },
+  "inputProperties": {
+    "aws:ec2/instance:Instance": ["ami", "instanceType", "subnetId", "tags"],
+    "aws:s3/bucket:Bucket": ["bucket", "tags", "acl"]
+  }
+}
+```
+
+Note: `StateLookup` (the state export used for secret resolution) is not serialized — it is only available during the initial run.
+
 **Status values:**
 - `changes_needed` — Code changes required
 - `clean` — No drift, code matches state
@@ -266,99 +290,42 @@ A JSON object with an `events` array, returned by the Pulumi Cloud API endpoint 
 ```mermaid
 flowchart TD
     subgraph Input
-        A1["pulumi preview --json<br/>(Standard JSON)"]
-        A2["NDJSON<br/>(MCP tool)"]
-        A3["Engine Events JSON<br/>(Pulumi Cloud API)"]
+        A1["Standard JSON"]
+        A2["NDJSON"]
+        A3["Engine Events JSON"]
     end
 
-    subgraph "Metadata (first run)"
-        S1["pulumi stack export<br/>--show-secrets"]
-        S2["pulumi package<br/>get-schema"]
+    A1 & A2 & A3 --> P1["1. Parse + normalize DetailedDiff"]
+    P1 --> P2["2. Invert preview ops → code actions"]
+    P2 --> P3["3. Schema-based output filtering"]
+    P3 --> P4["4. Value resolution"]
+    P4 --> P5["5. Unknown sentinel filtering"]
+    P5 --> P6["6. Secret supplementation"]
+    P6 --> P7["7. Property path parsing"]
+    P7 --> P8["8. Dependency enrichment"]
+    P8 --> P9["9. Dependency sorting"]
+
+    subgraph "Metadata (first run only)"
+        S1["pulumi stack export --show-secrets"]
+        S2["pulumi package get-schema"]
     end
 
-    A1 & A2 & A3 --> P0["Parse → PreviewStep[]"]
+    S1 -.-> P6
+    S1 -.-> P8
+    S2 -.-> P3
 
-    S1 --> DEP["Build dependency map"]
-    S1 --> SEC["State lookup<br/>(secret resolution)"]
-    S2 --> SCH["Input property sets<br/>(schema filtering)"]
-
-    P0 --> P1["1. Normalize DetailedDiff"]
-    P1 --> INV["Invert preview ops → code actions"]
-
-    INV --> |"update_code"| P2["2. Schema-based<br/>output filtering"]
-    P2 --> P3["3. Value resolution<br/>currentValue / desiredValue"]
-    P3 --> P4["4. Unknown sentinel<br/>filtering"]
-    P4 --> P5["5. Secret<br/>supplementation"]
-    P5 --> P6["6. Property path<br/>parsing"]
-
-    INV --> |"add_to_code"| EX["Extract input properties<br/>from OldState"]
-    EX --> P7["7. Dependency<br/>enrichment"]
-    P7 --> P5b["5. Secret<br/>supplementation"]
-
-    INV --> |"delete_from_code"| DEL["No properties needed"]
-
-    SCH -.-> P2
-    DEP -.-> P7
-    SEC -.-> P5
-    SEC -.-> P5b
-
-    P6 & P5b & DEL --> P8["8. Dependency sorting<br/>(topological / Kahn's)"]
-    P8 --> OUT["Output"]
-
-    subgraph Output
-        O1["stdout: summary JSON"]
-        O2["file: full resource JSON"]
-        O3["file: metadata<br/>(reuse via --dep-map-file)"]
-    end
-
-    OUT --> O1 & O2 & O3
+    P9 --> O1["stdout: summary JSON"]
+    P9 --> O2["file: full resource JSON"]
+    P9 --> O3["file: metadata ↩ --dep-map-file"]
 ```
 
 Both formats are parsed into `auto.PreviewStep` structs, then processed through the following stages:
 
-#### 1. DetailedDiff normalization
+#### 1. Parse + normalize DetailedDiff
 
-For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `InputDiff: true`. Both the NDJSON and Engine Events JSON parsers perform equivalent normalization from their `diffs` field during format conversion.
+All three input formats are parsed into `auto.PreviewStep` structs. For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `InputDiff: true`. Both the NDJSON and Engine Events JSON parsers perform equivalent normalization from their `diffs` field during format conversion.
 
-#### 2. Schema-based output filtering
-
-The tool fetches provider schemas via `pulumi package get-schema <provider>` and extracts the set of `inputProperties` for each resource type. DetailedDiff entries whose top-level property key is NOT in the schema's input properties are computed-only outputs (e.g., `tagsAll`, `arn`, `version`) and are automatically filtered out. This prevents the agent from trying to set properties that are managed by the provider.
-
-Schema results are cached in the metadata file (`--dep-map-file`) to avoid re-fetching on subsequent calls.
-
-#### 3. Value resolution
-
-Property values are resolved with correct engine semantics:
-
-- **`currentValue`** (what code says) — Always resolved from `NewState.Inputs`. During preview, `NewState.Outputs` may contain stale or placeholder data since the provider's `Update`/`Create` hasn't been called yet. Using Inputs only ensures the value reflects what the code actually declares.
-
-- **`desiredValue`** (what infrastructure has) — Resolved from `OldState.Outputs` by default (the provider's last-known state), or from `OldState.Inputs` when `inputDiff=true` (comparing input-to-input).
-
-This matches the Pulumi engine's own `TranslateDetailedDiff()` semantics documented in `pkg/engine/detailedDiff.go`.
-
-#### 4. Unknown sentinel filtering
-
-Preview data may contain Pulumi's unknown sentinel UUIDs as placeholder values (e.g., in cascading replace scenarios where a dependent resource's inputs aren't known yet). The tool recognizes all 7 sentinel types from the SDK (`plugin.UnknownStringValue`, etc.) and replaces them with nil. Properties where both current and desired values are nil after filtering are dropped.
-
-#### 5. Secret value supplementation
-
-When the tool detects `"[secret]"` as a property value, it supplements the real plaintext value from the state export (which is run with `--show-secrets`). The state export stores secrets in Pulumi's envelope format (`{sig.Key: sig.Secret, "plaintext": "..."}`) which the tool unwraps automatically. This ensures the agent receives actual values it can use to write working code, rather than opaque `[secret]` placeholders.
-
-Secret supplementation only applies to `desiredValue` on `update_code` resources (from infrastructure state). `currentValue` retains `[secret]` since the agent can read the actual code value directly from the source file. For `add_to_code` resources, property values come directly from `OldState` and are not supplemented. When reusing `--dep-map-file` from a prior run, the state export is not fetched and `[secret]` values remain unsupplemented.
-
-#### 6. Property path parsing
-
-Property paths (e.g., `tags.Environment`, `ingress[0].fromPort`, `tags["kubernetes.io/name"]`) are parsed using the Pulumi SDK's `resource.PropertyPath` parser, which correctly handles bracket-quoted keys with dots, consecutive array indices, and mixed nested paths.
-
-#### 7. Element-level dependency resolution
-
-For map and array-valued properties (e.g., `subnetIds`, `tags`), individual elements are resolved against dependent resource outputs rather than collapsing the entire collection to a single dependency reference. Map entries preserve their keys; array entries use bracket-index paths (e.g., `subnetIds[0]`, `subnetIds[1]`).
-
-#### 8. Dependency sorting
-
-Resources are topologically sorted using Kahn's algorithm so leaf nodes (no cross-batch dependencies) come first. Each resource is assigned a `DependencyLevel` indicating its depth in the dependency graph.
-
-### Inversion
+#### 2. Invert preview ops → code actions
 
 Preview output describes what Pulumi *would do* to infrastructure. The tool inverts this to describe what the *code* needs:
 
@@ -368,6 +335,46 @@ Preview output describes what Pulumi *would do* to infrastructure. The tool inve
 | `delete` | `add_to_code` |
 | `update` | `update_code` |
 | `replace` | `update_code` |
+
+For `update_code`/`replace`, properties are extracted from `DetailedDiff`. For `add_to_code`, all input properties are extracted from `OldState`. For `delete_from_code`, no properties are needed.
+
+#### 3. Schema-based output filtering
+
+The tool fetches provider schemas via `pulumi package get-schema <provider>` and extracts the set of `inputProperties` for each resource type. DetailedDiff entries whose top-level property key is NOT in the schema's input properties are computed-only outputs (e.g., `tagsAll`, `arn`, `version`) and are automatically filtered out. This prevents the agent from trying to set properties that are managed by the provider.
+
+Schema results are cached in the metadata file (`--dep-map-file`) to avoid re-fetching on subsequent calls.
+
+#### 4. Value resolution
+
+Property values are resolved with correct engine semantics:
+
+- **`currentValue`** (what code says) — Always resolved from `NewState.Inputs`. During preview, `NewState.Outputs` may contain stale or placeholder data since the provider's `Update`/`Create` hasn't been called yet. Using Inputs only ensures the value reflects what the code actually declares.
+
+- **`desiredValue`** (what infrastructure has) — Resolved from `OldState.Outputs` by default (the provider's last-known state), or from `OldState.Inputs` when `inputDiff=true` (comparing input-to-input).
+
+This matches the Pulumi engine's own `TranslateDetailedDiff()` semantics documented in `pkg/engine/detailedDiff.go`.
+
+#### 5. Unknown sentinel filtering
+
+Preview data may contain Pulumi's unknown sentinel UUIDs as placeholder values (e.g., in cascading replace scenarios where a dependent resource's inputs aren't known yet). The tool recognizes all 7 sentinel types from the SDK (`plugin.UnknownStringValue`, etc.) and replaces them with nil. Properties where both current and desired values are nil after filtering are dropped.
+
+#### 6. Secret value supplementation
+
+When the tool detects `"[secret]"` as a property value, it supplements the real plaintext value from the state export (which is run with `--show-secrets`). The state export stores secrets in Pulumi's envelope format (`{sig.Key: sig.Secret, "plaintext": "..."}`) which the tool unwraps automatically. This ensures the agent receives actual values it can use to write working code, rather than opaque `[secret]` placeholders.
+
+Secret supplementation only applies to `desiredValue` on `update_code` resources (from infrastructure state). `currentValue` retains `[secret]` since the agent can read the actual code value directly from the source file. For `add_to_code` resources, property values come directly from `OldState` and are not supplemented. When reusing `--dep-map-file` from a prior run, the state export is not fetched and `[secret]` values remain unsupplemented.
+
+#### 7. Property path parsing
+
+Property paths (e.g., `tags.Environment`, `ingress[0].fromPort`, `tags["kubernetes.io/name"]`) are parsed using the Pulumi SDK's `resource.PropertyPath` parser, which correctly handles bracket-quoted keys with dots, consecutive array indices, and mixed nested paths.
+
+#### 8. Dependency enrichment
+
+For map and array-valued properties (e.g., `subnetIds`, `tags`), individual elements are resolved against dependent resource outputs rather than collapsing the entire collection to a single dependency reference. Map entries preserve their keys; array entries use bracket-index paths (e.g., `subnetIds[0]`, `subnetIds[1]`). Properties that match a dependency get a `dependsOn` field with `resourceName`, `resourceType`, and optionally `outputProperty`.
+
+#### 9. Dependency sorting
+
+Resources are topologically sorted using Kahn's algorithm so leaf nodes (no cross-batch dependencies) come first. Each resource is assigned a `DependencyLevel` indicating its depth in the dependency graph.
 
 At the property level, the intent is conveyed entirely by `currentValue` and `desiredValue`:
 - `currentValue=X, desiredValue=Y` → update the property
