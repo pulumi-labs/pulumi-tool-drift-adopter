@@ -42,10 +42,11 @@ Use this mode when integrating with deployment systems that run preview separate
 
 ## Output
 
-The tool uses a two-phase output model:
+The tool produces three outputs:
 
 1. **Stdout** — A compact summary JSON for the agent to parse quickly
 2. **Output file** — The full JSON with all resource details, written to disk
+3. **Metadata file** — Cached provider schemas, dependency maps, and state data. Pass this back via `--dep-map-file` on subsequent calls to skip expensive state export and schema fetch operations
 
 ### Summary (stdout)
 
@@ -64,7 +65,7 @@ The tool uses a two-phase output model:
 }
 ```
 
-The agent reads the full resource details from `outputFile` using its Read tool.
+The agent reads the full resource details from `outputFile` using its Read tool. On subsequent calls, pass `depMapFile` back via `--dep-map-file` to reuse cached metadata.
 
 ### Full output (file)
 
