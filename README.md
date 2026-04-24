@@ -59,7 +59,7 @@ The tool uses a two-phase output model:
     "byTypeAction": { "aws:s3/bucket:Bucket": { "update_code": 2 } }
   },
   "outputFile": "/tmp/drift-adopter-output-123456.json",
-  "depMapFile": "/tmp/drift-adopter-depmap-123456.json",
+  "depMapFile": "/tmp/drift-adopter-metadata-123456.json",
   "skippedCount": 0
 }
 ```
@@ -71,25 +71,46 @@ The agent reads the full resource details from `outputFile` using its Read tool.
 ```json
 {
   "status": "changes_needed",
-  "summary": { "total": 1, "byAction": { "update_code": 1 }, "byType": {}, "byTypeAction": {} },
+  "summary": { "total": 2, "byAction": { "update_code": 1, "add_to_code": 1 }, "byType": {}, "byTypeAction": {} },
   "resources": [
     {
-      "action": "update_code",
       "urn": "urn:pulumi:dev::app::aws:s3/bucket:Bucket::my-bucket",
-      "type": "aws:s3/bucket:Bucket",
       "name": "my-bucket",
-      "dependencyLevel": 0,
+      "type": "aws:s3/bucket:Bucket",
+      "action": "update_code",
       "properties": [
         {
           "path": "tags.Environment",
           "currentValue": "dev",
           "desiredValue": "production"
         }
-      ]
+      ],
+      "dependencyLevel": 0
+    },
+    {
+      "urn": "urn:pulumi:dev::app::aws:ec2/instance:Instance::web-server",
+      "name": "web-server",
+      "type": "aws:ec2/instance:Instance",
+      "action": "add_to_code",
+      "inputProperties": {
+        "ami": "ami-0abcdef1234567890",
+        "instanceType": "t3.micro",
+        "subnetId": {
+          "dependsOn": {
+            "resourceName": "my-subnet",
+            "resourceType": "aws:ec2/subnet:Subnet"
+          }
+        },
+        "tags": {
+          "Name": "web-server",
+          "Environment": "production"
+        }
+      },
+      "dependencyLevel": 1
     }
   ],
   "skipped": [],
-  "depMapFile": "/tmp/drift-adopter-depmap-123456.json"
+  "depMapFile": "/tmp/drift-adopter-metadata-123456.json"
 }
 ```
 
@@ -100,11 +121,15 @@ The agent reads the full resource details from `outputFile` using its Read tool.
 - `error` — Preview failed
 
 **Actions:**
-- `update_code` — Update properties in code to match `desiredValue`
+- `update_code` — Update properties in code to match `desiredValue`. Uses `properties` array of `PropertyChange` objects with `path`, `currentValue`, and `desiredValue`.
 - `delete_from_code` — Remove resource from code (exists in code but not infrastructure)
-- `add_to_code` — Add resource to code (exists in infrastructure but not code)
+- `add_to_code` — Add resource to code (exists in infrastructure but not code). Uses `inputProperties` map with the full input structure from state. Values that reference other resources are wrapped in `{"dependsOn": {"resourceName": "...", "resourceType": "..."}}`.
 
 **Resource ordering:** Resources are topologically sorted by dependency level (leaf nodes first). The `dependencyLevel` field indicates depth in the dependency graph — 0 means no cross-batch dependencies.
+
+**Skipped resources:** Resources in the `skipped` array include a `reason` field: `"excluded"` (matched `--exclude-urns`) or `"missing_properties"` (no actionable property changes after filtering).
+
+**Value truncation:** String property values longer than 200 characters are replaced with `<string: N chars>` in the output.
 
 ## Flags
 
@@ -241,7 +266,7 @@ Both formats are parsed into `auto.PreviewStep` structs, then processed through 
 
 #### 1. DetailedDiff normalization
 
-For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `InputDiff: true`. The NDJSON parser performs equivalent normalization from its `diffs` field during format conversion.
+For update/replace steps where `DetailedDiff` is empty (common in standard JSON where `detailedDiff` is `null`), entries are synthesized from `ReplaceReasons` (preferred) or `DiffReasons` with `InputDiff: true`. Both the NDJSON and Engine Events JSON parsers perform equivalent normalization from their `diffs` field during format conversion.
 
 #### 2. Schema-based output filtering
 
@@ -267,7 +292,7 @@ Preview data may contain Pulumi's unknown sentinel UUIDs as placeholder values (
 
 When the tool detects `"[secret]"` as a property value, it supplements the real plaintext value from the state export (which is run with `--show-secrets`). The state export stores secrets in Pulumi's envelope format (`{sig.Key: sig.Secret, "plaintext": "..."}`) which the tool unwraps automatically. This ensures the agent receives actual values it can use to write working code, rather than opaque `[secret]` placeholders.
 
-Secret supplementation only applies to `desiredValue` (from infrastructure state). `currentValue` retains `[secret]` since the agent can read the actual code value directly from the source file.
+Secret supplementation only applies to `desiredValue` on `update_code` resources (from infrastructure state). `currentValue` retains `[secret]` since the agent can read the actual code value directly from the source file. For `add_to_code` resources, property values come directly from `OldState` and are not supplemented. When reusing `--dep-map-file` from a prior run, the state export is not fetched and `[secret]` values remain unsupplemented.
 
 #### 6. Property path parsing
 
@@ -275,7 +300,7 @@ Property paths (e.g., `tags.Environment`, `ingress[0].fromPort`, `tags["kubernet
 
 #### 7. Element-level dependency resolution
 
-For map and array properties (e.g. `dependsOn`), individual elements are resolved rather than collapsing to a single value. Map entries preserve their keys; array entries preserve structure.
+For map and array-valued properties (e.g., `subnetIds`, `tags`), individual elements are resolved against dependent resource outputs rather than collapsing the entire collection to a single dependency reference. Map entries preserve their keys; array entries use bracket-index paths (e.g., `subnetIds[0]`, `subnetIds[1]`).
 
 #### 8. Dependency sorting
 
