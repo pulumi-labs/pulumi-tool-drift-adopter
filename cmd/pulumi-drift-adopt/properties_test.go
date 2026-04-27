@@ -1044,48 +1044,6 @@ func TestSupplementSecretValues_ConfigKeyFormat(t *testing.T) {
 	assert.Equal(t, "hunter2", secrets["aws-rds-cluster-Cluster.my-db.masterPassword"])
 }
 
-// TestSupplementSecretValues_OverwriteOnConflict verifies that when two resources
-// produce the same config key (same type, name, and secret path), the second call's
-// value overwrites the first — last-write-wins, which is correct for re-runs.
-func TestSupplementSecretValues_OverwriteOnConflict(t *testing.T) {
-	urn1 := "urn:pulumi:dev::proj::aws:ssm/parameter:Parameter::db-password"
-	urn2 := "urn:pulumi:dev::proj2::aws:ssm/parameter:Parameter::db-password"
-	stateLookup := map[string]*apitype.ResourceV3{
-		urn1: {
-			Inputs: map[string]interface{}{
-				"value": map[string]interface{}{
-					pulumiSecretSigKey: "secret",
-					"plaintext":        `"first-value"`,
-				},
-			},
-		},
-		urn2: {
-			Inputs: map[string]interface{}{
-				"value": map[string]interface{}{
-					pulumiSecretSigKey: "secret",
-					"plaintext":        `"second-value"`,
-				},
-			},
-		},
-	}
-
-	props1 := []PropertyChange{{Path: "value", DesiredValue: "[secret]"}}
-	props2 := []PropertyChange{{Path: "value", DesiredValue: "[secret]"}}
-
-	// Simulate the convertStepsToResources loop: merge into one map.
-	allSecrets := make(map[string]string)
-	for k, v := range supplementSecretValues(props1, urn1, stateLookup, "db-password", "aws:ssm/parameter:Parameter") {
-		allSecrets[k] = v
-	}
-	for k, v := range supplementSecretValues(props2, urn2, stateLookup, "db-password", "aws:ssm/parameter:Parameter") {
-		allSecrets[k] = v
-	}
-
-	// Last write wins — second-value should overwrite first-value.
-	require.Len(t, allSecrets, 1)
-	assert.Equal(t, "second-value", allSecrets["aws-ssm-parameter-Parameter.db-password.value"])
-}
-
 // TestAddToCode_SecretValueSupplementation verifies that [secret] values in
 // add_to_code properties are supplemented with real values from the state export.
 func TestAddToCode_SecretValueSupplementation(t *testing.T) {

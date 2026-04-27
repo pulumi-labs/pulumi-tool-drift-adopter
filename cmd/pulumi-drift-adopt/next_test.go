@@ -176,6 +176,47 @@ func TestWriteSecretConfigs_WritesToStackFile(t *testing.T) {
 	assert.NoError(t, err, "stack config file should exist on disk")
 }
 
+// TestWriteSecretConfigs_OverwritesExistingKeys verifies that calling writeSecretConfigs
+// twice with the same key but different values results in the second value winning.
+func TestWriteSecretConfigs_OverwritesExistingKeys(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	pulumiYAML := filepath.Join(tmpDir, "Pulumi.yaml")
+	err := os.WriteFile(pulumiYAML, []byte("name: test-project\nruntime: yaml\n"), 0o644)
+	require.NoError(t, err)
+
+	t.Setenv("PULUMI_CONFIG_PASSPHRASE", "test")
+	t.Setenv("PULUMI_BACKEND_URL", "file://"+tmpDir)
+
+	stackName := "test-stack"
+
+	ctx := context.Background()
+	ws, err := auto.NewLocalWorkspace(ctx, auto.WorkDir(tmpDir))
+	require.NoError(t, err)
+	err = ws.CreateStack(ctx, stackName)
+	require.NoError(t, err)
+
+	// First write
+	err = writeSecretConfigs(tmpDir, stackName, map[string]string{
+		"aws-rds-cluster-Cluster.my-db.masterPassword": "first-value",
+	})
+	require.NoError(t, err)
+
+	// Second write with same key, different value
+	err = writeSecretConfigs(tmpDir, stackName, map[string]string{
+		"aws-rds-cluster-Cluster.my-db.masterPassword": "second-value",
+	})
+	require.NoError(t, err)
+
+	allConfig, err := ws.GetAllConfig(ctx, stackName)
+	require.NoError(t, err)
+
+	fullKey := "test-project:aws-rds-cluster-Cluster.my-db.masterPassword"
+	require.Contains(t, allConfig, fullKey)
+	assert.Equal(t, "second-value", allConfig[fullKey].Value)
+	assert.True(t, allConfig[fullKey].Secret)
+}
+
 // loadInputProperties loads testdata/aws_input_properties.json for use in tests.
 func loadInputProperties(t *testing.T) map[string][]string {
 	t.Helper()
