@@ -160,7 +160,7 @@ var pulumiSecretSigKey = sig.Key
 // returns a map of config keys to plaintext values for writing to stack config.
 // Each resolved secret gets a configRef as its DesiredValue instead of the plaintext.
 // The returned map is nil if no secrets were resolved.
-func supplementSecretValues(properties []PropertyChange, urn string, stateLookup map[string]*apitype.ResourceV3, resourceName string) map[string]string {
+func supplementSecretValues(properties []PropertyChange, urn string, stateLookup map[string]*apitype.ResourceV3, resourceName, resourceType string) map[string]string {
 	stateRes := stateLookup[urn]
 	if stateRes == nil {
 		return nil
@@ -176,7 +176,7 @@ func supplementSecretValues(properties []PropertyChange, urn string, stateLookup
 				real = resolveSecretFromState(stateRes.Outputs, properties[i].Path)
 			}
 			if real != nil {
-				configKey := "drift-adopt:" + resourceName + "." + properties[i].Path
+				configKey := sanitizeConfigKeyType(resourceType) + "." + resourceName + "." + properties[i].Path
 				if secrets == nil {
 					secrets = make(map[string]string)
 				}
@@ -189,6 +189,16 @@ func supplementSecretValues(properties []PropertyChange, urn string, stateLookup
 		// code value directly from the source file.
 	}
 	return secrets
+}
+
+// sanitizeConfigKeyType converts a Pulumi resource type token (e.g. "aws:rds/cluster:Cluster")
+// into a string safe for use in Pulumi config keys by replacing ":" and "/" with "-".
+// All colons are replaced to avoid Pulumi interpreting the prefix as a provider namespace.
+// Result: "aws-rds-cluster-Cluster"
+func sanitizeConfigKeyType(resourceType string) string {
+	s := strings.ReplaceAll(resourceType, ":", "-")
+	s = strings.ReplaceAll(s, "/", "-")
+	return s
 }
 
 // resolveSecretFromState looks up a property path in state data and unwraps

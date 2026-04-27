@@ -960,8 +960,8 @@ func TestAWSSecretInput_SecretValueSupplementation(t *testing.T) {
 		"desiredValue should be supplemented, not left as [secret]")
 	refMap, ok := valProp.DesiredValue.(map[string]interface{})
 	require.True(t, ok, "desiredValue should be a configRef map, got %T", valProp.DesiredValue)
-	assert.Equal(t, "drift-adopt:db-password.value", refMap["configRef"],
-		"configRef should use drift-adopt:<resourceName>.<path> format")
+	assert.Equal(t, "aws-ssm-parameter-Parameter.db-password.value", refMap["configRef"],
+		"configRef should use type.name.path format")
 }
 
 // TestSupplementSecretValues_ReturnsConfigMap verifies that supplementSecretValues
@@ -984,16 +984,16 @@ func TestSupplementSecretValues_ReturnsConfigMap(t *testing.T) {
 		{Path: "name", CurrentValue: "old-name", DesiredValue: "new-name"},
 	}
 
-	secrets := supplementSecretValues(properties, urn, stateLookup, "db-password")
+	secrets := supplementSecretValues(properties, urn, stateLookup, "db-password", "aws:ssm/parameter:Parameter")
 
 	// Should return one secret entry
 	require.Len(t, secrets, 1)
-	assert.Equal(t, "my-secret-value", secrets["drift-adopt:db-password.value"])
+	assert.Equal(t, "my-secret-value", secrets["aws-ssm-parameter-Parameter.db-password.value"])
 
 	// Secret property should have configRef as desiredValue
 	refMap, ok := properties[0].DesiredValue.(map[string]interface{})
 	require.True(t, ok)
-	assert.Equal(t, "drift-adopt:db-password.value", refMap["configRef"])
+	assert.Equal(t, "aws-ssm-parameter-Parameter.db-password.value", refMap["configRef"])
 
 	// Non-secret property should be unchanged
 	assert.Equal(t, "new-name", properties[1].DesiredValue)
@@ -1015,13 +1015,13 @@ func TestSupplementSecretValues_NoSecrets(t *testing.T) {
 		{Path: "bucket", CurrentValue: "old", DesiredValue: "my-bucket"},
 	}
 
-	secrets := supplementSecretValues(properties, urn, stateLookup, "my-bucket")
+	secrets := supplementSecretValues(properties, urn, stateLookup, "my-bucket", "aws:s3/bucket:Bucket")
 	assert.Nil(t, secrets)
 	assert.Equal(t, "my-bucket", properties[0].DesiredValue)
 }
 
 // TestSupplementSecretValues_ConfigKeyFormat verifies the config key format is
-// drift-adopt:<resourceName>.<propertyPath>.
+// type.name.path.
 func TestSupplementSecretValues_ConfigKeyFormat(t *testing.T) {
 	urn := "urn:pulumi:dev::proj::aws:rds/cluster:Cluster::my-db"
 	stateLookup := map[string]*apitype.ResourceV3{
@@ -1039,9 +1039,51 @@ func TestSupplementSecretValues_ConfigKeyFormat(t *testing.T) {
 		{Path: "masterPassword", DesiredValue: "[secret]"},
 	}
 
-	secrets := supplementSecretValues(properties, urn, stateLookup, "my-db")
-	require.Contains(t, secrets, "drift-adopt:my-db.masterPassword")
-	assert.Equal(t, "hunter2", secrets["drift-adopt:my-db.masterPassword"])
+	secrets := supplementSecretValues(properties, urn, stateLookup, "my-db", "aws:rds/cluster:Cluster")
+	require.Contains(t, secrets, "aws-rds-cluster-Cluster.my-db.masterPassword")
+	assert.Equal(t, "hunter2", secrets["aws-rds-cluster-Cluster.my-db.masterPassword"])
+}
+
+// TestSupplementSecretValues_OverwriteOnConflict verifies that when two resources
+// produce the same config key (same type, name, and secret path), the second call's
+// value overwrites the first — last-write-wins, which is correct for re-runs.
+func TestSupplementSecretValues_OverwriteOnConflict(t *testing.T) {
+	urn1 := "urn:pulumi:dev::proj::aws:ssm/parameter:Parameter::db-password"
+	urn2 := "urn:pulumi:dev::proj2::aws:ssm/parameter:Parameter::db-password"
+	stateLookup := map[string]*apitype.ResourceV3{
+		urn1: {
+			Inputs: map[string]interface{}{
+				"value": map[string]interface{}{
+					pulumiSecretSigKey: "secret",
+					"plaintext":        `"first-value"`,
+				},
+			},
+		},
+		urn2: {
+			Inputs: map[string]interface{}{
+				"value": map[string]interface{}{
+					pulumiSecretSigKey: "secret",
+					"plaintext":        `"second-value"`,
+				},
+			},
+		},
+	}
+
+	props1 := []PropertyChange{{Path: "value", DesiredValue: "[secret]"}}
+	props2 := []PropertyChange{{Path: "value", DesiredValue: "[secret]"}}
+
+	// Simulate the convertStepsToResources loop: merge into one map.
+	allSecrets := make(map[string]string)
+	for k, v := range supplementSecretValues(props1, urn1, stateLookup, "db-password", "aws:ssm/parameter:Parameter") {
+		allSecrets[k] = v
+	}
+	for k, v := range supplementSecretValues(props2, urn2, stateLookup, "db-password", "aws:ssm/parameter:Parameter") {
+		allSecrets[k] = v
+	}
+
+	// Last write wins — second-value should overwrite first-value.
+	require.Len(t, allSecrets, 1)
+	assert.Equal(t, "second-value", allSecrets["aws-ssm-parameter-Parameter.db-password.value"])
 }
 
 // TestAddToCode_SecretValueSupplementation verifies that [secret] values in
@@ -1102,7 +1144,7 @@ func TestAddToCode_SecretValueSupplementation(t *testing.T) {
 
 	require.Contains(t, props, "password")
 	// With the secrets-to-stack-config feature, secret values are replaced with configRef objects.
-	expectedRef := map[string]interface{}{"configRef": "drift-adopt:my-db.password"}
+	expectedRef := map[string]interface{}{"configRef": "some-provider-Resource.my-db.password"}
 	assert.Equal(t, expectedRef, props["password"].DesiredValue,
 		"add_to_code secret should be replaced with configRef")
 

@@ -302,7 +302,7 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) (
 		// Supplement "[secret]" values with real values from state export.
 		// Applies to both update_code and add_to_code properties.
 		if stateLookup != nil && action != ActionDeleteFromCode {
-			if secrets := supplementSecretValues(res.Properties, string(step.URN), stateLookup, name); secrets != nil {
+			if secrets := supplementSecretValues(res.Properties, string(step.URN), stateLookup, name, resourceType); secrets != nil {
 				if allSecrets == nil {
 					allSecrets = make(map[string]string)
 				}
@@ -318,7 +318,7 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) (
 }
 
 // writeSecretConfigs writes secret values to Pulumi stack config using the automation API.
-// Each secret is stored as an encrypted config value under the drift-adopt namespace.
+// Each secret is stored as an encrypted config value keyed by type.name.path.
 func writeSecretConfigs(projectDir, stack string, secrets map[string]string) error {
 	ctx := context.Background()
 	opts := []auto.LocalWorkspaceOption{auto.WorkDir(projectDir)}

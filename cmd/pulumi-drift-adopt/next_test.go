@@ -15,12 +15,15 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -117,6 +120,60 @@ func runNextTest(t *testing.T, args []string) (NextSummaryOutput, NextOutput) {
 	}
 
 	return summary, full
+}
+
+// TestWriteSecretConfigs_WritesToStackFile verifies that writeSecretConfigs creates
+// encrypted config entries in a real Pulumi stack file and that they can be read back.
+func TestWriteSecretConfigs_WritesToStackFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Write minimal Pulumi.yaml
+	pulumiYAML := filepath.Join(tmpDir, "Pulumi.yaml")
+	err := os.WriteFile(pulumiYAML, []byte("name: test-project\nruntime: yaml\n"), 0o644)
+	require.NoError(t, err)
+
+	// Use local file backend and passphrase encryption for isolation
+	t.Setenv("PULUMI_CONFIG_PASSPHRASE", "test")
+	t.Setenv("PULUMI_BACKEND_URL", "file://"+tmpDir)
+
+	stackName := "test-stack"
+
+	// Create a local workspace and stack
+	ctx := context.Background()
+	ws, err := auto.NewLocalWorkspace(ctx, auto.WorkDir(tmpDir))
+	require.NoError(t, err)
+	err = ws.CreateStack(ctx, stackName)
+	require.NoError(t, err)
+
+	// Write secrets using the function under test
+	secrets := map[string]string{
+		"aws-rds-cluster-Cluster.my-db.masterPassword":  "hunter2",
+		"aws-ssm-parameter-Parameter.db-password.value": "super-secret",
+	}
+	err = writeSecretConfigs(tmpDir, stackName, secrets)
+	require.NoError(t, err)
+
+	// Read back all config
+	allConfig, err := ws.GetAllConfig(ctx, stackName)
+	require.NoError(t, err)
+
+	// Validate correct number of keys.
+	// Pulumi auto-prefixes keys without a ":" with the project name.
+	assert.Len(t, allConfig, len(secrets))
+
+	// Validate each expected key (with project name prefix added by Pulumi)
+	for key, plaintext := range secrets {
+		fullKey := "test-project:" + key
+		cv, ok := allConfig[fullKey]
+		require.True(t, ok, "expected config key %q not found in %v", fullKey, allConfig)
+		assert.Equal(t, plaintext, cv.Value, "value mismatch for key %q", fullKey)
+		assert.True(t, cv.Secret, "key %q should be marked as secret", fullKey)
+	}
+
+	// Verify the stack config file exists on disk
+	stackFile := filepath.Join(tmpDir, "Pulumi."+stackName+".yaml")
+	_, err = os.Stat(stackFile)
+	assert.NoError(t, err, "stack config file should exist on disk")
 }
 
 // loadInputProperties loads testdata/aws_input_properties.json for use in tests.
