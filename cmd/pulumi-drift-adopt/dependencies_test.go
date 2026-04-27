@@ -19,9 +19,44 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/pulumi/pulumi/sdk/v3/go/auto"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
+	"github.com/pulumi/pulumi/sdk/v3/go/common/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+// findProp returns a pointer to the PropertyChange with the given path, or fails the test.
+func findProp(t *testing.T, props []PropertyChange, path string) *PropertyChange {
+	t.Helper()
+	for i := range props {
+		if props[i].Path == path {
+			return &props[i]
+		}
+	}
+	t.Fatalf("property %q not found", path)
+	return nil
+}
+
+func makeRes(name string, properties []PropertyChange) ResourceChange {
+	return ResourceChange{
+		URN:        "urn:pulumi:dev::proj::pkg:mod:Res::" + name,
+		Name:       name,
+		Type:       "pkg:mod:Res",
+		Action:     ActionAddToCode,
+		Properties: properties,
+	}
+}
+
+func depProp(path, depName string) PropertyChange {
+	return PropertyChange{
+		Path: path,
+		DependsOn: &DependencyRef{
+			ResourceName: depName,
+			ResourceType: "pkg:mod:Res",
+		},
+	}
+}
 
 func TestDependencyResolution(t *testing.T) {
 	// Load test fixtures
@@ -55,42 +90,34 @@ func TestDependencyResolution(t *testing.T) {
 	require.NotNil(t, serverCert, "server-cert resource not found")
 
 	// ca-cert.privateKeyPem should have dependsOn metadata (no literal value)
-	pkPem := caCert.InputProperties["privateKeyPem"]
-	pkMap, ok := pkPem.(map[string]interface{})
-	require.True(t, ok, "privateKeyPem should be a map with dependsOn, got %T", pkPem)
-	assert.Nil(t, pkMap["value"], "value should be omitted when dependsOn is present")
-
-	depInfo, ok := pkMap["dependsOn"].(map[string]interface{})
-	require.True(t, ok, "dependsOn should be a map")
-	assert.Equal(t, "ca-key", depInfo["resourceName"])
-	assert.Equal(t, "tls:index/privateKey:PrivateKey", depInfo["resourceType"])
-	assert.Equal(t, "privateKeyPem", depInfo["outputProperty"])
+	pkPem := findProp(t, caCert.Properties, "privateKeyPem")
+	require.NotNil(t, pkPem.DependsOn, "privateKeyPem should have DependsOn")
+	assert.Nil(t, pkPem.DesiredValue, "value should be omitted when dependsOn is present")
+	assert.Equal(t, "ca-key", pkPem.DependsOn.ResourceName)
+	assert.Equal(t, "tls:index/privateKey:PrivateKey", pkPem.DependsOn.ResourceType)
+	assert.Equal(t, "privateKeyPem", pkPem.DependsOn.OutputProperty)
 
 	// ca-cert.validityPeriodHours should be a plain value (no deps)
-	assert.Equal(t, float64(87600), caCert.InputProperties["validityPeriodHours"])
+	vph := findProp(t, caCert.Properties, "validityPeriodHours")
+	assert.Equal(t, float64(87600), vph.DesiredValue)
+	assert.Nil(t, vph.DependsOn)
 
 	// server-cert.caPrivateKeyPem should resolve to ca-key
-	caKeyPem := serverCert.InputProperties["caPrivateKeyPem"]
-	caKeyMap, ok := caKeyPem.(map[string]interface{})
-	require.True(t, ok, "caPrivateKeyPem should be a map with dependsOn")
-	caKeyDep, ok := caKeyMap["dependsOn"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "ca-key", caKeyDep["resourceName"])
-	assert.Equal(t, "privateKeyPem", caKeyDep["outputProperty"])
+	caKeyPem := findProp(t, serverCert.Properties, "caPrivateKeyPem")
+	require.NotNil(t, caKeyPem.DependsOn, "caPrivateKeyPem should have DependsOn")
+	assert.Equal(t, "ca-key", caKeyPem.DependsOn.ResourceName)
+	assert.Equal(t, "privateKeyPem", caKeyPem.DependsOn.OutputProperty)
 
 	// server-cert.caCertPem should resolve to ca-cert
-	caCertPem := serverCert.InputProperties["caCertPem"]
-	caCertMap, ok := caCertPem.(map[string]interface{})
-	require.True(t, ok, "caCertPem should be a map with dependsOn")
-	caCertDep, ok := caCertMap["dependsOn"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "ca-cert", caCertDep["resourceName"])
-	assert.Equal(t, "tls:index/selfSignedCert:SelfSignedCert", caCertDep["resourceType"])
-	assert.Equal(t, "certPem", caCertDep["outputProperty"])
+	caCertPem := findProp(t, serverCert.Properties, "caCertPem")
+	require.NotNil(t, caCertPem.DependsOn, "caCertPem should have DependsOn")
+	assert.Equal(t, "ca-cert", caCertPem.DependsOn.ResourceName)
+	assert.Equal(t, "tls:index/selfSignedCert:SelfSignedCert", caCertPem.DependsOn.ResourceType)
+	assert.Equal(t, "certPem", caCertPem.DependsOn.OutputProperty)
 
 	// server-cert.certRequestPem has empty deps — should be plain value
-	_, isCsrMap := serverCert.InputProperties["certRequestPem"].(map[string]interface{})
-	assert.False(t, isCsrMap, "certRequestPem has empty deps, should be plain value")
+	csrPem := findProp(t, serverCert.Properties, "certRequestPem")
+	assert.Nil(t, csrPem.DependsOn, "certRequestPem has empty deps, should be plain value")
 }
 
 func TestDependencyResolutionEdgeCases(t *testing.T) {
@@ -109,14 +136,9 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 			if res.Action != ActionAddToCode {
 				continue
 			}
-			for key, val := range res.InputProperties {
-				_, isMap := val.(map[string]interface{})
-				if isMap {
-					// Should NOT have dependsOn when no state lookup
-					m := val.(map[string]interface{})
-					_, hasDep := m["dependsOn"]
-					assert.False(t, hasDep, "property %s should not have dependsOn without state lookup", key)
-				}
+			for _, prop := range res.Properties {
+				assert.Nil(t, prop.DependsOn,
+					"property %s should not have DependsOn without state lookup", prop.Path)
 			}
 		}
 	})
@@ -146,7 +168,9 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		require.Len(t, resources, 1)
 
 		// Should be plain string since dep URN is missing from state
-		assert.Equal(t, "some-pem-value", resources[0].InputProperties["privateKeyPem"])
+		prop := findProp(t, resources[0].Properties, "privateKeyPem")
+		assert.Equal(t, "some-pem-value", prop.DesiredValue)
+		assert.Nil(t, prop.DependsOn)
 	})
 
 	t.Run("engine events format with propertyDependencies", func(t *testing.T) {
@@ -171,12 +195,10 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		require.NotNil(t, cert)
 
 		// PropertyDependencies should survive NDJSON parsing and resolve
-		pkPem, ok := cert.InputProperties["privateKeyPem"].(map[string]interface{})
-		require.True(t, ok, "privateKeyPem should have dependsOn from engine events format")
-		dep, ok := pkPem["dependsOn"].(map[string]interface{})
-		require.True(t, ok)
-		assert.Equal(t, "ndjson-key", dep["resourceName"])
-		assert.Equal(t, "privateKeyPem", dep["outputProperty"])
+		pkPem := findProp(t, cert.Properties, "privateKeyPem")
+		require.NotNil(t, pkPem.DependsOn, "privateKeyPem should have DependsOn from engine events format")
+		assert.Equal(t, "ndjson-key", pkPem.DependsOn.ResourceName)
+		assert.Equal(t, "privateKeyPem", pkPem.DependsOn.OutputProperty)
 	})
 
 	t.Run("value not found in dep outputs - bare dependsOn with single depURN", func(t *testing.T) {
@@ -219,20 +241,18 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
-		// Value doesn't match any output, but single depURN → bare dependsOn (no outputProperty)
-		pkPem, ok := resources[0].InputProperties["privateKeyPem"].(map[string]interface{})
-		require.True(t, ok, "privateKeyPem should have bare dependsOn, got %T", resources[0].InputProperties["privateKeyPem"])
-		dep, ok := pkPem["dependsOn"].(map[string]interface{})
-		require.True(t, ok, "dependsOn should be a map")
-		assert.Equal(t, "some-key", dep["resourceName"])
-		assert.Equal(t, "tls:index/privateKey:PrivateKey", dep["resourceType"])
-		assert.Nil(t, dep["outputProperty"], "bare dependsOn should not have outputProperty")
+		// Value doesn't match any output, but single depURN -> bare dependsOn (no outputProperty)
+		pkPem := findProp(t, resources[0].Properties, "privateKeyPem")
+		require.NotNil(t, pkPem.DependsOn, "privateKeyPem should have bare DependsOn")
+		assert.Equal(t, "some-key", pkPem.DependsOn.ResourceName)
+		assert.Equal(t, "tls:index/privateKey:PrivateKey", pkPem.DependsOn.ResourceType)
+		assert.Empty(t, pkPem.DependsOn.OutputProperty, "bare dependsOn should not have outputProperty")
 	})
 
 	t.Run("plaintext secret output matches correctly (show-secrets)", func(t *testing.T) {
 		// With --show-secrets, secret outputs appear as plaintext — no sentinel wrapper.
 		// Each array element is resolved individually: "secret-password-value" matches
-		// the "result" output, so triggers becomes [{dependsOn: {outputProperty: "result"}}].
+		// the "result" output, so triggers[0] becomes a DependsOn with outputProperty "result".
 		eventsContent := `{
 			"steps": [{
 				"op": "delete",
@@ -272,19 +292,12 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
-		// Array elements are resolved individually: "secret-password-value" matches result output.
-		// triggers should be an array with one dependsOn element (with outputProperty).
-		triggersRaw := resources[0].InputProperties["triggers"]
-		triggers, ok := triggersRaw.([]interface{})
-		require.True(t, ok, "triggers should be an array, got %T", triggersRaw)
-		require.Len(t, triggers, 1)
-		elem, ok := triggers[0].(map[string]interface{})
-		require.True(t, ok, "trigger element should be a map")
-		dep, ok := elem["dependsOn"].(map[string]interface{})
-		require.True(t, ok)
-		assert.Equal(t, "api-pass", dep["resourceName"])
-		assert.Equal(t, "random:index/randomPassword:RandomPassword", dep["resourceType"])
-		assert.Equal(t, "result", dep["outputProperty"])
+		// Array element resolved individually: triggers[0] matches "result" output
+		prop := findProp(t, resources[0].Properties, "triggers[0]")
+		require.NotNil(t, prop.DependsOn, "triggers[0] should have DependsOn")
+		assert.Equal(t, "api-pass", prop.DependsOn.ResourceName)
+		assert.Equal(t, "random:index/randomPassword:RandomPassword", prop.DependsOn.ResourceType)
+		assert.Equal(t, "result", prop.DependsOn.OutputProperty)
 	})
 
 	t.Run("array element matched to string output - resolves outputProperty", func(t *testing.T) {
@@ -329,18 +342,12 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
-		// Array element "hex-output-value" matches output "hex" → resolved with outputProperty
-		triggersRaw := resources[0].InputProperties["triggers"]
-		triggers, ok := triggersRaw.([]interface{})
-		require.True(t, ok, "triggers should be an array, got %T", triggersRaw)
-		require.Len(t, triggers, 1)
-		elem, ok := triggers[0].(map[string]interface{})
-		require.True(t, ok, "trigger element should be a map")
-		dep, ok := elem["dependsOn"].(map[string]interface{})
-		require.True(t, ok)
-		assert.Equal(t, "worker-id", dep["resourceName"])
-		assert.Equal(t, "random:index/randomId:RandomId", dep["resourceType"])
-		assert.Equal(t, "hex", dep["outputProperty"])
+		// Array element "hex-output-value" matches output "hex" -> resolved with outputProperty
+		prop := findProp(t, resources[0].Properties, "triggers[0]")
+		require.NotNil(t, prop.DependsOn, "triggers[0] should have DependsOn")
+		assert.Equal(t, "worker-id", prop.DependsOn.ResourceName)
+		assert.Equal(t, "random:index/randomId:RandomId", prop.DependsOn.ResourceType)
+		assert.Equal(t, "hex", prop.DependsOn.OutputProperty)
 	})
 
 	t.Run("multiple depURNs with no match returns plain value", func(t *testing.T) {
@@ -391,11 +398,10 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
-		// Multiple depURNs, no exact match → plain value (no bare dependsOn due to ambiguity)
-		triggers := resources[0].InputProperties["triggers"]
-		triggerArr, ok := triggers.([]interface{})
-		require.True(t, ok, "triggers should be plain array value, got %T", triggers)
-		assert.Equal(t, "ambiguous-value", triggerArr[0])
+		// Multiple depURNs, no exact match -> plain value (no bare dependsOn due to ambiguity)
+		prop := findProp(t, resources[0].Properties, "triggers[0]")
+		assert.Equal(t, "ambiguous-value", prop.DesiredValue)
+		assert.Nil(t, prop.DependsOn)
 	})
 }
 
@@ -428,11 +434,9 @@ func TestRunNextDepMapFileFlag(t *testing.T) {
 	}
 	require.NotNil(t, caCert)
 
-	pkPem, ok := caCert.InputProperties["privateKeyPem"].(map[string]interface{})
-	require.True(t, ok, "privateKeyPem should have dependsOn metadata")
-	dep, ok := pkPem["dependsOn"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "ca-key", dep["resourceName"])
+	pkPem := findProp(t, caCert.Properties, "privateKeyPem")
+	require.NotNil(t, pkPem.DependsOn, "privateKeyPem should have DependsOn metadata")
+	assert.Equal(t, "ca-key", pkPem.DependsOn.ResourceName)
 }
 
 func TestDependencyResolutionFromPreviewOnly(t *testing.T) {
@@ -485,11 +489,10 @@ func TestDependencyResolutionFromPreviewOnly(t *testing.T) {
 	}
 	require.NotNil(t, cert)
 
-	pkPem, ok := cert.InputProperties["privateKeyPem"].(map[string]interface{})
-	require.True(t, ok, "should have dependsOn")
-	dep := pkPem["dependsOn"].(map[string]interface{})
-	assert.Equal(t, "inline-key", dep["resourceName"])
-	assert.Equal(t, "privateKeyPem", dep["outputProperty"])
+	pkPem := findProp(t, cert.Properties, "privateKeyPem")
+	require.NotNil(t, pkPem.DependsOn, "should have DependsOn")
+	assert.Equal(t, "inline-key", pkPem.DependsOn.ResourceName)
+	assert.Equal(t, "privateKeyPem", pkPem.DependsOn.OutputProperty)
 }
 
 func TestDepMapFileInOutput(t *testing.T) {
@@ -560,19 +563,12 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
-		// keepers should be a map with preserved keys and resolved dependsOn per value
-		keepersRaw := resources[0].InputProperties["keepers"]
-		keepers, ok := keepersRaw.(map[string]interface{})
-		require.True(t, ok, "keepers should be a map, got %T", keepersRaw)
-
-		// Key "ref" should be preserved; its value should be a dependsOn wrapper
-		refVal, ok := keepers["ref"].(map[string]interface{})
-		require.True(t, ok, "keepers[\"ref\"] should be a dependsOn map, got %T", keepers["ref"])
-		dep, ok := refVal["dependsOn"].(map[string]interface{})
-		require.True(t, ok)
-		assert.Equal(t, "cache-pet", dep["resourceName"])
-		assert.Equal(t, "random:index/randomPet:RandomPet", dep["resourceType"])
-		assert.Equal(t, "id", dep["outputProperty"])
+		// keepers.ref should be flattened with DependsOn
+		prop := findProp(t, resources[0].Properties, "keepers.ref")
+		require.NotNil(t, prop.DependsOn, "keepers.ref should have DependsOn")
+		assert.Equal(t, "cache-pet", prop.DependsOn.ResourceName)
+		assert.Equal(t, "random:index/randomPet:RandomPet", prop.DependsOn.ResourceType)
+		assert.Equal(t, "id", prop.DependsOn.OutputProperty)
 	})
 
 	t.Run("map value encrypted - key preserved with bare dependsOn", func(t *testing.T) {
@@ -617,18 +613,12 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
-		keepersRaw := resources[0].InputProperties["keepers"]
-		keepers, ok := keepersRaw.(map[string]interface{})
-		require.True(t, ok, "keepers should be a map, got %T", keepersRaw)
-
-		// Key "ref" preserved; value is bare dependsOn (no outputProperty)
-		refVal, ok := keepers["ref"].(map[string]interface{})
-		require.True(t, ok, "keepers[\"ref\"] should be a dependsOn map")
-		dep, ok := refVal["dependsOn"].(map[string]interface{})
-		require.True(t, ok)
-		assert.Equal(t, "cache-pet", dep["resourceName"])
-		assert.Equal(t, "random:index/randomPet:RandomPet", dep["resourceType"])
-		assert.Nil(t, dep["outputProperty"], "bare dependsOn should have no outputProperty")
+		// keepers.ref preserved; bare dependsOn (no outputProperty)
+		prop := findProp(t, resources[0].Properties, "keepers.ref")
+		require.NotNil(t, prop.DependsOn, "keepers.ref should have bare DependsOn")
+		assert.Equal(t, "cache-pet", prop.DependsOn.ResourceName)
+		assert.Equal(t, "random:index/randomPet:RandomPet", prop.DependsOn.ResourceType)
+		assert.Empty(t, prop.DependsOn.OutputProperty, "bare dependsOn should have no outputProperty")
 	})
 
 	t.Run("array element encrypted - array structure preserved with bare dependsOn", func(t *testing.T) {
@@ -676,43 +666,17 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
-		triggersRaw := resources[0].InputProperties["triggers"]
-		triggers, ok := triggersRaw.([]interface{})
-		require.True(t, ok, "triggers should be an array, got %T", triggersRaw)
-		require.Len(t, triggers, 1)
-
-		// Element becomes bare dependsOn (encrypted = no output match)
-		elem, ok := triggers[0].(map[string]interface{})
-		require.True(t, ok, "trigger element should be a dependsOn map")
-		dep, ok := elem["dependsOn"].(map[string]interface{})
-		require.True(t, ok)
-		assert.Equal(t, "api-pass", dep["resourceName"])
-		assert.Equal(t, "random:index/randomPassword:RandomPassword", dep["resourceType"])
-		assert.Nil(t, dep["outputProperty"], "bare dependsOn should have no outputProperty")
+		// triggers[0] becomes bare dependsOn (encrypted = no output match)
+		prop := findProp(t, resources[0].Properties, "triggers[0]")
+		require.NotNil(t, prop.DependsOn, "triggers[0] should have bare DependsOn")
+		assert.Equal(t, "api-pass", prop.DependsOn.ResourceName)
+		assert.Equal(t, "random:index/randomPassword:RandomPassword", prop.DependsOn.ResourceType)
+		assert.Empty(t, prop.DependsOn.OutputProperty, "bare dependsOn should have no outputProperty")
 	})
 }
 
 // TestSortResourcesByDependencies verifies topological sorting and DependencyLevel assignment.
 func TestSortResourcesByDependencies(t *testing.T) {
-	makeRes := func(name string, inputProps map[string]interface{}) ResourceChange {
-		return ResourceChange{
-			Action:          ActionAddToCode,
-			URN:             "urn:pulumi:dev::test::pkg:Res::" + name,
-			Type:            "pkg:Res",
-			Name:            name,
-			InputProperties: inputProps,
-		}
-	}
-
-	dependsOnProp := func(resourceName string) map[string]interface{} {
-		return map[string]interface{}{
-			"dependsOn": map[string]interface{}{
-				"resourceName": resourceName,
-				"resourceType": "pkg:Res",
-			},
-		}
-	}
-
 	t.Run("empty slice", func(t *testing.T) {
 		result := sortResourcesByDependencies(nil)
 		assert.Nil(t, result)
@@ -720,8 +684,8 @@ func TestSortResourcesByDependencies(t *testing.T) {
 
 	t.Run("no dependencies - order preserved, level 0", func(t *testing.T) {
 		resources := []ResourceChange{
-			makeRes("a", map[string]interface{}{"x": 1}),
-			makeRes("b", map[string]interface{}{"y": 2}),
+			makeRes("a", []PropertyChange{{Path: "x", DesiredValue: 1}}),
+			makeRes("b", []PropertyChange{{Path: "y", DesiredValue: 2}}),
 		}
 		result := sortResourcesByDependencies(resources)
 		require.Len(t, result, 2)
@@ -732,8 +696,8 @@ func TestSortResourcesByDependencies(t *testing.T) {
 
 	t.Run("simple chain A depends on B - B comes first at level 0, A at level 1", func(t *testing.T) {
 		resources := []ResourceChange{
-			makeRes("a", map[string]interface{}{"ref": dependsOnProp("b")}),
-			makeRes("b", map[string]interface{}{"x": 1}),
+			makeRes("a", []PropertyChange{depProp("ref", "b")}),
+			makeRes("b", []PropertyChange{{Path: "x", DesiredValue: 1}}),
 		}
 		result := sortResourcesByDependencies(resources)
 		require.Len(t, result, 2)
@@ -745,10 +709,10 @@ func TestSortResourcesByDependencies(t *testing.T) {
 
 	t.Run("diamond A->B, A->C, B->D, C->D - D first, then B and C, then A", func(t *testing.T) {
 		resources := []ResourceChange{
-			makeRes("a", map[string]interface{}{"rb": dependsOnProp("b"), "rc": dependsOnProp("c")}),
-			makeRes("b", map[string]interface{}{"rd": dependsOnProp("d")}),
-			makeRes("c", map[string]interface{}{"rd": dependsOnProp("d")}),
-			makeRes("d", map[string]interface{}{"x": 1}),
+			makeRes("a", []PropertyChange{depProp("rb", "b"), depProp("rc", "c")}),
+			makeRes("b", []PropertyChange{depProp("rd", "d")}),
+			makeRes("c", []PropertyChange{depProp("rd", "d")}),
+			makeRes("d", []PropertyChange{{Path: "x", DesiredValue: 1}}),
 		}
 		result := sortResourcesByDependencies(resources)
 		require.Len(t, result, 4)
@@ -771,8 +735,8 @@ func TestSortResourcesByDependencies(t *testing.T) {
 	t.Run("external dep (not in batch) - resource treated as level 0", func(t *testing.T) {
 		// "a" references "external" which is not in the batch
 		resources := []ResourceChange{
-			makeRes("a", map[string]interface{}{"ref": dependsOnProp("external")}),
-			makeRes("b", map[string]interface{}{"x": 1}),
+			makeRes("a", []PropertyChange{depProp("ref", "external")}),
+			makeRes("b", []PropertyChange{{Path: "x", DesiredValue: 1}}),
 		}
 		result := sortResourcesByDependencies(resources)
 		require.Len(t, result, 2)
@@ -782,12 +746,10 @@ func TestSortResourcesByDependencies(t *testing.T) {
 	})
 
 	t.Run("array-wrapped dependsOn resolved correctly", func(t *testing.T) {
-		// triggers = [{"dependsOn": {...}}] — dependency inside array
+		// triggers[0] has DependsOn referencing "pass"
 		resources := []ResourceChange{
-			makeRes("cmd", map[string]interface{}{
-				"triggers": []interface{}{dependsOnProp("pass")},
-			}),
-			makeRes("pass", map[string]interface{}{"length": 16}),
+			makeRes("cmd", []PropertyChange{depProp("triggers[0]", "pass")}),
+			makeRes("pass", []PropertyChange{{Path: "length", DesiredValue: 16}}),
 		}
 		result := sortResourcesByDependencies(resources)
 		require.Len(t, result, 2)
@@ -809,7 +771,7 @@ func TestBuildDepMapFromState(t *testing.T) {
 
 	depMap := buildDepMapFromState(stateLookup)
 
-	// ca-cert.privateKeyPem → ca-key.privateKeyPem
+	// ca-cert.privateKeyPem -> ca-key.privateKeyPem
 	caCertDeps := depMap["urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert"]
 	require.NotNil(t, caCertDeps, "ca-cert should have dependency entries")
 	pkRef := caCertDeps["privateKeyPem"]
@@ -817,14 +779,14 @@ func TestBuildDepMapFromState(t *testing.T) {
 	assert.Equal(t, "tls:index/privateKey:PrivateKey", pkRef.ResourceType)
 	assert.Equal(t, "privateKeyPem", pkRef.OutputProperty)
 
-	// server-cert.caPrivateKeyPem → ca-key.privateKeyPem
+	// server-cert.caPrivateKeyPem -> ca-key.privateKeyPem
 	serverDeps := depMap["urn:pulumi:dev::test::tls:index/locallySignedCert:LocallySignedCert::server-cert"]
 	require.NotNil(t, serverDeps, "server-cert should have dependency entries")
 	caKeyRef := serverDeps["caPrivateKeyPem"]
 	assert.Equal(t, "ca-key", caKeyRef.ResourceName)
 	assert.Equal(t, "privateKeyPem", caKeyRef.OutputProperty)
 
-	// server-cert.caCertPem → ca-cert.certPem
+	// server-cert.caCertPem -> ca-cert.certPem
 	caCertRef := serverDeps["caCertPem"]
 	assert.Equal(t, "ca-cert", caCertRef.ResourceName)
 	assert.Equal(t, "tls:index/selfSignedCert:SelfSignedCert", caCertRef.ResourceType)
@@ -835,7 +797,7 @@ func TestBuildDepMapFromState(t *testing.T) {
 	assert.Nil(t, depMap["urn:pulumi:dev::test::tls:index/privateKey:PrivateKey::server-key"])
 }
 
-// TestDepMapRoundTrip verifies save → load produces identical dep map.
+// TestDepMapRoundTrip verifies save -> load produces identical dep map.
 func TestDepMapRoundTrip(t *testing.T) {
 	original := DependencyMap{
 		"urn:pulumi:dev::test::tls:index/selfSignedCert:SelfSignedCert::ca-cert": {
@@ -940,12 +902,10 @@ func TestDepMapSkipsStateExport(t *testing.T) {
 		}
 	}
 	require.NotNil(t, caCert)
-	pkPem, ok := caCert.InputProperties["privateKeyPem"].(map[string]interface{})
-	require.True(t, ok, "privateKeyPem should have dependsOn from dep map")
-	dep, ok := pkPem["dependsOn"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "ca-key", dep["resourceName"])
-	assert.Equal(t, "privateKeyPem", dep["outputProperty"])
+	pkPem := findProp(t, caCert.Properties, "privateKeyPem")
+	require.NotNil(t, pkPem.DependsOn, "privateKeyPem should have DependsOn from dep map")
+	assert.Equal(t, "ca-key", pkPem.DependsOn.ResourceName)
+	assert.Equal(t, "privateKeyPem", pkPem.DependsOn.OutputProperty)
 }
 
 // TestDepMapReusedOnSubsequentCalls verifies that the dep map produced on first run
@@ -982,9 +942,138 @@ func TestDepMapReusedOnSubsequentCalls(t *testing.T) {
 		}
 	}
 	require.NotNil(t, caCert)
-	pkPem, ok := caCert.InputProperties["privateKeyPem"].(map[string]interface{})
-	require.True(t, ok)
-	dep, ok := pkPem["dependsOn"].(map[string]interface{})
-	require.True(t, ok)
-	assert.Equal(t, "ca-key", dep["resourceName"])
+	pkPem := findProp(t, caCert.Properties, "privateKeyPem")
+	require.NotNil(t, pkPem.DependsOn)
+	assert.Equal(t, "ca-key", pkPem.DependsOn.ResourceName)
+}
+
+func TestExtractInputPropertiesUnified(t *testing.T) {
+	step := auto.PreviewStep{
+		Op:  "delete",
+		URN: resource.URN("urn:pulumi:dev::proj::aws:s3/bucket:Bucket::my-bucket"),
+		OldState: &apitype.ResourceV3{
+			Type: "aws:s3/bucket:Bucket",
+			Inputs: map[string]interface{}{
+				"bucket": "my-bucket",
+				"tags":   map[string]interface{}{"Environment": "prod", "Team": "platform"},
+				"corsRules": []interface{}{
+					map[string]interface{}{"allowedMethods": []interface{}{"GET"}},
+				},
+			},
+		},
+	}
+
+	result := extractInputProperties(step, nil)
+
+	pathMap := make(map[string]interface{})
+	for _, pc := range result {
+		assert.Nil(t, pc.CurrentValue, "add_to_code properties should have nil CurrentValue")
+		pathMap[pc.Path] = pc.DesiredValue
+	}
+
+	assert.Equal(t, "my-bucket", pathMap["bucket"])
+	assert.Equal(t, "prod", pathMap["tags.Environment"])
+	assert.Equal(t, "platform", pathMap["tags.Team"])
+	assert.Equal(t, "GET", pathMap["corsRules[0].allowedMethods[0]"])
+}
+
+func TestExtractInputPropertiesDeepNesting(t *testing.T) {
+	step := auto.PreviewStep{
+		Op:  "delete",
+		URN: resource.URN("urn:pulumi:dev::proj::pkg:mod:Res::deep"),
+		OldState: &apitype.ResourceV3{
+			Type: "pkg:mod:Res",
+			Inputs: map[string]interface{}{
+				"metadata": map[string]interface{}{
+					"labels": map[string]interface{}{"app": "nginx"},
+					"ports":  []interface{}{80, 443},
+				},
+			},
+		},
+	}
+
+	result := extractInputProperties(step, nil)
+
+	pathMap := make(map[string]interface{})
+	for _, pc := range result {
+		pathMap[pc.Path] = pc.DesiredValue
+	}
+
+	assert.Equal(t, "nginx", pathMap["metadata.labels.app"])
+	assert.Equal(t, 80, pathMap["metadata.ports[0]"])
+	assert.Equal(t, 443, pathMap["metadata.ports[1]"])
+}
+
+func TestExtractInputPropertiesWithDeps(t *testing.T) {
+	urn := "urn:pulumi:dev::proj::tls:index/selfSignedCert:SelfSignedCert::my-cert"
+	step := auto.PreviewStep{
+		Op:  "delete",
+		URN: resource.URN(urn),
+		OldState: &apitype.ResourceV3{
+			Type: "tls:index/selfSignedCert:SelfSignedCert",
+			Inputs: map[string]interface{}{
+				"privateKeyPem": "some-pem-value",
+				"subject":       "CN=test",
+			},
+		},
+	}
+	depMap := DependencyMap{
+		urn: {
+			"privateKeyPem": DependencyRef{
+				ResourceName:   "ca-key",
+				ResourceType:   "tls:index/privateKey:PrivateKey",
+				OutputProperty: "privateKeyPem",
+			},
+		},
+	}
+
+	result := extractInputProperties(step, depMap)
+
+	var pkPem, subject *PropertyChange
+	for i := range result {
+		switch result[i].Path {
+		case "privateKeyPem":
+			pkPem = &result[i]
+		case "subject":
+			subject = &result[i]
+		}
+	}
+
+	require.NotNil(t, pkPem)
+	require.NotNil(t, pkPem.DependsOn)
+	assert.Equal(t, "ca-key", pkPem.DependsOn.ResourceName)
+	assert.Equal(t, "privateKeyPem", pkPem.DependsOn.OutputProperty)
+	assert.Nil(t, pkPem.DesiredValue, "dependsOn properties should not have DesiredValue")
+
+	require.NotNil(t, subject)
+	assert.Nil(t, subject.DependsOn)
+	assert.Equal(t, "CN=test", subject.DesiredValue)
+}
+
+// TestSortResourcesByDependencies_UpdateCodeIncluded verifies that update_code resources
+// with DependsOn are correctly sorted by dependency level.
+func TestSortResourcesByDependencies_UpdateCodeIncluded(t *testing.T) {
+	resources := []ResourceChange{
+		{
+			Name:   "consumer",
+			Action: ActionUpdateCode,
+			Properties: []PropertyChange{
+				{Path: "roleArn", DependsOn: &DependencyRef{ResourceName: "producer", ResourceType: "aws:iam/role:Role", OutputProperty: "arn"}},
+			},
+		},
+		{
+			Name:   "producer",
+			Action: ActionUpdateCode,
+			Properties: []PropertyChange{
+				{Path: "name", CurrentValue: "old", DesiredValue: "new"},
+			},
+		},
+	}
+
+	sorted := sortResourcesByDependencies(resources)
+
+	assert.Equal(t, "producer", sorted[0].Name)
+	assert.Equal(t, 0, sorted[0].DependencyLevel)
+	assert.Equal(t, "consumer", sorted[1].Name)
+	assert.Equal(t, 1, sorted[1].DependencyLevel)
 }

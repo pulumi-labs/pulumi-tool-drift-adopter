@@ -97,14 +97,13 @@ type DependencyRef struct {
 
 // ResourceChange represents a single resource that needs code changes.
 type ResourceChange struct {
-	URN             string                 `json:"urn"`
-	Name            string                 `json:"name"`
-	Type            string                 `json:"type"`
-	Action          string                 `json:"action"`
-	Properties      []PropertyChange       `json:"properties,omitempty"`
-	InputProperties map[string]interface{} `json:"inputProperties,omitempty"`
-	DependencyLevel int                    `json:"dependencyLevel,omitempty"`
-	Reason          string                 `json:"reason,omitempty"`
+	URN             string           `json:"urn"`
+	Name            string           `json:"name"`
+	Type            string           `json:"type"`
+	Action          string           `json:"action"`
+	Properties      []PropertyChange `json:"properties,omitempty"`
+	DependencyLevel int              `json:"dependencyLevel,omitempty"`
+	Reason          string           `json:"reason,omitempty"`
 }
 
 // PropertyChange represents a single property change within a resource.
@@ -113,9 +112,10 @@ type ResourceChange struct {
 //   - currentValue=nil, desiredValue=Y → add property to code
 //   - currentValue=X, desiredValue=nil → remove property from code
 type PropertyChange struct {
-	Path         string      `json:"path"`
-	CurrentValue interface{} `json:"currentValue,omitempty"`
-	DesiredValue interface{} `json:"desiredValue,omitempty"`
+	Path         string         `json:"path"`
+	CurrentValue interface{}    `json:"currentValue,omitempty"`
+	DesiredValue interface{}    `json:"desiredValue,omitempty"`
+	DependsOn    *DependencyRef `json:"dependsOn,omitempty"`
 }
 
 // Action constants for drift-adoption operations.
@@ -263,17 +263,27 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) [
 
 		switch action {
 		case ActionAddToCode:
-			// For resources that need to be added, extract all input properties from state
-			res.InputProperties = extractInputProperties(*step, depMap)
+			res.Properties = extractInputProperties(*step, depMap)
 		case ActionDeleteFromCode:
 			// No properties needed for removal
 		default:
-			// For update/replace, extract changed properties with schema-based filtering
 			res.Properties = extractPropertyChanges(*step, inputPropSet)
-			// Supplement "[secret]" values with real values from state export
-			if stateLookup != nil {
-				supplementSecretValues(res.Properties, string(step.URN), stateLookup)
+			if depMap != nil {
+				urnDeps := depMap[string(step.URN)]
+				if len(urnDeps) > 0 {
+					for i := range res.Properties {
+						if ref, ok := urnDeps[res.Properties[i].Path]; ok {
+							res.Properties[i].DependsOn = &ref
+						}
+					}
+				}
 			}
+		}
+
+		// Supplement "[secret]" values with real values from state export.
+		// Applies to both update_code and add_to_code properties.
+		if stateLookup != nil && action != ActionDeleteFromCode {
+			supplementSecretValues(res.Properties, string(step.URN), stateLookup)
 		}
 
 		resources = append(resources, res)
