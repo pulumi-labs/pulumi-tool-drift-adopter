@@ -236,7 +236,7 @@ func TestNextCommandTempFileDefault(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err := processNext(nil, 0, nil, nil, "", "")
+	err := processNext(nil, 0, nil, nil, "", "", "", "")
 
 	_ = w.Close()
 	os.Stdout = oldStdout
@@ -295,7 +295,7 @@ func TestNextCommandOutputFileFlag(t *testing.T) {
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	err = processNext(steps, parseErrors, nil, nil, "", outputFile)
+	err = processNext(steps, parseErrors, nil, nil, "", outputFile, "", "")
 
 	_ = w.Close()
 	os.Stdout = oldStdout
