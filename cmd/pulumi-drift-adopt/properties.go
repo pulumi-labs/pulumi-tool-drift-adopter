@@ -156,28 +156,49 @@ func extractPropertyChanges(step auto.PreviewStep, inputPropSet map[string]map[s
 //	{sig.Key: sig.Secret, "plaintext": "\"actual-value\""}
 var pulumiSecretSigKey = sig.Key
 
-// supplementSecretValues replaces "[secret]" property values with real values from the
-// state export. The state export (run with --show-secrets) contains actual secret values
-// in a Pulumi envelope format that we can unwrap.
-func supplementSecretValues(properties []PropertyChange, urn string, stateLookup map[string]*apitype.ResourceV3) {
+// supplementSecretValues resolves "[secret]" property values from the state export and
+// returns a map of config keys to plaintext values for writing to stack config.
+// Each resolved secret gets a configRef as its DesiredValue instead of the plaintext.
+// The returned map is nil if no secrets were resolved.
+func supplementSecretValues(properties []PropertyChange, urn string, stateLookup map[string]*apitype.ResourceV3, resourceName, resourceType string) map[string]string {
 	stateRes := stateLookup[urn]
 	if stateRes == nil {
-		return
+		return nil
 	}
+
+	var secrets map[string]string
 
 	for i := range properties {
 		if properties[i].DesiredValue == "[secret]" {
 			// desiredValue comes from OldState (infrastructure) — look up in state export
-			if real := resolveSecretFromState(stateRes.Inputs, properties[i].Path); real != nil {
-				properties[i].DesiredValue = real
-			} else if real := resolveSecretFromState(stateRes.Outputs, properties[i].Path); real != nil {
-				properties[i].DesiredValue = real
+			var real interface{}
+			if real = resolveSecretFromState(stateRes.Inputs, properties[i].Path); real == nil {
+				real = resolveSecretFromState(stateRes.Outputs, properties[i].Path)
+			}
+			if real != nil {
+				configKey := sanitizeConfigKeyType(resourceType) + "." + resourceName + "." + properties[i].Path
+				if secrets == nil {
+					secrets = make(map[string]string)
+				}
+				secrets[configKey] = fmt.Sprintf("%v", real)
+				properties[i].DesiredValue = map[string]interface{}{"configRef": configKey}
 			}
 		}
 		// Note: currentValue "[secret]" is NOT supplemented. It comes from NewState (code),
 		// and the state export only has the deployed version. The agent reads the actual
 		// code value directly from the source file.
 	}
+	return secrets
+}
+
+// sanitizeConfigKeyType converts a Pulumi resource type token (e.g. "aws:rds/cluster:Cluster")
+// into a string safe for use in Pulumi config keys by replacing ":" and "/" with "-".
+// All colons are replaced to avoid Pulumi interpreting the prefix as a provider namespace.
+// Result: "aws-rds-cluster-Cluster"
+func sanitizeConfigKeyType(resourceType string) string {
+	s := strings.ReplaceAll(resourceType, ":", "-")
+	s = strings.ReplaceAll(s, "/", "-")
+	return s
 }
 
 // resolveSecretFromState looks up a property path in state data and unwraps

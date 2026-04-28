@@ -72,7 +72,7 @@ func TestDependencyResolution(t *testing.T) {
 	require.NoError(t, err)
 
 	depMap := buildDepMapFromState(stateLookup)
-	resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: depMap})
+	resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: depMap})
 	require.Len(t, resources, 2)
 
 	// Find the ca-cert resource (SelfSignedCert)
@@ -129,7 +129,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 
 		// nil stateLookup — should return plain values
-		resources := convertStepsToResources(steps, nil) // nil metadata — no deps, no schema filtering
+		resources, _ := convertStepsToResources(steps, nil) // nil metadata — no deps, no schema filtering
 		require.NotEmpty(t, resources)
 
 		for _, res := range resources {
@@ -164,7 +164,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
 		// Should be plain string since dep URN is missing from state
@@ -184,7 +184,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 
 		// Build lookup from steps (no external state)
 		stateLookup := buildStateLookupFromSteps(steps)
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 
 		var cert *ResourceChange
 		for i := range resources {
@@ -238,7 +238,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 			}
 		}
 
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
 		// Value doesn't match any output, but single depURN -> bare dependsOn (no outputProperty)
@@ -289,7 +289,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 			}
 		}
 
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
 		// Array element resolved individually: triggers[0] matches "result" output
@@ -339,7 +339,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 			}
 		}
 
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
 		// Array element "hex-output-value" matches output "hex" -> resolved with outputProperty
@@ -395,7 +395,7 @@ func TestDependencyResolutionEdgeCases(t *testing.T) {
 		stateLookup, err := parseStateExport([]byte(stateContent))
 		require.NoError(t, err)
 
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
 		// Multiple depURNs, no exact match -> plain value (no bare dependsOn due to ambiguity)
@@ -479,7 +479,7 @@ func TestDependencyResolutionFromPreviewOnly(t *testing.T) {
 	// Build state lookup from the preview steps themselves (no external state file)
 	stateLookup := buildStateLookupFromSteps(steps)
 
-	resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+	resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 
 	var cert *ResourceChange
 	for i := range resources {
@@ -560,7 +560,7 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 			}
 		}
 
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
 		// keepers.ref should be flattened with DependsOn
@@ -610,7 +610,7 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 			}
 		}
 
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
 		// keepers.ref preserved; bare dependsOn (no outputProperty)
@@ -663,7 +663,7 @@ func TestNestedDependsOnMapProperty(t *testing.T) {
 			}
 		}
 
-		resources := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
+		resources, _ := convertStepsToResources(steps, &ResourceMetadata{Dependencies: buildDepMapFromState(stateLookup)})
 		require.Len(t, resources, 1)
 
 		// triggers[0] becomes bare dependsOn (encrypted = no output match)

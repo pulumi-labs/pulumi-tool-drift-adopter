@@ -15,6 +15,10 @@
 package main
 
 import (
+	"context"
+	"fmt"
+	"os"
+
 	"github.com/pulumi/pulumi/sdk/v3/go/auto"
 	"github.com/pulumi/pulumi/sdk/v3/go/common/apitype"
 	"github.com/spf13/cobra"
@@ -199,7 +203,7 @@ func runNext(cmd *cobra.Command, _ []string) error {
 		}
 	}
 
-	return processNext(steps, parseErrors, meta, excludeURNs, metaPath, outputFile)
+	return processNext(steps, parseErrors, meta, excludeURNs, metaPath, outputFile, projectDir, stack)
 }
 
 // mergeStateLookupAndBuildDepMap supplements a state lookup with OldState from preview steps,
@@ -221,16 +225,30 @@ func mergeStateLookupAndBuildDepMap(steps []auto.PreviewStep, stateLookup map[st
 // processNext is the core pipeline: convert parsed steps to resources and output results.
 // It is separated from runNext so that tests can call it directly without needing CLI flags,
 // state export, or a live Pulumi stack.
-func processNext(steps []auto.PreviewStep, parseErrors int, meta *ResourceMetadata, excludeURNs []string, depMapPath, outputFile string) error {
-	resources := convertStepsToResources(steps, meta)
+// projectDir and stack are used to write secret values to stack config when available.
+func processNext(steps []auto.PreviewStep, parseErrors int, meta *ResourceMetadata, excludeURNs []string, depMapPath, outputFile, projectDir, stack string) error {
+	resources, secretConfigs := convertStepsToResources(steps, meta)
 	resources = sortResourcesByDependencies(resources)
+
+	// Write collected secrets to stack config
+	if len(secretConfigs) > 0 {
+		if stack == "" {
+			fmt.Fprintf(os.Stderr, "warning: secret values found but no stack specified — secrets written as plaintext configRefs without encryption\n")
+		} else {
+			if err := writeSecretConfigs(projectDir, stack, secretConfigs); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to write secrets to stack config: %v — configRefs will reference unset keys\n", err)
+			}
+		}
+	}
 
 	return outputResult(resources, excludeURNs, depMapPath, outputFile, parseErrors)
 }
 
 // convertStepsToResources converts preview steps to resource changes for drift adoption.
 // meta provides dependency resolution and schema-based input property filtering.
-func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) []ResourceChange {
+// Returns the resource list and a map of config keys to plaintext secret values that
+// should be written to stack config (nil if no secrets were resolved).
+func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) ([]ResourceChange, map[string]string) {
 	var depMap DependencyMap
 	var inputPropSet map[string]map[string]bool
 	var stateLookup map[string]*apitype.ResourceV3
@@ -241,6 +259,7 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) [
 	}
 
 	var resources []ResourceChange
+	var allSecrets map[string]string
 	for i := range steps {
 		step := &steps[i]
 		action := getActionForOperation(step.Op)
@@ -283,12 +302,40 @@ func convertStepsToResources(steps []auto.PreviewStep, meta *ResourceMetadata) [
 		// Supplement "[secret]" values with real values from state export.
 		// Applies to both update_code and add_to_code properties.
 		if stateLookup != nil && action != ActionDeleteFromCode {
-			supplementSecretValues(res.Properties, string(step.URN), stateLookup)
+			if secrets := supplementSecretValues(res.Properties, string(step.URN), stateLookup, name, resourceType); secrets != nil {
+				if allSecrets == nil {
+					allSecrets = make(map[string]string)
+				}
+				for k, v := range secrets {
+					allSecrets[k] = v
+				}
+			}
 		}
 
 		resources = append(resources, res)
 	}
-	return resources
+	return resources, allSecrets
+}
+
+// writeSecretConfigs writes secret values to Pulumi stack config using the automation API.
+// Each secret is stored as an encrypted config value keyed by type.name.path.
+func writeSecretConfigs(projectDir, stack string, secrets map[string]string) error {
+	ctx := context.Background()
+	opts := []auto.LocalWorkspaceOption{auto.WorkDir(projectDir)}
+	ws, err := auto.NewLocalWorkspace(ctx, opts...)
+	if err != nil {
+		return fmt.Errorf("failed to create workspace: %w", err)
+	}
+
+	configMap := make(auto.ConfigMap, len(secrets))
+	for key, value := range secrets {
+		configMap[key] = auto.ConfigValue{Value: value, Secret: true}
+	}
+
+	if err := ws.SetAllConfig(ctx, stack, configMap); err != nil {
+		return fmt.Errorf("failed to set config: %w", err)
+	}
+	return nil
 }
 
 // getActionForOperation maps a Pulumi preview operation to a drift-adoption action.
